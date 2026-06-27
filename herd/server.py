@@ -7,6 +7,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, Form, UploadFile
 from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 import httpx
 
 from herd.config import HERD_MODELS_DIR, HERD_PORT
@@ -83,6 +84,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Herd API Gateway", lifespan=lifespan)
+
+# Mount assets folder to serve the logo image
+assets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
+if os.path.exists(assets_dir):
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+@app.get("/")
+@app.get("/dashboard")
+async def get_dashboard():
+    """Serves the Herd Web Control Center dashboard."""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
+    try:
+        with open(dashboard_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+    except Exception as e:
+        return Response(content=f"Error loading dashboard: {e}", status_code=500, media_type="text/plain")
 
 
 @app.get("/metrics")

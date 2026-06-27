@@ -110,9 +110,15 @@ herd serve --port 11434
 
 ---
 
-## API Usage
+## API Usage & Control Center
 
-The Herd gateway listens on port `11434` (by default) and exposes standard OpenAI-compatible endpoints:
+The Herd gateway listens on port `11434` (by default) and exposes a web control panel as well as standard OpenAI-compatible endpoints:
+
+### Web Control Center Dashboard
+You can monitor active models, CPU/RAM utilization, view cumulative statistics, and manage your local model library (with load and unload buttons) via a beautiful, real-time GUI in your browser:
+* **URL**: `http://localhost:11434` or `http://localhost:11434/dashboard`
+
+### OpenAI-Compatible API Endpoints
 
 ### Chat Completions (`POST /v1/chat/completions`)
 ```bash

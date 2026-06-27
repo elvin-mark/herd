@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herd - Control Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #09090b;
+            --card-bg: #18181b;
+            --card-border: #27272a;
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --accent-cyan: #06b6d4;
+            --accent-violet: #8b5cf6;
+            --accent-emerald: #10b981;
+            --accent-rose: #f43f5e;
+            --font-family: 'Outfit', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            min-height: 100vh;
+            padding: 2rem;
+            line-height: 1.5;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(24, 24, 27, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            padding: 1.5rem 2rem;
+            border-radius: 16px;
+        }
+
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+        }
+
+        .logo-img {
+            width: 55px;
+            height: 55px;
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+            object-fit: cover;
+        }
+
+        .header-title h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-emerald);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent-emerald);
+            border-radius: 50%;
+            animation: pulse 1.8s infinite;
+        }
+
+        /* Overview Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .metric-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 1.5rem;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            border-color: #3f3f46;
+        }
+
+        .metric-info h3 {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-info .value {
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        .metric-icon {
+            font-size: 2.5rem;
+            opacity: 0.15;
+            color: var(--accent-cyan);
+        }
+
+        /* Dynamic Colors for Card Borders */
+        .metric-card::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: linear-gradient(to bottom, var(--accent-cyan), var(--accent-violet));
+        }
+
+        /* Section Title */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .section-header h2 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        /* Active Processes */
+        .active-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .active-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            position: relative;
+            transition: border-color 0.2s ease;
+        }
+
+        .active-card:hover {
+            border-color: #3f3f46;
+        }
+
+        .active-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .active-model-name {
+            font-size: 1.15rem;
+            font-weight: 600;
+            word-break: break-all;
+            max-width: 80%;
+        }
+
+        .active-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        .badge-llm {
+            background-color: rgba(6, 182, 212, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+        }
+
+        .badge-embedding {
+            background-color: rgba(139, 92, 246, 0.1);
+            color: var(--accent-violet);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .badge-whisper {
+            background-color: rgba(244, 63, 94, 0.1);
+            color: var(--accent-rose);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+        }
+
+        .active-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            background: rgba(9, 9, 11, 0.4);
+            padding: 1rem;
+            border-radius: 10px;
+            border: 1px solid rgba(39, 39, 42, 0.5);
+        }
+
+        .detail-item span {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .detail-item p {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .active-resources {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .resource-bar-wrapper {
+            font-size: 0.85rem;
+        }
+
+        .resource-bar-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.3rem;
+            color: var(--text-secondary);
+        }
+
+        .resource-bar {
+            height: 8px;
+            background-color: #27272a;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .resource-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        .active-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 0.5rem;
+        }
+
+        .btn {
+            font-family: var(--font-family);
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.6rem 1.2rem;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-stop {
+            background-color: rgba(244, 63, 94, 0.1);
+            color: var(--accent-rose);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+        }
+
+        .btn-stop:hover {
+            background-color: var(--accent-rose);
+            color: #fff;
+        }
+
+        .btn-load {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+            color: #fff;
+        }
+
+        .btn-load:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background-color: #27272a;
+            color: var(--text-primary);
+            border: 1px solid var(--card-border);
+        }
+
+        .btn-secondary:hover {
+            background-color: #3f3f46;
+        }
+
+        /* Stats & Library Sections */
+        .bottom-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .bottom-sections {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        /* Stats Table */
+        .stats-table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        th {
+            padding: 0.8rem 1rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--card-border);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Library Model List */
+        .library-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .library-item {
+            background-color: rgba(9, 9, 11, 0.4);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .library-item:hover {
+            border-color: #3f3f46;
+        }
+
+        .library-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .library-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .library-size {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .library-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.8rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed var(--card-border);
+        }
+
+        .library-params {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .param-group {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .param-group label {
+            white-space: nowrap;
+        }
+
+        .param-group select {
+            background-color: #27272a;
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-family: var(--font-family);
+            outline: none;
+        }
+
+        .param-group input[type="number"] {
+            background-color: #27272a;
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            width: 60px;
+            padding: 0.25rem 0.4rem;
+            border-radius: 6px;
+            outline: none;
+            font-family: var(--font-family);
+        }
+
+        .library-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+            }
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+        }
+
+        /* Auto refresh toggle */
+        .toggle-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #27272a;
+            transition: .3s;
+            border-radius: 20px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-cyan);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-logo">
+                <img src="/assets/logo.jpg" alt="Herd Logo" class="logo-img" onerror="this.src='https://placehold.co/100?text=Herd'">
+                <div class="header-title">
+                    <h1>Herd Control Center</h1>
+                    <p>Local AI process coordinator & API gateway</p>
+                </div>
+            </div>
+            
+            <div class="header-status">
+                <div class="toggle-wrapper">
+                    <span>Auto-Refresh (2s)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="refresh-toggle" checked>
+                        <span class="slider"></span>
+                    </</label>
+                </div>
+                <div class="status-badge">
+                    <span class="status-dot"></span>
+                    <span>GATEWAY: ONLINE</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Overview Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-info">
+                    <h3>Active Models</h3>
+                    <div class="value" id="metrics-active">0</div>
+                </div>
+                <div class="metric-icon">🦙</div>
+            </div>
+            
+            <div class="metric-card" style="--accent-cyan: var(--accent-violet)">
+                <div class="metric-info">
+                    <h3>Total RAM Footprint</h3>
+                    <div class="value" id="metrics-ram">0.00 GB</div>
+                </div>
+                <div class="metric-icon">💾</div>
+            </div>
+
+            <div class="metric-card" style="--accent-cyan: var(--accent-rose)">
+                <div class="metric-info">
+                    <h3>Total API Requests</h3>
+                    <div class="value" id="metrics-requests">0</div>
+                </div>
+                <div class="metric-icon">⚡</div>
+            </div>
+        </div>
+
+        <!-- Active Model Processes -->
+        <div>
+            <div class="section-header">
+                <h2>Running Model Instances</h2>
+            </div>
+            <div class="active-grid" id="active-models-container">
+                <!-- Active models will populate here dynamically -->
+                <div class="panel-card" style="grid-column: 1 / -1; align-items: center; padding: 3rem; text-align: center; color: var(--text-secondary);">
+                    <p>No model instances are currently running.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom panels: Cumulative Stats and Model Library -->
+        <div class="bottom-sections">
+            <!-- Model Library -->
+            <div class="panel-card">
+                <h2>Model Library (Local)</h2>
+                <div class="library-list" id="library-container">
+                    <!-- Library models will populate here dynamically -->
+                </div>
+            </div>
+
+            <!-- Cumulative Statistics -->
+            <div class="panel-card">
+                <h2>Cumulative Statistics</h2>
+                <div class="stats-table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Model</th>
+                                <th>Requests</th>
+                                <th>Prompt Tok</th>
+                                <th>Gen Tok</th>
+                                <th>Latency</th>
+                                <th>Speed</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stats-table-body">
+                            <!-- Stats rows will populate here dynamically -->
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No request statistics recorded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const activeContainer = document.getElementById('active-models-container');
+        const libraryContainer = document.getElementById('library-container');
+        const statsTableBody = document.getElementById('stats-table-body');
+        const refreshToggle = document.getElementById('refresh-toggle');
+        
+        const metricsActive = document.getElementById('metrics-active');
+        const metricsRam = document.getElementById('metrics-ram');
+        const metricsRequests = document.getElementById('metrics-requests');
+
+        let isRefreshing = true;
+        let refreshInterval = null;
+
+        // Start Auto Refresh
+        function startAutoRefresh() {
+            refreshInterval = setInterval(fetchData, 2000);
+        }
+
+        // Stop Auto Refresh
+        function stopAutoRefresh() {
+            clearInterval(refreshInterval);
+        }
+
+        refreshToggle.addEventListener('change', (e) => {
+            isRefreshing = e.target.checked;
+            if (isRefreshing) {
+                startAutoRefresh();
+                fetchData();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+
+        // Initialize
+        async function init() {
+            await fetchData();
+            startAutoRefresh();
+        }
+
+        // Fetch All API Data
+        async function fetchData() {
+            try {
+                const [activeRes, statsRes, libraryRes] = await Promise.all([
+                    fetch('/v1/models/active').then(r => r.json()),
+                    fetch('/v1/models/stats').then(r => r.json()),
+                    fetch('/v1/models').then(r => r.json())
+                ]);
+
+                updateActiveModels(activeRes);
+                updateStats(statsRes);
+                updateLibrary(libraryRes, activeRes);
+            } catch (err) {
+                console.error('Error fetching dashboard data:', err);
+            }
+        }
+
+        // Update Active Model Cards
+        function updateActiveModels(active) {
+            metricsActive.textContent = active.length;
+            
+            // Calculate total RAM
+            let totalBytes = 0;
+            active.forEach(a => totalBytes += (a.memory_bytes || 0));
+            const totalGb = totalBytes / (1024 * 1024 * 1024);
+            metricsRam.textContent = totalGb >= 1.0 ? `${totalGb.toFixed(2)} GB` : `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+            if (active.length === 0) {
+                activeContainer.innerHTML = `
+                    <div style="grid-column: 1 / -1; width: 100%; border: 1px solid var(--card-border); background-color: var(--card-bg); border-radius: 16px; align-items: center; display: flex; justify-content: center; padding: 4rem; text-align: center; color: var(--text-secondary);">
+                        <div>
+                            <span style="font-size: 2.5rem; display: block; margin-bottom: 0.8rem;">💤</span>
+                            <p>No model instances are currently running.<br>Use the Library below or make an API request to start a model.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            activeContainer.innerHTML = active.map(a => {
+                const typeClass = a.is_whisper ? 'badge-whisper' : (a.is_embedding ? 'badge-embedding' : 'badge-llm');
+                const typeText = a.is_whisper ? 'Whisper' : (a.is_embedding ? 'Embedding' : 'LLM');
+                const cpu = a.cpu_percent || 0.0;
+                
+                return `
+                    <div class="active-card">
+                        <div class="active-header">
+                            <h3 class="active-model-name">${a.model}</h3>
+                            <span class="active-badge ${typeClass}">${typeText}</span>
+                        </div>
+                        
+                        <div class="active-details">
+                            <div class="detail-item">
+                                <span>Gateway Port</span>
+                                <p>${a.port}</p>
+                            </div>
+                            <div class="detail-item">
+                                <span>Idle Time</span>
+                                <p>${a.idle_seconds}s</p>
+                            </div>
+                        </div>
+
+                        <div class="active-resources">
+                            <div class="resource-bar-wrapper">
+                                <div class="resource-bar-label">
+                                    <span>CPU Usage</span>
+                                    <span>${cpu.toFixed(1)}%</span>
+                                </div>
+                                <div class="resource-bar">
+                                    <div class="resource-bar-fill" style="width: ${Math.min(cpu, 100)}%;"></div>
+                                </div>
+                            </div>
+
+                            <div class="resource-bar-wrapper">
+                                <div class="resource-bar-label">
+                                    <span>RAM Footprint</span>
+                                    <span>${a.memory_str}</span>
+                                </div>
+                                <div class="resource-bar">
+                                    <!-- Assume 8GB max scale for visualization -->
+                                    <div class="resource-bar-fill" style="width: ${Math.min((a.memory_bytes || 0) / (8 * 1024 * 1024 * 1024) * 100, 100)}%; background: linear-gradient(90deg, var(--accent-violet), var(--accent-rose));"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="active-actions">
+                            <button class="btn btn-stop" onclick="stopModel('${a.model}')">
+                                <span>⏹</span> Stop Model
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update Cumulative Statistics Table
+        function updateStats(stats) {
+            let totalReqs = 0;
+            const rows = Object.entries(stats).map(([model, data]) => {
+                totalReqs += (data.requests || 0);
+                const avgSpeed = data.avg_speed_tok_sec > 0 ? `${data.avg_speed_tok_sec.toFixed(1)} tok/s` : 'N/A';
+                return `
+                    <tr>
+                        <td style="font-weight: 600; font-family: monospace; font-size: 0.8rem; word-break: break-all;">${model}</td>
+                        <td>${data.requests} <span style="color: var(--accent-rose); font-size: 0.75rem;">(${data.errors})</span></td>
+                        <td>${data.prompt_tokens.toLocaleString()}</td>
+                        <td>${data.completion_tokens.toLocaleString()}</td>
+                        <td>${data.avg_latency_sec.toFixed(2)}s</td>
+                        <td style="color: var(--accent-emerald); font-weight: 600;">${avgSpeed}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            metricsRequests.textContent = totalReqs;
+            
+            if (rows.length === 0) {
+                statsTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">No request statistics recorded yet.</td>
+                    </tr>
+                `;
+            } else {
+                statsTableBody.innerHTML = rows;
+            }
+        }
+
+        // Update Library Model List
+        function updateLibrary(library, active) {
+            const activeModels = new Set(active.map(a => a.model));
+            
+            if (!library.data || library.data.length === 0) {
+                libraryContainer.innerHTML = `
+                    <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                        <p>No local models found on disk.<br>Run <code>herd pull &lt;model_name&gt;</code> in your terminal to download models.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            libraryContainer.innerHTML = library.data.map((m, idx) => {
+                const isRunning = activeModels.has(m.id);
+                const isWhisper = m.id.toLowerCase().includes('whisper');
+                
+                return `
+                    <div class="library-item">
+                        <div class="library-item-top">
+                            <span class="library-name">${m.id}</span>
+                            <span class="library-size">Downloaded</span>
+                        </div>
+                        
+                        <div class="library-controls">
+                            <div class="library-params">
+                                <div class="param-group">
+                                    <label>Type:</label>
+                                    <select id="type-${idx}" ${isRunning ? 'disabled' : ''}>
+                                        <option value="llm" ${isWhisper ? '' : 'selected'}>LLM</option>
+                                        <option value="embedding">Embedding</option>
+                                        <option value="whisper" ${isWhisper ? 'selected' : ''}>Whisper</option>
+                                    </select>
+                                </div>
+                                <div class="param-group">
+                                    <label>Timeout (s):</label>
+                                    <input type="number" id="timeout-${idx}" value="300" min="0" ${isRunning ? 'disabled' : ''}>
+                                </div>
+                            </div>
+                            
+                            <div class="library-actions">
+                                ${isRunning ? `
+                                    <button class="btn btn-stop" onclick="stopModel('${m.id}')">
+                                        ⏹ Stop
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-load" onclick="loadModel('${m.id}', ${idx})">
+                                        ▶ Load Model
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Action: Stop Model
+        async function stopModel(modelName) {
+            try {
+                const res = await fetch('/v1/models/unload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: modelName })
+                });
+                if (res.ok) {
+                    fetchData();
+                } else {
+                    const data = await res.json();
+                    alert(`Failed to stop model: ${data.error || res.statusText}`);
+                }
+            } catch (err) {
+                alert(`Error stopping model: ${err}`);
+            }
+        }
+
+        // Action: Load Model
+        async function loadModel(modelName, idx) {
+            const type = document.getElementById(`type-${idx}`).value;
+            const timeoutVal = parseInt(document.getElementById(`timeout-${idx}`).value, 10);
+            
+            const isWhisper = type === 'whisper';
+            const isEmbedding = type === 'embedding';
+
+            try {
+                // Show temporary loading UI indicator
+                const btn = document.querySelector(`[onclick="loadModel('${modelName}', ${idx})"]`);
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '⏳ Loading...';
+                }
+
+                const res = await fetch('/v1/models/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: modelName,
+                        is_whisper: isWhisper,
+                        is_embedding: isEmbedding,
+                        idle_timeout: timeoutVal
+                    })
+                });
+                
+                if (res.ok) {
+                    fetchData();
+                } else {
+                    const data = await res.json();
+                    alert(`Failed to load model: ${data.error || res.statusText}`);
+                    fetchData(); // reset buttons
+                }
+            } catch (err) {
+                alert(`Error loading model: ${err}`);
+                fetchData();
+            }
+        }
+
+        // Run Init
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
