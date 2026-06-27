@@ -388,11 +388,11 @@ def run(
 
     # 4. Enter chat REPL or display server status
     if whisper or "whisper" in model_name.lower():
-        console.print(f"\n[bold green]Whisper model loaded successfully![/bold green]")
+        console.print("\n[bold green]Whisper model loaded successfully![/bold green]")
         console.print(
             f"Whisper server running internally on port [bold cyan]{port}[/bold cyan]."
         )
-        console.print(f"You can send transcription requests to the Gateway:")
+        console.print("You can send transcription requests to the Gateway:")
         console.print(
             f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/audio/transcriptions[/bold white]"
         )
@@ -401,12 +401,12 @@ def run(
         )
     elif embedding or "embedding" in model_name.lower() or "bert" in model_name.lower():
         console.print(
-            f"\n[bold green]Embedding model loaded successfully![/bold green]"
+            "\n[bold green]Embedding model loaded successfully![/bold green]"
         )
         console.print(
             f"Model server running internally on port [bold cyan]{port}[/bold cyan]."
         )
-        console.print(f"You can send embedding requests to the Gateway:")
+        console.print("You can send embedding requests to the Gateway:")
         console.print(
             f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/embeddings[/bold white]"
         )

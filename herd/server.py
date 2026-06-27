@@ -5,12 +5,13 @@ import json
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response, Form, UploadFile, HTTPException
+from fastapi import FastAPI, Request, Response, Form, UploadFile
 from fastapi.responses import StreamingResponse, JSONResponse
 import httpx
 
 from herd.config import HERD_MODELS_DIR, HERD_PORT
 from herd.manager import ProcessManager
+from herd.metrics import collector
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -82,8 +83,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Herd API Gateway", lifespan=lifespan)
-
-from herd.metrics import collector
 
 @app.get("/metrics")
 async def get_prometheus_metrics_endpoint():

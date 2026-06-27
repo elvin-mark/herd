@@ -1,5 +1,4 @@
-import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 class MetricsCollector:
     def __init__(self):
