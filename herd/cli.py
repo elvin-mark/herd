@@ -400,9 +400,7 @@ def run(
             f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/audio/translations[/bold white]"
         )
     elif embedding or "embedding" in model_name.lower() or "bert" in model_name.lower():
-        console.print(
-            "\n[bold green]Embedding model loaded successfully![/bold green]"
-        )
+        console.print("\n[bold green]Embedding model loaded successfully![/bold green]")
         console.print(
             f"Model server running internally on port [bold cyan]{port}[/bold cyan]."
         )
@@ -521,7 +519,9 @@ def show_stats():
         return
 
     if not stats:
-        console.print("[yellow]No stats collected yet. Send some requests first![/yellow]")
+        console.print(
+            "[yellow]No stats collected yet. Send some requests first![/yellow]"
+        )
         return
 
     table = Table(title="Herd Model Usage Statistics")
@@ -535,15 +535,19 @@ def show_stats():
     for model, data in stats.items():
         req_str = f"{data['requests']} ({data['errors']})"
         lat_str = f"{data['avg_latency_sec']:.2f}s"
-        speed_str = f"{data['avg_speed_tok_sec']:.1f} tok/s" if data['avg_speed_tok_sec'] > 0 else "N/A"
-        
+        speed_str = (
+            f"{data['avg_speed_tok_sec']:.1f} tok/s"
+            if data["avg_speed_tok_sec"] > 0
+            else "N/A"
+        )
+
         table.add_row(
             model,
             req_str,
             f"{data['prompt_tokens']:,}",
             f"{data['completion_tokens']:,}",
             lat_str,
-            speed_str
+            speed_str,
         )
 
     console.print(table)

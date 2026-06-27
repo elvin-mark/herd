@@ -269,7 +269,7 @@ class ProcessManager:
             proc = psutil.Process(pid)
             mem = proc.memory_info().rss
             cpu = proc.cpu_percent(interval=None)
-            
+
             # Sum up children resources recursively
             for child in proc.children(recursive=True):
                 try:
