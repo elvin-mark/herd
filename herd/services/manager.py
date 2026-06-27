@@ -83,7 +83,7 @@ class ProcessManager:
                             except asyncio.TimeoutError:
                                 logger.warning(
                                     f"Process for '{model_name}' did not exit. Force killing..."
-                               )
+                                )
                                 process.kill()
                                 await process.wait()
                         except Exception as e:

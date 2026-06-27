@@ -284,12 +284,8 @@ async def chat_interactive(model_name: str):
             print("Response: ", end="")
 
             try:
-                assistant_response = await stream_chat_completions(
-                    model_name, messages
-                )
-                messages.append(
-                    {"role": "assistant", "content": assistant_response}
-                )
+                assistant_response = await stream_chat_completions(model_name, messages)
+                messages.append({"role": "assistant", "content": assistant_response})
             except KeyboardInterrupt:
                 print("\n[yellow]Generation interrupted.[/yellow]")
                 messages.append(
@@ -307,7 +303,7 @@ def pull(
     model_name: str = typer.Argument(
         ...,
         help="Model identifier format 'author/repo[:tag]' (e.g. unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M)",
-    )
+    ),
 ):
     """Downloads a GGUF or BIN model from Hugging Face."""
     asyncio.run(pull_model_async(model_name))
@@ -390,9 +386,7 @@ def run(
             f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/audio/translations[/bold white]"
         )
     elif embedding or "embedding" in model_name.lower() or "bert" in model_name.lower():
-        console.print(
-            "\n[bold green]Embedding model loaded successfully![/bold green]"
-        )
+        console.print("\n[bold green]Embedding model loaded successfully![/bold green]")
         console.print(
             f"Model server running internally on port [bold cyan]{port}[/bold cyan]."
         )
@@ -450,9 +444,7 @@ def list_models(
     table.add_column("Size", style="green")
 
     for m in models:
-        table.add_row(
-            m.get("provider", "local"), m["name"], m["filename"], m["size"]
-        )
+        table.add_row(m.get("provider", "local"), m["name"], m["filename"], m["size"])
 
     console.print(table)
 
@@ -494,9 +486,7 @@ def ps():
         idle_str = f"{a['idle_seconds']}s"
         cpu_str = f"{a.get('cpu_percent', 0.0)}%"
         mem_str = a.get("memory_str", "0 MB")
-        table.add_row(
-            a["model"], str(a["port"]), m_type, cpu_str, mem_str, idle_str
-        )
+        table.add_row(a["model"], str(a["port"]), m_type, cpu_str, mem_str, idle_str)
 
     console.print(table)
 
@@ -553,9 +543,7 @@ def show_stats():
 
 
 @app.command()
-def stop(
-    model_name: str = typer.Argument(..., help="Model identifier to stop.")
-):
+def stop(model_name: str = typer.Argument(..., help="Model identifier to stop.")):
     """Stops a running model process."""
     if not is_gateway_running():
         console.print("[yellow]Herd API gateway is not running.[/yellow]")
@@ -565,9 +553,7 @@ def stop(
     try:
         response = httpx.post(url, json={"model": model_name})
         if response.status_code == 200:
-            console.print(
-                f"[green]Successfully stopped model '{model_name}'.[/green]"
-            )
+            console.print(f"[green]Successfully stopped model '{model_name}'.[/green]")
         else:
             console.print(f"[red]Failed to stop model: {response.text}[/red]")
     except Exception as e:
@@ -578,7 +564,7 @@ def stop(
 def serve(
     port: int = typer.Option(
         HERD_PORT, "--port", "-p", help="Port to run the gateway server on."
-    )
+    ),
 ):
     """Starts the central Herd API Gateway server."""
     # Ensure gateway port is set in env so server.py knows about it

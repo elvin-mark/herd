@@ -478,9 +478,7 @@ async def completions(request: Request):
             content={"error": f"Failed to start model server: {e}"},
         )
 
-    return await proxy_to_port(
-        port, "/v1/completions", request, body_bytes, model_name
-    )
+    return await proxy_to_port(port, "/v1/completions", request, body_bytes, model_name)
 
 
 @app.post("/v1/embeddings")
@@ -507,9 +505,7 @@ async def embeddings(request: Request):
             content={"error": f"Failed to start model server: {e}"},
         )
 
-    return await proxy_to_port(
-        port, "/v1/embeddings", request, body_bytes, model_name
-    )
+    return await proxy_to_port(port, "/v1/embeddings", request, body_bytes, model_name)
 
 
 @app.post("/v1/audio/transcriptions")
