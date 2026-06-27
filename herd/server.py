@@ -83,11 +83,31 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Herd API Gateway", lifespan=lifespan)
 
+from herd.metrics import collector
+
+@app.get("/metrics")
+async def get_prometheus_metrics_endpoint():
+    """Prometheus metrics scraping endpoint."""
+    active = []
+    async with manager.lock:
+        for path, info in manager.running_models.items():
+            name = info["model_name"]
+            pid = info["process"].pid
+            resources = manager.get_process_resources(pid)
+            active.append({
+                "model": name,
+                "port": info["port"],
+                "cpu_percent": resources["cpu_percent"],
+                "memory_bytes": resources["memory_bytes"]
+            })
+    prometheus_data = collector.get_prometheus_metrics(active)
+    return Response(content=prometheus_data, media_type="text/plain; version=0.0.4; charset=utf-8")
+
 
 async def proxy_to_port(
-    port: int, path: str, request: Request, body_bytes: bytes
+    port: int, path: str, request: Request, body_bytes: bytes, model_name: str
 ) -> Response:
-    """Proxies an HTTP request to the target port, supporting streaming response."""
+    """Proxies an HTTP request to the target port, supporting streaming response and recording metrics."""
     client = httpx.AsyncClient(timeout=None)
     url = f"http://127.0.0.1:{port}{path}"
 
@@ -104,23 +124,54 @@ async def proxy_to_port(
         params=request.query_params,
     )
 
+    start_time = time.time()
     try:
         response = await client.send(req, stream=True)
     except Exception as e:
         await client.aclose()
         logger.error(f"Failed to connect to backend server on port {port}: {e}")
+        collector.record_request(model_name=model_name, endpoint=path, duration_sec=time.time() - start_time, is_error=True)
         return JSONResponse(
             status_code=502,
             content={"error": f"Failed to connect to model server: {e}"},
         )
 
     async def response_generator():
+        full_response_text = b""
         try:
             async for chunk in response.aiter_bytes():
+                full_response_text += chunk
                 yield chunk
         finally:
             await response.aclose()
             await client.aclose()
+            
+            # Record request metrics at the end of streaming/non-streaming transmission
+            duration = time.time() - start_time
+            prompt_tokens = 0
+            completion_tokens = 0
+            
+            try:
+                # Extract prompt_tokens and completion_tokens using fast regex matching on returned payload
+                import re
+                text = full_response_text.decode("utf-8", errors="ignore")
+                match_p = re.search(r'"prompt_tokens"\s*:\s*(\d+)', text)
+                if match_p:
+                    prompt_tokens = int(match_p.group(1))
+                match_c = re.search(r'"completion_tokens"\s*:\s*(\d+)', text)
+                if match_c:
+                    completion_tokens = int(match_c.group(1))
+            except Exception as e:
+                logger.error(f"Error parsing tokens from response text: {e}")
+                
+            collector.record_request(
+                model_name=model_name,
+                endpoint=path,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                duration_sec=duration,
+                is_error=(response.status_code >= 400)
+            )
 
     res_headers = dict(response.headers)
     res_headers.pop("transfer-encoding", None)
@@ -138,8 +189,9 @@ async def whisper_proxy(
     temperature: float | None,
     response_format: str | None,
     translate: bool,
+    model: str
 ) -> Response:
-    """Proxies transcription/translation request to whisper-server's /inference endpoint."""
+    """Proxies transcription/translation request to whisper-server's /inference endpoint and logs metrics."""
     file_bytes = await file.read()
 
     files = {
@@ -162,6 +214,9 @@ async def whisper_proxy(
     if translate:
         data["translate"] = "true"
 
+    start_time = time.time()
+    endpoint_path = "/v1/audio/translations" if translate else "/v1/audio/transcriptions"
+    
     async with httpx.AsyncClient(timeout=None) as client:
         try:
             response = await client.post(
@@ -169,15 +224,18 @@ async def whisper_proxy(
             )
         except Exception as e:
             logger.error(f"Failed to connect to whisper server on port {port}: {e}")
+            collector.record_request(model_name=model, endpoint=endpoint_path, duration_sec=time.time() - start_time, is_error=True)
             return JSONResponse(
                 status_code=502,
                 content={"error": f"Failed to connect to whisper server: {e}"},
             )
 
+        duration = time.time() - start_time
         if response.status_code != 200:
             logger.error(
                 f"Whisper server returned status {response.status_code}: {response.text}"
             )
+            collector.record_request(model_name=model, endpoint=endpoint_path, duration_sec=duration, is_error=True)
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -187,6 +245,17 @@ async def whisper_proxy(
         result = response.json()
 
     text = result.get("text", "").strip()
+    
+    # Estimate word count as approximation for completion tokens (Whisper doesn't have prompt tokens in OpenAI sense)
+    words_count = len(text.split())
+    collector.record_request(
+        model_name=model,
+        endpoint=endpoint_path,
+        prompt_tokens=0,
+        completion_tokens=words_count,
+        duration_sec=duration,
+        is_error=False
+    )
 
     if response_format == "text":
         return Response(content=text, media_type="text/plain")
@@ -233,22 +302,38 @@ async def get_models():
 
 @app.get("/v1/models/active")
 async def get_active_models():
-    """Lists currently running model servers and their details."""
+    """Lists currently running model servers and their resource/CPU details."""
     active = []
     async with manager.lock:
-        for name, info in manager.running_models.items():
-            active.append(
-                {
-                    "model": name,
-                    "port": info["port"],
-                    "is_whisper": info["is_whisper"],
-                    "is_embedding": info["is_embedding"],
-                    "last_accessed": info["last_accessed"],
-                    "idle_seconds": int(time.time() - info["last_accessed"]),
-                    "log_path": info["log_path"],
-                }
-            )
+        for path, info in manager.running_models.items():
+            name = info["model_name"]
+            pid = info["process"].pid
+            resources = manager.get_process_resources(pid)
+            
+            # Formatted memory size
+            mem_bytes = resources["memory_bytes"]
+            mem_gb = mem_bytes / (1024 * 1024 * 1024)
+            mem_str = f"{mem_gb:.2f} GB" if mem_gb >= 1.0 else f"{mem_bytes / (1024 * 1024):.2f} MB"
+            
+            active.append({
+                "model": name,
+                "port": info["port"],
+                "is_whisper": info["is_whisper"],
+                "is_embedding": info["is_embedding"],
+                "last_accessed": info["last_accessed"],
+                "idle_seconds": int(time.time() - info["last_accessed"]),
+                "log_path": info["log_path"],
+                "cpu_percent": resources["cpu_percent"],
+                "memory_bytes": mem_bytes,
+                "memory_str": mem_str
+            })
     return active
+
+
+@app.get("/v1/models/stats")
+async def get_model_stats():
+    """Returns cumulative request, token, and performance stats for all models."""
+    return collector.get_stats()
 
 
 @app.post("/v1/models/load")
@@ -322,7 +407,7 @@ async def chat_completions(request: Request):
             status_code=500, content={"error": f"Failed to start model server: {e}"}
         )
 
-    return await proxy_to_port(port, "/v1/chat/completions", request, body_bytes)
+    return await proxy_to_port(port, "/v1/chat/completions", request, body_bytes, model_name)
 
 
 @app.post("/v1/completions")
@@ -348,7 +433,7 @@ async def completions(request: Request):
             status_code=500, content={"error": f"Failed to start model server: {e}"}
         )
 
-    return await proxy_to_port(port, "/v1/completions", request, body_bytes)
+    return await proxy_to_port(port, "/v1/completions", request, body_bytes, model_name)
 
 
 @app.post("/v1/embeddings")
@@ -374,7 +459,7 @@ async def embeddings(request: Request):
             status_code=500, content={"error": f"Failed to start model server: {e}"}
         )
 
-    return await proxy_to_port(port, "/v1/embeddings", request, body_bytes)
+    return await proxy_to_port(port, "/v1/embeddings", request, body_bytes, model_name)
 
 
 @app.post("/v1/audio/transcriptions")
@@ -395,7 +480,7 @@ async def audio_transcriptions(
         )
 
     return await whisper_proxy(
-        port, file, language, temperature, response_format, translate=False
+        port, file, language, temperature, response_format, translate=False, model=model
     )
 
 
@@ -417,5 +502,5 @@ async def audio_translations(
         )
 
     return await whisper_proxy(
-        port, file, language, temperature, response_format, translate=True
+        port, file, language, temperature, response_format, translate=True, model=model
     )

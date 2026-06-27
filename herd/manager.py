@@ -12,6 +12,11 @@ from herd.config import (
 )
 from herd.downloader import resolve_model_path
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 logger = logging.getLogger("herd.manager")
 
 
@@ -255,3 +260,23 @@ class ProcessManager:
                     f"Model '{model_name}' has been idle for {idle_time:.1f}s. Stopping process."
                 )
                 await self.stop_model(model_name)
+
+    def get_process_resources(self, pid: int) -> dict:
+        """Returns CPU percentage and RSS RAM usage in bytes for the process and its children."""
+        if psutil is None:
+            return {"cpu_percent": 0.0, "memory_bytes": 0}
+        try:
+            proc = psutil.Process(pid)
+            mem = proc.memory_info().rss
+            cpu = proc.cpu_percent(interval=None)
+            
+            # Sum up children resources recursively
+            for child in proc.children(recursive=True):
+                try:
+                    mem += child.memory_info().rss
+                    cpu += child.cpu_percent(interval=None)
+                except Exception:
+                    pass
+            return {"cpu_percent": round(cpu, 1), "memory_bytes": mem}
+        except Exception:
+            return {"cpu_percent": 0.0, "memory_bytes": 0}

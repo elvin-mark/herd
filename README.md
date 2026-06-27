@@ -81,18 +81,24 @@ herd list --provider huggingface
 ```
 
 ### 4. View Active Model processes (`herd ps`)
-See which models are currently loaded, which ports they are running on, and how long they've been idle:
+See which models are currently loaded, their internal ports, CPU usage, RAM utilization, and idle time:
 ```bash
 herd ps
 ```
 
-### 5. Stop a Running Model (`herd stop`)
+### 5. View Performance Statistics (`herd stats`)
+See cumulative request counts, error counts, prompt tokens processed, generation tokens generated, average latency, and average generation speed (tokens per second) across all models:
+```bash
+herd stats
+```
+
+### 6. Stop a Running Model (`herd stop`)
 Manually unload a model and terminate its process:
 ```bash
 herd stop unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M
 ```
 
-### 6. Start the API Gateway (`herd serve`)
+### 7. Start the API Gateway (`herd serve`)
 Manually start the gateway in the foreground:
 ```bash
 herd serve --port 11434
@@ -121,6 +127,12 @@ curl http://127.0.0.1:11434/v1/audio/transcriptions \
   -F "file=@/path/to/audio.wav" \
   -F "model=ggerganov/whisper.cpp:ggml-base.en.bin" \
   -F "language=en"
+```
+
+### Prometheus Scraping Metrics (`GET /metrics`)
+Exposes standard Prometheus plain-text metrics (e.g. CPU, memory, requests total, token counts, and request durations) for third-party dashboards (Grafana, etc.):
+```bash
+curl http://127.0.0.1:11434/metrics
 ```
 
 ---

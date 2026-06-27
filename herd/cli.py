@@ -486,6 +486,8 @@ def ps():
     table.add_column("Model", style="cyan")
     table.add_column("Port", style="green")
     table.add_column("Type", style="magenta")
+    table.add_column("CPU %", style="yellow")
+    table.add_column("Memory", style="green")
     table.add_column("Idle Time", style="blue")
 
     for a in active:
@@ -495,7 +497,54 @@ def ps():
             else ("Embedding" if a["is_embedding"] else "LLM")
         )
         idle_str = f"{a['idle_seconds']}s"
-        table.add_row(a["model"], str(a["port"]), m_type, idle_str)
+        cpu_str = f"{a.get('cpu_percent', 0.0)}%"
+        mem_str = a.get("memory_str", "0 MB")
+        table.add_row(a["model"], str(a["port"]), m_type, cpu_str, mem_str, idle_str)
+
+    console.print(table)
+
+
+@app.command(name="stats")
+def show_stats():
+    """Displays cumulative request, token, and performance stats for all models."""
+    if not is_gateway_running():
+        console.print("[yellow]Herd API gateway is not running.[/yellow]")
+        return
+
+    url = f"http://127.0.0.1:{HERD_PORT}/v1/models/stats"
+    try:
+        response = httpx.get(url)
+        response.raise_for_status()
+        stats = response.json()
+    except Exception as e:
+        console.print(f"[red]Failed to query model stats: {e}[/red]")
+        return
+
+    if not stats:
+        console.print("[yellow]No stats collected yet. Send some requests first![/yellow]")
+        return
+
+    table = Table(title="Herd Model Usage Statistics")
+    table.add_column("Model", style="cyan")
+    table.add_column("Requests (Err)", style="magenta")
+    table.add_column("Prompt Tok", style="green")
+    table.add_column("Gen Tok", style="green")
+    table.add_column("Avg Latency", style="yellow")
+    table.add_column("Avg Speed", style="bold green")
+
+    for model, data in stats.items():
+        req_str = f"{data['requests']} ({data['errors']})"
+        lat_str = f"{data['avg_latency_sec']:.2f}s"
+        speed_str = f"{data['avg_speed_tok_sec']:.1f} tok/s" if data['avg_speed_tok_sec'] > 0 else "N/A"
+        
+        table.add_row(
+            model,
+            req_str,
+            f"{data['prompt_tokens']:,}",
+            f"{data['completion_tokens']:,}",
+            lat_str,
+            speed_str
+        )
 
     console.print(table)
 
