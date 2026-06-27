@@ -576,6 +576,61 @@ def serve(
     uvicorn.run("herd.api.server:app", host="127.0.0.1", port=port, log_level="info")
 
 
+@app.command()
+def logs(
+    model_name: Optional[str] = typer.Argument(
+        None,
+        help="Model identifier to view logs for. If omitted, tails the gateway logs.",
+    ),
+    follow: bool = typer.Option(
+        False, "--follow", "-f", help="Follow log output in real-time."
+    ),
+    lines: int = typer.Option(
+        20, "--lines", "-n", help="Number of lines to show from the end of the logs."
+    ),
+):
+    """Views or live-tails logs for a model process or the central gateway."""
+    if model_name:
+        model_safe = model_name.replace("/", "_").replace(":", "_")
+        log_path = os.path.join(HERD_LOGS_DIR, f"{model_safe}.log")
+        target_desc = f"Model '{model_name}'"
+    else:
+        log_path = os.path.join(HERD_LOGS_DIR, "gateway.log")
+        target_desc = "Herd Gateway"
+
+    if not os.path.exists(log_path):
+        console.print(f"[red]No logs found at: {log_path}[/red]")
+        raise typer.Exit(1)
+
+    console.print(
+        f"[bold green]Tailing last {lines} lines of {target_desc} logs...[/bold green]"
+    )
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            from collections import deque
+
+            last_lines = deque(f, maxlen=lines)
+            for line in last_lines:
+                print(line, end="")
+
+            if follow:
+                f.seek(0, 2)
+                console.print(
+                    "\n[bold yellow]--- Following logs (Press Ctrl+C to exit) ---[/bold yellow]\n"
+                )
+                while True:
+                    line = f.readline()
+                    if not line:
+                        time.sleep(0.1)
+                        continue
+                    print(line, end="", flush=True)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Log tailing stopped.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error reading logs: {e}[/red]")
+
+
 def main():
     app()
 

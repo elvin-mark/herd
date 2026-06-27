@@ -102,7 +102,20 @@ Manually unload a model and terminate its process:
 herd stop unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M
 ```
 
-### 7. Start the API Gateway (`herd serve`)
+### 7. View Server and Model Logs (`herd logs`)
+View or live-tail the runtime logs of the gateway or any active model process. Press `Ctrl+C` to exit:
+```bash
+# View the last 20 lines of the main API gateway logs
+herd logs
+
+# Live-follow the last 50 lines of the gateway logs in real-time
+herd logs -f -n 50
+
+# Live-follow the logs for a specific running model process
+herd logs unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M -f
+```
+
+### 8. Start the API Gateway (`herd serve`)
 Manually start the gateway in the foreground:
 ```bash
 herd serve --port 11434
