@@ -2,10 +2,9 @@
   <img src="assets/logo.jpg" alt="Herd Logo" width="280" />
 </p>
 
-# Herd 🐃
+# Herd 🦙
 
-
-Herd is a local AI model coordinator and API gateway inspired by Ollama. It enables you to download GGUF (LLM) and GGML/GGUF (Whisper) models directly from Hugging Face, run multiple models concurrently in separate background processes (powered by `llama.cpp` and `whisper.cpp`), and access them all through a single OpenAI-compatible API gateway.
+Herd is a local AI model coordinator and API gateway inspired by Ollama. The name comes from the idea of running a **"herd" of llamas** (Llama LLM processes) concurrently on your system. It enables you to download GGUF (LLM) and GGML/GGUF (Whisper) models directly from Hugging Face, run multiple models concurrently in separate background processes (powered by `llama.cpp` and `whisper.cpp`), and access them all through a single OpenAI-compatible API gateway.
 
 ## Features
 
