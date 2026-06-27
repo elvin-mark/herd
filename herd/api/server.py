@@ -87,6 +87,12 @@ if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint."""
+    return {"status": "ok"}
+
+
 @app.get("/")
 @app.get("/dashboard")
 async def get_dashboard():
