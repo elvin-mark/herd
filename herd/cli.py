@@ -9,9 +9,10 @@ from typing import Optional
 from rich.console import Console
 from rich.table import Table
 import httpx
+import uvicorn
 
-from herd.config import HERD_PORT, HERD_LOGS_DIR, HERD_MODELS_DIR
-from herd.downloader import (
+from herd.core.config import HERD_PORT, HERD_LOGS_DIR, HERD_MODELS_DIR
+from herd.services.downloader import (
     list_hf_repository_files,
     download_file,
     parse_model_identifier,
@@ -264,58 +265,41 @@ async def stream_chat_completions(model_name: str, messages: list) -> str:
 
 
 async def chat_interactive(model_name: str):
-    """Enters an interactive terminal chat session with the model."""
-    history = []
+    """Launches the CLI chat session loops."""
     console.print(
         f"\n[bold green]Chatting with {model_name} (Herd Gateway)[/bold green]"
     )
-    console.print(
-        "[dim]Type /exit or /quit to end. Press Ctrl+C to stop generation.[/dim]\n"
-    )
+    console.print("Type /exit or /quit to end. Press Ctrl+C to stop generation.\n")
 
+    messages = []
     while True:
         try:
-            # Styled prompt
-            console.print("[bold green]>>> [/bold green]", end="")
-            user_input = input()
+            user_input = typer.prompt(">>> ", prompt_suffix="").strip()
+            if not user_input:
+                continue
+            if user_input.lower() in ["/exit", "/quit"]:
+                break
+
+            messages.append({"role": "user", "content": user_input})
+            print("Response: ", end="")
+
+            try:
+                assistant_response = await stream_chat_completions(
+                    model_name, messages
+                )
+                messages.append(
+                    {"role": "assistant", "content": assistant_response}
+                )
+            except KeyboardInterrupt:
+                print("\n[yellow]Generation interrupted.[/yellow]")
+                messages.append(
+                    {"role": "assistant", "content": "[Generation Interrupted]"}
+                )
+            except Exception as e:
+                console.print(f"\n[red]Error during generation: {e}[/red]")
         except (KeyboardInterrupt, EOFError):
-            console.print("\n[yellow]Exiting chat.[/yellow]")
+            console.print("\n[yellow]Exiting chat session...[/yellow]")
             break
-
-        if not user_input.strip():
-            continue
-
-        if user_input.strip() in ("/exit", "/quit"):
-            break
-
-        history.append({"role": "user", "content": user_input})
-        console.print("[bold cyan]Response:[/bold cyan] ", end="")
-
-        try:
-            assistant_response = await stream_chat_completions(model_name, history)
-            history.append({"role": "assistant", "content": assistant_response})
-        except KeyboardInterrupt:
-            console.print("\n[yellow]Generation interrupted by user.[/yellow]")
-            history.append({"role": "assistant", "content": "[generation interrupted]"})
-        except Exception as e:
-            console.print(f"\n[red]Error: {e}[/red]")
-            # Remove failed prompt
-            history.pop()
-
-
-@app.command()
-def serve(
-    port: int = typer.Option(
-        HERD_PORT, "--port", "-p", help="Port to bind the Herd gateway server."
-    ),
-):
-    """Starts the Herd API gateway server in the foreground."""
-    import uvicorn
-
-    console.print(
-        f"[bold green]Starting Herd API Gateway on port {port}...[/bold green]"
-    )
-    uvicorn.run("herd.server:app", host="127.0.0.1", port=port, log_level="info")
 
 
 @app.command()
@@ -323,7 +307,7 @@ def pull(
     model_name: str = typer.Argument(
         ...,
         help="Model identifier format 'author/repo[:tag]' (e.g. unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M)",
-    ),
+    )
 ):
     """Downloads a GGUF or BIN model from Hugging Face."""
     asyncio.run(pull_model_async(model_name))
@@ -333,10 +317,16 @@ def pull(
 def run(
     model_name: str = typer.Argument(..., help="Model identifier to run."),
     whisper: bool = typer.Option(
-        False, "--whisper", "-w", help="Run as a speech-to-text whisper model server."
+        False,
+        "--whisper",
+        "-w",
+        help="Run as a speech-to-text whisper model server.",
     ),
     embedding: bool = typer.Option(
-        False, "--embedding", "-e", help="Enable embeddings flag for llama-server."
+        False,
+        "--embedding",
+        "-e",
+        help="Enable embeddings flag for llama-server.",
     ),
     idle_timeout: Optional[int] = typer.Option(
         None,
@@ -400,7 +390,9 @@ def run(
             f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/audio/translations[/bold white]"
         )
     elif embedding or "embedding" in model_name.lower() or "bert" in model_name.lower():
-        console.print("\n[bold green]Embedding model loaded successfully![/bold green]")
+        console.print(
+            "\n[bold green]Embedding model loaded successfully![/bold green]"
+        )
         console.print(
             f"Model server running internally on port [bold cyan]{port}[/bold cyan]."
         )
@@ -418,7 +410,10 @@ def list_models(
         None, help="Filter models by name (case-insensitive substring search)."
     ),
     provider: Optional[str] = typer.Option(
-        None, "--provider", "-p", help="Filter models by provider (e.g. huggingface)."
+        None,
+        "--provider",
+        "-p",
+        help="Filter models by provider (e.g. huggingface).",
     ),
 ):
     """Lists all downloaded models present on disk, optionally filtered."""
@@ -455,7 +450,9 @@ def list_models(
     table.add_column("Size", style="green")
 
     for m in models:
-        table.add_row(m.get("provider", "local"), m["name"], m["filename"], m["size"])
+        table.add_row(
+            m.get("provider", "local"), m["name"], m["filename"], m["size"]
+        )
 
     console.print(table)
 
@@ -497,7 +494,9 @@ def ps():
         idle_str = f"{a['idle_seconds']}s"
         cpu_str = f"{a.get('cpu_percent', 0.0)}%"
         mem_str = a.get("memory_str", "0 MB")
-        table.add_row(a["model"], str(a["port"]), m_type, cpu_str, mem_str, idle_str)
+        table.add_row(
+            a["model"], str(a["port"]), m_type, cpu_str, mem_str, idle_str
+        )
 
     console.print(table)
 
@@ -554,7 +553,9 @@ def show_stats():
 
 
 @app.command()
-def stop(model_name: str = typer.Argument(..., help="Model identifier to stop.")):
+def stop(
+    model_name: str = typer.Argument(..., help="Model identifier to stop.")
+):
     """Stops a running model process."""
     if not is_gateway_running():
         console.print("[yellow]Herd API gateway is not running.[/yellow]")
@@ -564,12 +565,34 @@ def stop(model_name: str = typer.Argument(..., help="Model identifier to stop.")
     try:
         response = httpx.post(url, json={"model": model_name})
         if response.status_code == 200:
-            console.print(f"[green]Successfully stopped model '{model_name}'.[/green]")
+            console.print(
+                f"[green]Successfully stopped model '{model_name}'.[/green]"
+            )
         else:
             console.print(f"[red]Failed to stop model: {response.text}[/red]")
     except Exception as e:
         console.print(f"[red]Error stopping model: {e}[/red]")
 
 
+@app.command(name="serve")
+def serve(
+    port: int = typer.Option(
+        HERD_PORT, "--port", "-p", help="Port to run the gateway server on."
+    )
+):
+    """Starts the central Herd API Gateway server."""
+    # Ensure gateway port is set in env so server.py knows about it
+    os.environ["HERD_PORT"] = str(port)
+    console.print(
+        f"[bold green]Starting Herd API Gateway on port {port}...[/bold green]"
+    )
+    # Correct path to the FastAPI app module under the new package layout
+    uvicorn.run("herd.api.server:app", host="127.0.0.1", port=port, log_level="info")
+
+
 def main():
     app()
+
+
+if __name__ == "__main__":
+    main()

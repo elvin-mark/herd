@@ -9,7 +9,7 @@ from rich.progress import (
     TimeRemainingColumn,
     TextColumn,
 )
-from herd.config import HERD_MODELS_DIR
+from herd.core.config import HERD_MODELS_DIR
 
 
 def parse_model_identifier(model_name: str):

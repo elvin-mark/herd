@@ -1,5 +1,4 @@
 import os
-import re
 import time
 import json
 import logging
@@ -10,9 +9,9 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
-from herd.config import HERD_MODELS_DIR, HERD_PORT
-from herd.manager import ProcessManager
-from herd.metrics import collector
+from herd.core.config import HERD_MODELS_DIR
+from herd.services.manager import ProcessManager
+from herd.core.metrics import collector
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -25,49 +24,40 @@ cleanup_task = None
 
 
 def list_downloaded_models() -> list[str]:
-    """Scans the HERD_HOME/models/huggingface directory to find all downloaded GGUF/bin models."""
+    """Scans the models directory and returns all model names in author/repo format."""
     models = []
     hf_dir = os.path.join(HERD_MODELS_DIR, "huggingface")
     if not os.path.exists(hf_dir):
         return models
 
+    # Walk directory to find author/repo structures containing .gguf or .bin
     for author in os.listdir(hf_dir):
         author_path = os.path.join(hf_dir, author)
         if not os.path.isdir(author_path):
             continue
+
         for repo in os.listdir(author_path):
             repo_path = os.path.join(author_path, repo)
             if not os.path.isdir(repo_path):
                 continue
 
-            # Scan for .gguf or .bin files
-            for root, _, files in os.walk(repo_path):
-                for file in files:
-                    if file.endswith(".gguf") or file.endswith(".bin"):
-                        name_no_ext, _ = os.path.splitext(file)
+            # Look for model files
+            files = os.listdir(repo_path)
+            model_files = [
+                f for f in files if f.endswith(".gguf") or f.endswith(".bin")
+            ]
+            if model_files:
+                models.append(f"{author}/{repo}")
 
-                        # Extract tag if we can match quantization format (e.g. Q4_K_M)
-                        match = re.search(
-                            r"([qI]?[0-9]_[A-Za-z0-9_]+)", name_no_ext, re.IGNORECASE
-                        )
-                        if match:
-                            tag = match.group(1)
-                        else:
-                            tag = name_no_ext
-
-                        models.append(f"{author}/{repo}:{tag}")
-
-    return list(sorted(set(models)))
+    return sorted(models)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup: start process manager idle cleanup background loop
     global cleanup_task
     cleanup_task = asyncio.create_task(manager.cleanup_loop())
-    logger.info(
-        f"Herd Gateway Server listening on port {HERD_PORT}. Idle timeout cleanup task running."
-    )
+    logger.info("Herd Gateway Server started. Idle cleanup task scheduled.")
     yield
     # Shutdown
     if cleanup_task:
@@ -78,29 +68,42 @@ async def lifespan(app: FastAPI):
             pass
     # Stop all models
     running_models = list(manager.running_models.keys())
-    for model_name in running_models:
-        await manager.stop_model(model_name)
+    for model_path in running_models:
+        # Since running_models is keyed by path, stop_model handles either model_name or path.
+        # We can extract model_name from info dict
+        info = manager.running_models.get(model_path)
+        if info:
+            await manager.stop_model(info["model_name"])
     logger.info("Herd Gateway Server stopped. All child processes terminated.")
 
 
 app = FastAPI(title="Herd API Gateway", lifespan=lifespan)
 
 # Mount assets folder to serve the logo image
-assets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
+assets_dir = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "assets")
+)
 if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
 
 @app.get("/")
 @app.get("/dashboard")
 async def get_dashboard():
     """Serves the Herd Web Control Center dashboard."""
-    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
+    dashboard_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "templates", "dashboard.html")
+    )
     try:
         with open(dashboard_path, "r", encoding="utf-8") as f:
             content = f.read()
         return Response(content=content, media_type="text/html")
     except Exception as e:
-        return Response(content=f"Error loading dashboard: {e}", status_code=500, media_type="text/plain")
+        return Response(
+            content=f"Error loading dashboard: {e}",
+            status_code=500,
+            media_type="text/plain",
+        )
 
 
 @app.get("/metrics")
@@ -122,7 +125,8 @@ async def get_prometheus_metrics_endpoint():
             )
     prometheus_data = collector.get_prometheus_metrics(active)
     return Response(
-        content=prometheus_data, media_type="text/plain; version=0.0.4; charset=utf-8"
+        content=prometheus_data,
+        media_type="text/plain; version=0.0.4; charset=utf-8",
     )
 
 
@@ -206,7 +210,9 @@ async def proxy_to_port(
     res_headers.pop("content-length", None)
 
     return StreamingResponse(
-        response_generator(), status_code=response.status_code, headers=res_headers
+        response_generator(),
+        status_code=response.status_code,
+        headers=res_headers,
     )
 
 
@@ -299,36 +305,24 @@ async def whisper_proxy(
 
     if response_format == "text":
         return Response(content=text, media_type="text/plain")
-    elif response_format == "verbose_json":
-        return JSONResponse(
-            content={
-                "text": text,
-                "task": "translate" if translate else "transcribe",
-                "language": result.get("language", language or "english"),
-                "duration": result.get("duration", 0.0),
-                "segments": result.get("segments", []),
-            }
-        )
-    else:
-        # Default or json
-        return JSONResponse(content={"text": text})
 
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy"}
+    openai_response = {
+        "text": text,
+        "segments": result.get("segments", []),
+    }
+    return JSONResponse(content=openai_response)
 
 
 @app.get("/v1/models")
-async def get_models():
-    """Lists all downloaded models in the HF repository style directory."""
+async def list_models():
+    """Exposes downloaded models in OpenAI format."""
     try:
         models = list_downloaded_models()
         data = []
-        for model in models:
+        for m in models:
             data.append(
                 {
-                    "id": model,
+                    "id": m,
                     "object": "model",
                     "created": int(time.time()),
                     "owned_by": "huggingface",
@@ -410,13 +404,14 @@ async def load_model(request: Request):
         return JSONResponse(status_code=404, content={"error": str(e)})
     except Exception as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to start model server: {e}"}
+            status_code=500,
+            content={"error": f"Failed to start model server: {e}"},
         )
 
 
 @app.post("/v1/models/unload")
 async def unload_model(request: Request):
-    """Explicitly stops a running model server process."""
+    """Explicitly stops a model server process."""
     try:
         body = await request.json()
     except Exception:
@@ -450,7 +445,8 @@ async def chat_completions(request: Request):
         return JSONResponse(status_code=404, content={"error": str(e)})
     except Exception as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to start model server: {e}"}
+            status_code=500,
+            content={"error": f"Failed to start model server: {e}"},
         )
 
     return await proxy_to_port(
@@ -478,10 +474,13 @@ async def completions(request: Request):
         return JSONResponse(status_code=404, content={"error": str(e)})
     except Exception as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to start model server: {e}"}
+            status_code=500,
+            content={"error": f"Failed to start model server: {e}"},
         )
 
-    return await proxy_to_port(port, "/v1/completions", request, body_bytes, model_name)
+    return await proxy_to_port(
+        port, "/v1/completions", request, body_bytes, model_name
+    )
 
 
 @app.post("/v1/embeddings")
@@ -504,10 +503,13 @@ async def embeddings(request: Request):
         return JSONResponse(status_code=404, content={"error": str(e)})
     except Exception as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to start model server: {e}"}
+            status_code=500,
+            content={"error": f"Failed to start model server: {e}"},
         )
 
-    return await proxy_to_port(port, "/v1/embeddings", request, body_bytes, model_name)
+    return await proxy_to_port(
+        port, "/v1/embeddings", request, body_bytes, model_name
+    )
 
 
 @app.post("/v1/audio/transcriptions")
@@ -524,11 +526,18 @@ async def audio_transcriptions(
         return JSONResponse(status_code=404, content={"error": str(e)})
     except Exception as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to start whisper server: {e}"}
+            status_code=500,
+            content={"error": f"Failed to start whisper server: {e}"},
         )
 
     return await whisper_proxy(
-        port, file, language, temperature, response_format, translate=False, model=model
+        port,
+        file,
+        language,
+        temperature,
+        response_format,
+        translate=False,
+        model=model,
     )
 
 
@@ -546,9 +555,16 @@ async def audio_translations(
         return JSONResponse(status_code=404, content={"error": str(e)})
     except Exception as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to start whisper server: {e}"}
+            status_code=500,
+            content={"error": f"Failed to start whisper server: {e}"},
         )
 
     return await whisper_proxy(
-        port, file, language, temperature, response_format, translate=True, model=model
+        port,
+        file,
+        language,
+        temperature,
+        response_format,
+        translate=True,
+        model=model,
     )

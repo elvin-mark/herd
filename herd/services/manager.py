@@ -4,13 +4,13 @@ import asyncio
 import logging
 import socket
 from typing import Dict, Any, Optional
-from herd.config import (
+from herd.core.config import (
     HERD_LOGS_DIR,
     LLAMA_SERVER_BIN,
     WHISPER_SERVER_BIN,
     IDLE_TIMEOUT,
 )
-from herd.downloader import resolve_model_path
+from herd.services.downloader import resolve_model_path
 
 try:
     import psutil
@@ -83,7 +83,7 @@ class ProcessManager:
                             except asyncio.TimeoutError:
                                 logger.warning(
                                     f"Process for '{model_name}' did not exit. Force killing..."
-                                )
+                               )
                                 process.kill()
                                 await process.wait()
                         except Exception as e:
