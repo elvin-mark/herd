@@ -687,9 +687,10 @@ def setup(
     if cuda:
         cmake_args.append("-DGGML_CUDA=ON")
 
+    cores = os.cpu_count() or 1
     subprocess.run(cmake_args, cwd=llama_dir, check=True)
     subprocess.run(
-        [cmake_bin, "--build", "build", "--config", "Release", "--target", "llama-server"],
+        [cmake_bin, "--build", "build", "--config", "Release", "--target", "llama-server", "--parallel", str(cores)],
         cwd=llama_dir,
         check=True
     )
@@ -711,7 +712,7 @@ def setup(
 
     subprocess.run(whisper_cmake_args, cwd=whisper_dir, check=True)
     subprocess.run(
-        [cmake_bin, "--build", "build", "--config", "Release", "--target", "whisper-server"],
+        [cmake_bin, "--build", "build", "--config", "Release", "--target", "whisper-server", "--parallel", str(cores)],
         cwd=whisper_dir,
         check=True
     )
