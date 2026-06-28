@@ -11,7 +11,7 @@ from rich.table import Table
 import httpx
 import uvicorn
 
-from herd.core.config import HERD_PORT, HERD_LOGS_DIR, HERD_MODELS_DIR
+from herd.core.config import HERD_HOST, HERD_PORT, HERD_LOGS_DIR, HERD_MODELS_DIR
 from herd.services.downloader import (
     list_hf_repository_files,
     download_file,
@@ -29,8 +29,11 @@ console = Console()
 
 def is_gateway_running() -> bool:
     """Checks if the Herd gateway server is currently running."""
+    host = HERD_HOST
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
     try:
-        response = httpx.get(f"http://127.0.0.1:{HERD_PORT}/health", timeout=1.0)
+        response = httpx.get(f"http://{host}:{HERD_PORT}/health", timeout=1.0)
         return response.status_code == 200
     except Exception:
         return False
@@ -562,18 +565,25 @@ def stop(model_name: str = typer.Argument(..., help="Model identifier to stop.")
 
 @app.command(name="serve")
 def serve(
+    host: str = typer.Option(
+        HERD_HOST,
+        "--host",
+        "-h",
+        help="Host IP address to bind the gateway server to (use '0.0.0.0' for local network access).",
+    ),
     port: int = typer.Option(
         HERD_PORT, "--port", "-p", help="Port to run the gateway server on."
     ),
 ):
     """Starts the central Herd API Gateway server."""
-    # Ensure gateway port is set in env so server.py knows about it
+    # Ensure gateway port and host are set in env so other processes know about it
     os.environ["HERD_PORT"] = str(port)
+    os.environ["HERD_HOST"] = host
     console.print(
-        f"[bold green]Starting Herd API Gateway on port {port}...[/bold green]"
+        f"[bold green]Starting Herd API Gateway on {host}:{port}...[/bold green]"
     )
     # Correct path to the FastAPI app module under the new package layout
-    uvicorn.run("herd.api.server:app", host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run("herd.api.server:app", host=host, port=port, log_level="info")
 
 
 @app.command()

@@ -116,9 +116,13 @@ herd logs unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M -f
 ```
 
 ### 8. Start the API Gateway (`herd serve`)
-Manually start the gateway in the foreground:
+Manually start the gateway in the foreground. Use `--host 0.0.0.0` to expose the gateway and its models to other machines on your local network:
 ```bash
+# Bind to localhost (default)
 herd serve --port 11434
+
+# Bind to all network interfaces for local network access
+herd serve --host 0.0.0.0 --port 11434
 ```
 
 ---
@@ -167,6 +171,7 @@ You can customize Herd's behavior using the following environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `HERD_HOME` | Directory where models and logs are stored | `~/.herd` |
+| `HERD_HOST` | Host IP address to bind the Herd API gateway | `127.0.0.1` |
 | `HERD_PORT` | Port for the central Herd API gateway | `11434` |
 | `HERD_IDLE_TIMEOUT` | Seconds of inactivity before stopping a model process | `300` (5 minutes) |
 | `LLAMA_SERVER_BIN` | Custom path to the `llama-server` binary | Discovered in `PATH` |

@@ -6,7 +6,8 @@ HERD_HOME = os.environ.get("HERD_HOME", os.path.expanduser("~/.herd"))
 HERD_MODELS_DIR = os.path.join(HERD_HOME, "models")
 HERD_LOGS_DIR = os.path.join(HERD_HOME, "logs")
 
-# Port for Herd API gateway
+# Host and Port for Herd API gateway
+HERD_HOST = os.environ.get("HERD_HOST", "127.0.0.1")
 HERD_PORT = int(os.environ.get("HERD_PORT", "11434"))
 
 # Idle timeout for model servers in seconds
