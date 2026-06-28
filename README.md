@@ -125,6 +125,20 @@ herd serve --port 11434
 herd serve --host 0.0.0.0 --port 11434
 ```
 
+### 9. Build and Configure Binaries Locally (`herd setup`)
+If you do not have `llama-server` or `whisper-server` installed on your system PATH, Herd can automatically clone, compile, and configure the binaries locally in your `HERD_HOME` directory. Requires `git` and `cmake` to be installed on your system:
+```bash
+# Clone and build llama-server and whisper-server locally with CPU support
+herd setup
+
+# Clone and compile with CUDA/GPU support (NVIDIA GPUs)
+herd setup --cuda
+
+# Specify a custom directory to clone and build the repositories
+herd setup --dir ./my-builds
+```
+This command automatically writes the compiled absolute binary paths to a configuration file `~/.herd/config.json`, which Herd loads at startup.
+
 ---
 
 ## API Usage & Control Center

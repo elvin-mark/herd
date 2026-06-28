@@ -11,7 +11,8 @@ from rich.table import Table
 import httpx
 import uvicorn
 
-from herd.core.config import HERD_HOST, HERD_PORT, HERD_LOGS_DIR, HERD_MODELS_DIR
+import shutil
+from herd.core.config import HERD_HOST, HERD_PORT, HERD_LOGS_DIR, HERD_MODELS_DIR, HERD_HOME
 from herd.services.downloader import (
     list_hf_repository_files,
     download_file,
@@ -639,6 +640,103 @@ def logs(
         console.print("\n[yellow]Log tailing stopped.[/yellow]")
     except Exception as e:
         console.print(f"[red]Error reading logs: {e}[/red]")
+
+
+@app.command()
+def setup(
+    dir_path: Optional[str] = typer.Option(
+        None,
+        "--dir",
+        "-d",
+        help="Directory where llama.cpp and whisper.cpp will be cloned and compiled. Defaults to HERD_HOME/src.",
+    ),
+    cuda: bool = typer.Option(
+        False, "--cuda", help="Compile llama.cpp and whisper.cpp with CUDA support."
+    ),
+):
+    """Clones, compiles, and configures llama.cpp and whisper.cpp locally."""
+    if not dir_path:
+        dir_path = os.path.join(HERD_HOME, "src")
+
+    os.makedirs(dir_path, exist_ok=True)
+
+    git_bin = shutil.which("git")
+    cmake_bin = shutil.which("cmake")
+    if not git_bin:
+        console.print("[red]Error: 'git' is not installed or not in PATH. Please install git first.[/red]")
+        raise typer.Exit(1)
+    if not cmake_bin:
+        console.print("[red]Error: 'cmake' is not installed or not in PATH. Please install cmake first.[/red]")
+        raise typer.Exit(1)
+
+    llama_dir = os.path.join(dir_path, "llama.cpp")
+    whisper_dir = os.path.join(dir_path, "whisper.cpp")
+
+    # 1. Setup llama.cpp
+    if not os.path.exists(llama_dir):
+        console.print("[bold cyan]Cloning llama.cpp...[/bold cyan]")
+        subprocess.run(
+            [git_bin, "clone", "--depth", "1", "https://github.com/ggerganov/llama.cpp.git", llama_dir],
+            check=True
+        )
+    else:
+        console.print("[yellow]llama.cpp directory already exists. Skipping clone.[/yellow]")
+
+    console.print("[bold cyan]Compiling llama-server...[/bold cyan]")
+    cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
+    if cuda:
+        cmake_args.append("-DGGML_CUDA=ON")
+
+    subprocess.run(cmake_args, cwd=llama_dir, check=True)
+    subprocess.run(
+        [cmake_bin, "--build", "build", "--config", "Release", "--target", "llama-server"],
+        cwd=llama_dir,
+        check=True
+    )
+
+    # 2. Setup whisper.cpp
+    if not os.path.exists(whisper_dir):
+        console.print("[bold cyan]Cloning whisper.cpp...[/bold cyan]")
+        subprocess.run(
+            [git_bin, "clone", "--depth", "1", "https://github.com/ggerganov/whisper.cpp.git", whisper_dir],
+            check=True
+        )
+    else:
+        console.print("[yellow]whisper.cpp directory already exists. Skipping clone.[/yellow]")
+
+    console.print("[bold cyan]Compiling whisper-server...[/bold cyan]")
+    whisper_cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
+    if cuda:
+        whisper_cmake_args.append("-DGGML_CUDA=ON")
+
+    subprocess.run(whisper_cmake_args, cwd=whisper_dir, check=True)
+    subprocess.run(
+        [cmake_bin, "--build", "build", "--config", "Release", "--target", "whisper-server"],
+        cwd=whisper_dir,
+        check=True
+    )
+
+    # 3. Configure binary paths
+    llama_bin_path = os.path.abspath(os.path.join(llama_dir, "build", "bin", "llama-server"))
+    whisper_bin_path = os.path.abspath(os.path.join(whisper_dir, "build", "bin", "whisper-server"))
+    if not os.path.exists(whisper_bin_path):
+        fallback_path = os.path.abspath(os.path.join(whisper_dir, "build", "whisper-server"))
+        if os.path.exists(fallback_path):
+            whisper_bin_path = fallback_path
+
+    config_path = os.path.join(HERD_HOME, "config.json")
+    config_data = {
+        "LLAMA_SERVER_BIN": llama_bin_path,
+        "WHISPER_SERVER_BIN": whisper_bin_path
+    }
+
+    with open(config_path, "w") as f:
+        json.dump(config_data, f, indent=4)
+
+    console.print("\n[bold green]Herd setup completed successfully![/bold green]")
+    console.print(f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:")
+    console.print(f"  llama-server: [bold white]{llama_bin_path}[/bold white]")
+    console.print(f"  whisper-server: [bold white]{whisper_bin_path}[/bold white]")
 
 
 def main():
