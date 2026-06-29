@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "A CLI and API gateway for running LLM and transcription models locally using llama.cpp and whisper.cpp."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",
@@ -23,4 +24,4 @@ dependencies = [
 herd = "herd.cli:main"
 
 [tool.setuptools]
-packages = ["herd"]
+packages = ["herd", "herd.core", "herd.services", "herd.api"]
