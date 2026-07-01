@@ -4,6 +4,7 @@ import asyncio
 import logging
 import socket
 from typing import Dict, Any, Optional
+import httpx
 from herd.core.config import (
     HERD_LOGS_DIR,
     LLAMA_SERVER_BIN,
@@ -159,6 +160,20 @@ class ProcessManager:
                     f"Please check the logs at: {log_path}"
                 )
 
+            # Wait for the model weights to load fully
+            ready = await self._wait_for_model_ready(port, is_whisper)
+            if not ready:
+                try:
+                    process.terminate()
+                    await process.wait()
+                except Exception:
+                    pass
+                log_file.close()
+                raise RuntimeError(
+                    f"Model server '{model_name}' failed to load weights and become ready within timeout. "
+                    f"Please check the logs at: {log_path}"
+                )
+
             # 7. Register model server using resolved model path as key
             self.running_models[model_path] = {
                 "process": process,
@@ -225,6 +240,38 @@ class ProcessManager:
                 return True
             except Exception:
                 await asyncio.sleep(0.5)
+        return False
+
+    async def _wait_for_model_ready(self, port: int, is_whisper: bool, timeout: float = 120.0) -> bool:
+        """Waits for the model server to finish loading and be fully ready to serve."""
+        if is_whisper:
+            # Whisper loads fast, port binding is sufficient
+            return True
+
+        start_time = time.time()
+        url = f"http://127.0.0.1:{port}/health"
+        
+        async with httpx.AsyncClient() as client:
+            while time.time() - start_time < timeout:
+                try:
+                    response = await client.get(url, timeout=1.0)
+                    if response.status_code == 200:
+                        # Fully loaded and ready!
+                        return True
+                    elif response.status_code == 503:
+                        # Still loading model
+                        logger.info(f"Model on port {port} is still loading. Retrying...")
+                    elif response.status_code == 404:
+                        # If /health doesn't exist on this server version, fall back to assuming ready
+                        logger.warning(f"Health endpoint not found (404) on port {port}. Assuming ready.")
+                        return True
+                except httpx.RequestError:
+                    # Connection error or timeout
+                    pass
+                
+                await asyncio.sleep(1.0)
+                
+        logger.warning(f"Timeout waiting for model on port {port} to become ready.")
         return False
 
     async def cleanup_loop(self):
