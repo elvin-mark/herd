@@ -282,7 +282,7 @@ async def chat_interactive(model_name: str):
     console.print(
         f"\n[bold green]Chatting with {model_name} (Herd Gateway)[/bold green]"
     )
-    console.print("Type /exit or /quit to end. Press Ctrl+C to stop generation.\n")
+    console.print("Type [bold cyan]/help[/bold cyan] to see available commands. Press Ctrl+C to stop generation.\n")
 
     messages = []
     while True:
@@ -290,8 +290,57 @@ async def chat_interactive(model_name: str):
             user_input = typer.prompt(">>> ", prompt_suffix="").strip()
             if not user_input:
                 continue
-            if user_input.lower() in ["/exit", "/quit"]:
-                break
+
+            # Process slash commands
+            if user_input.startswith("/"):
+                cmd_parts = user_input.split(" ", 1)
+                cmd = cmd_parts[0].lower()
+                arg = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
+
+                if cmd in ["/exit", "/quit"]:
+                    break
+                elif cmd == "/help":
+                    console.print("\n[bold cyan]Available Chat Commands:[/bold cyan]")
+                    console.print("  [bold white]/help[/bold white]               - Show this help menu.")
+                    console.print("  [bold white]/clear[/bold white] or [bold white]/reset[/bold white]   - Clear the chat history.")
+                    console.print("  [bold white]/system <prompt>[/bold white]     - Set or update the system prompt.")
+                    console.print("  [bold white]/export [filename][/bold white]   - Export the chat history to a Markdown file.")
+                    console.print("  [bold white]/exit[/bold white] or [bold white]/quit[/bold white]     - Exit the chat session.\n")
+                    continue
+                elif cmd in ["/clear", "/reset"]:
+                    messages = []
+                    console.print("[yellow]Chat history cleared.[/yellow]")
+                    continue
+                elif cmd == "/system":
+                    if not arg:
+                        console.print("[red]Usage: /system <prompt>[/red]")
+                        continue
+                    # Update or prepend system prompt
+                    has_system = False
+                    for idx, msg in enumerate(messages):
+                        if msg["role"] == "system":
+                            messages[idx]["content"] = arg
+                            has_system = True
+                            break
+                    if not has_system:
+                        messages.insert(0, {"role": "system", "content": arg})
+                    console.print(f"[yellow]System prompt updated to:[/yellow] [italic]{arg}[/italic]")
+                    continue
+                elif cmd == "/export":
+                    filename = arg if arg else "chat_export.md"
+                    try:
+                        with open(filename, "w", encoding="utf-8") as f:
+                            f.write(f"# Chat Session with {model_name}\n\n")
+                            for msg in messages:
+                                role = msg["role"].capitalize()
+                                f.write(f"### {role}\n{msg['content']}\n\n")
+                        console.print(f"[green]Chat session exported to {filename}[/green]")
+                    except Exception as e:
+                        console.print(f"[red]Failed to export chat: {e}[/red]")
+                    continue
+                else:
+                    console.print(f"[red]Unknown command: {cmd}. Type /help for assistance.[/red]")
+                    continue
 
             messages.append({"role": "user", "content": user_input})
             print("Response: ", end="")
@@ -912,6 +961,180 @@ def doctor():
         border_style="green",
         expand=False
     ))
+
+
+DEFAULT_BENCHMARK_PROMPTS = [
+    "Explain the concept of quantum computing in one simple sentence.",
+    "Write a short, engaging story about a time traveler who gets stuck in the year 1999.",
+    "Draft a detailed step-by-step guide for deploying a Dockerized Python FastAPI web application to production."
+]
+
+
+async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str]], rounds: int):
+    # 1. Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # 2. Check if model exists locally
+    try:
+        resolve_model_path(model_name)
+    except FileNotFoundError:
+        console.print(f"[red]Error: Model '{model_name}' not found locally. Please pull it first.[/red]")
+        raise typer.Exit(1)
+
+    # 3. Load model in gateway
+    console.print(f"Loading [bold cyan]{model_name}[/bold cyan] and running benchmark suite ({rounds} rounds per prompt)...")
+    url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": model_name}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to pre-load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    prompts = custom_prompts if custom_prompts else DEFAULT_BENCHMARK_PROMPTS
+    results = []
+
+    for idx, prompt in enumerate(prompts):
+        console.print(f"\n[bold magenta]Prompt {idx + 1}/{len(prompts)}:[/bold magenta] [italic]\"{prompt[:60]}...\"[/italic]")
+
+        ttfts = []
+        speeds = []
+        mems = []
+        cpus = []
+
+        for r in range(rounds):
+            console.print(f"  Round {r + 1}/{rounds}...", end="", flush=True)
+
+            url_chat = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
+            payload = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": True
+            }
+
+            start_time = time.time()
+            first_token_time = None
+            token_count = 0
+
+            # Get resource stats concurrently during inference
+            async def get_stats_during_inference():
+                await asyncio.sleep(0.5)  # Wait for it to start processing
+                host = HERD_HOST
+                if host == "0.0.0.0":
+                    host = "127.0.0.1"
+                try:
+                    async with httpx.AsyncClient() as client:
+                        res = await client.get(f"http://{host}:{HERD_PORT}/v1/models/active")
+                        active = res.json()
+                        for m in active:
+                            if m["model"] == model_name:
+                                return m.get("memory_bytes", 0), m.get("cpu_percent", 0.0)
+                except Exception:
+                    pass
+                return 0, 0.0
+
+            stats_task = asyncio.create_task(get_stats_during_inference())
+
+            try:
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream("POST", url_chat, json=payload) as response:
+                        async for line in response.aiter_lines():
+                            if not line:
+                                continue
+                            if first_token_time is None:
+                                first_token_time = time.time()
+                            if line.startswith("data: "):
+                                data_str = line[6:]
+                                if data_str.strip() == "[DONE]":
+                                    break
+                                try:
+                                    data = json.loads(data_str)
+                                    choices = data.get("choices", [])
+                                    if choices:
+                                        delta = choices[0].get("delta", {})
+                                        content = delta.get("content", "")
+                                        if content:
+                                            token_count += 1
+                                except Exception:
+                                    pass
+            except Exception as e:
+                console.print(f" [red]Failed: {e}[/red]")
+                continue
+
+            end_time = time.time()
+            duration = end_time - start_time
+            ttft = (first_token_time - start_time) if first_token_time else duration
+            speed = token_count / (end_time - first_token_time) if (first_token_time and end_time > first_token_time) else 0.0
+
+            mem_bytes, cpu_pct = await stats_task
+
+            ttfts.append(ttft)
+            speeds.append(speed)
+            if mem_bytes > 0:
+                mems.append(mem_bytes)
+            if cpu_pct > 0.0:
+                cpus.append(cpu_pct)
+
+            console.print(f" Done ({speed:.1f} tok/sec, TTFT: {ttft:.2f}s)")
+
+        if ttfts and speeds:
+            avg_ttft = sum(ttfts) / len(ttfts)
+            avg_speed = sum(speeds) / len(speeds)
+            avg_mem = sum(mems) / len(mems) if mems else 0
+            avg_cpu = sum(cpus) / len(cpus) if cpus else 0.0
+
+            mem_gb = avg_mem / (1024 * 1024 * 1024)
+            mem_str = f"{mem_gb:.2f} GB" if mem_gb >= 0.1 else f"{avg_mem / (1024 * 1024):.1f} MB"
+
+            results.append({
+                "prompt": prompt[:40] + "...",
+                "ttft": avg_ttft,
+                "speed": avg_speed,
+                "memory": mem_str if avg_mem > 0 else "N/A",
+                "cpu": f"{avg_cpu:.1f}%" if avg_cpu > 0.0 else "N/A"
+            })
+
+    # Display results
+    if results:
+        table = Table(title=f"Benchmark Results: {model_name}")
+        table.add_column("Prompt Sample", style="cyan")
+        table.add_column("Avg TTFT (s)", style="yellow")
+        table.add_column("Avg Speed (tok/sec)", style="bold green")
+        table.add_column("Peak Memory", style="magenta")
+        table.add_column("Avg CPU %", style="blue")
+
+        for r in results:
+            table.add_row(
+                r["prompt"],
+                f"{r['ttft']:.3f}s",
+                f"{r['speed']:.1f} tok/s",
+                r["memory"],
+                r["cpu"]
+            )
+
+        console.print("\n")
+        console.print(table)
+
+
+@app.command(name="benchmark")
+def benchmark(
+    model_name: str = typer.Argument(..., help="Model identifier to benchmark."),
+    prompts: Optional[str] = typer.Option(
+        None,
+        "--prompts",
+        "-p",
+        help="Comma-separated custom prompts to test. If not specified, uses built-in prompts.",
+    ),
+    rounds: int = typer.Option(
+        3,
+        "--rounds",
+        "-r",
+        help="Number of evaluation rounds to run per prompt to calculate average statistics.",
+    ),
+):
+    """Benchmarks a model's load time, prompt ingestion latency (TTFT), generation speed, and system memory footprint."""
+    custom_list = [p.strip() for p in prompts.split(",")] if prompts else None
+    asyncio.run(run_benchmark_async(model_name, custom_list, rounds))
 
 
 def main():

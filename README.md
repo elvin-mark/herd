@@ -145,6 +145,24 @@ Audits your system environment, hardware compatibility, compiling prerequisites,
 herd doctor
 ```
 
+### 11. Run Model Benchmarks (`herd benchmark`)
+Benchmarks an LLM's prompt ingestion latency (TTFT), generation speed, and system memory/CPU footprint using standardized prompts (or custom prompts via `-p`):
+```bash
+# Run benchmark suite (3 rounds per prompt by default)
+herd benchmark unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M
+
+# Run with custom prompts and 2 rounds
+herd benchmark unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M -p "Write a song.,Tell a joke." -r 2
+```
+
+### Interactive Chat Slash Commands
+During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:
+*   `/help` — Displays the help menu listing all available chat commands.
+*   `/clear` or `/reset` — Clears the conversation history (context window).
+*   `/system <prompt>` — Dynamically sets or updates the system prompt.
+*   `/export [filename]` — Exports the current chat transcript to a markdown file (default: `chat_export.md`).
+*   `/exit` or `/quit` — Exits the chat session.
+
 ---
 
 ## API Usage & Control Center
