@@ -221,6 +221,10 @@ class ProcessManager:
                     )
                     process.kill()
                     await process.wait()
+            except ProcessLookupError:
+                logger.info(
+                    f"Model server '{model_name}' process already stopped."
+                )
             except Exception as e:
                 logger.error(f"Error terminating model server for '{model_name}': {e}")
             finally:

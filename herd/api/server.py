@@ -66,14 +66,15 @@ async def lifespan(app: FastAPI):
             await cleanup_task
         except asyncio.CancelledError:
             pass
-    # Stop all models
+    # Stop all models concurrently
     running_models = list(manager.running_models.keys())
+    tasks = []
     for model_path in running_models:
-        # Since running_models is keyed by path, stop_model handles either model_name or path.
-        # We can extract model_name from info dict
         info = manager.running_models.get(model_path)
         if info:
-            await manager.stop_model(info["model_name"])
+            tasks.append(manager.stop_model(info["model_name"]))
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
     logger.info("Herd Gateway Server stopped. All child processes terminated.")
 
 
