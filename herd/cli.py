@@ -12,7 +12,16 @@ import httpx
 import uvicorn
 
 import shutil
-from herd.core.config import HERD_HOST, HERD_PORT, HERD_LOGS_DIR, HERD_MODELS_DIR, HERD_HOME
+from herd.core.config import (
+    HERD_HOST,
+    HERD_PORT,
+    HERD_LOGS_DIR,
+    HERD_MODELS_DIR,
+    HERD_HOME,
+    LLAMA_SERVER_BIN,
+    WHISPER_SERVER_BIN,
+    IDLE_TIMEOUT,
+)
 from herd.services.downloader import (
     list_hf_repository_files,
     download_file,
@@ -738,6 +747,171 @@ def setup(
     console.print(f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:")
     console.print(f"  llama-server: [bold white]{llama_bin_path}[/bold white]")
     console.print(f"  whisper-server: [bold white]{whisper_bin_path}[/bold white]")
+
+
+def check_cpu_flags() -> dict:
+    """Detects CPU instruction capabilities on Linux and macOS."""
+    flags = {"avx2": False, "avx512": False, "neon": False}
+    if os.path.exists("/proc/cpuinfo"):
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                content = f.read().lower()
+                flags["avx2"] = "avx2" in content
+                flags["avx512"] = "avx512" in content or "avx-512" in content
+                flags["neon"] = "neon" in content or "asimd" in content
+        except Exception:
+            pass
+    elif sys.platform == "darwin":
+        try:
+            res = subprocess.run(["sysctl", "-a"], capture_output=True, text=True)
+            content = res.stdout.lower()
+            flags["avx2"] = "hw.optional.avx2: 1" in content or "avx2" in content
+            flags["neon"] = "hw.optional.neon: 1" in content or "neon" in content
+        except Exception:
+            pass
+    return flags
+
+
+def check_gpu_info() -> Optional[dict]:
+    """Retrieves NVIDIA GPU model and VRAM size if nvidia-smi is available."""
+    nv_smi = shutil.which("nvidia-smi")
+    if not nv_smi:
+        return None
+    try:
+        res = subprocess.run(
+            [nv_smi, "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        parts = res.stdout.strip().split(",")
+        if len(parts) >= 3:
+            mem_mb = float(parts[1].strip())
+            return {
+                "name": parts[0].strip(),
+                "vram_gb": round(mem_mb / 1024.0, 2),
+                "driver": parts[2].strip()
+            }
+    except Exception:
+        pass
+    return None
+
+
+def get_tool_version(binary_name: str, version_arg: str = "--version") -> str:
+    """Checks if a development tool is installed and retrieves its version string."""
+    path = shutil.which(binary_name)
+    if not path:
+        return "[red]Not Installed[/red]"
+    try:
+        res = subprocess.run([path, version_arg], capture_output=True, text=True)
+        first_line = res.stdout.strip().split("\n")[0]
+        return f"[green]Installed[/green] ({first_line})"
+    except Exception:
+        return "[green]Installed[/green] (unknown version)"
+
+
+@app.command(name="doctor")
+def doctor():
+    """Runs a system-wide hardware, prerequisite, and gateway state diagnostic."""
+    import platform
+    from rich.panel import Panel
+    from rich.console import Group
+
+    console.print("\n🩺 [bold green]Running Herd Doctor Diagnosis...[/bold green]\n")
+
+    # 1. System & CPU
+    sys_os = platform.system()
+    sys_release = platform.release()
+    sys_arch = platform.machine()
+    py_ver = platform.python_version()
+    
+    cpu_flags = check_cpu_flags()
+    def fmt_flag(supported: bool) -> str:
+        return "[green]Yes[/green]" if supported else "[red]No[/red]"
+
+    cpu_section = (
+        f"[bold white]System Info:[/bold white]\n"
+        f"  OS: {sys_os} ({sys_release})\n"
+        f"  Architecture: {sys_arch}\n"
+        f"  Python Version: {py_ver}\n"
+        f"  CPU Features: AVX2: {fmt_flag(cpu_flags['avx2'])}, AVX512: {fmt_flag(cpu_flags['avx512'])}, Neon: {fmt_flag(cpu_flags['neon'])}\n"
+    )
+
+    # 2. GPU Check
+    gpu = check_gpu_info()
+    if gpu:
+        gpu_section = (
+            f"[bold white]GPU Hardware (NVIDIA):[/bold white]\n"
+            f"  Device Name: [cyan]{gpu['name']}[/cyan]\n"
+            f"  VRAM Available: [green]{gpu['vram_gb']:.2f} GB[/green]\n"
+            f"  Driver Version: {gpu['driver']}\n"
+        )
+    else:
+        gpu_section = (
+            "[bold white]GPU Hardware:[/bold white]\n"
+            "  Device Name: [yellow]No NVIDIA GPU detected[/yellow] (or nvidia-smi not in PATH)\n"
+        )
+
+    # 3. Development Prereqs
+    git_status = get_tool_version("git")
+    cmake_status = get_tool_version("cmake")
+    compiler_status = get_tool_version("g++") if sys_os != "Darwin" else get_tool_version("clang")
+    compiler_lbl = "G++" if sys_os != "Darwin" else "Clang"
+
+    prereq_section = (
+        f"[bold white]Prerequisites (for compilation):[/bold white]\n"
+        f"  Git: {git_status}\n"
+        f"  CMake: {cmake_status}\n"
+        f"  {compiler_lbl}: {compiler_status}\n"
+    )
+
+    # 4. Gateway Status
+    active_info = ""
+    if is_gateway_running():
+        host = HERD_HOST
+        if host == "0.0.0.0":
+            host = "127.0.0.1"
+        try:
+            res = httpx.get(f"http://{host}:{HERD_PORT}/v1/models/active")
+            active_models = res.json()
+            active_info = f"[green]Running[/green] ({len(active_models)} active model{'s' if len(active_models) != 1 else ''})"
+        except Exception:
+            active_info = "[green]Running[/green]"
+    else:
+        active_info = "[red]Not Running[/red]"
+
+    def fmt_bin(path: Optional[str]) -> str:
+        if path and os.path.exists(path):
+            return f"[green]Found[/green] ({path})"
+        return "[red]Not Found[/red] (will search PATH at startup)"
+
+    gateway_section = (
+        f"[bold white]Herd Gateway & Environment:[/bold white]\n"
+        f"  Home Directory: {HERD_HOME}\n"
+        f"  API Host / Port: {HERD_HOST}:{HERD_PORT}\n"
+        f"  Idle Timeout: {IDLE_TIMEOUT}s\n"
+        f"  Gateway Status: {active_info}\n"
+        f"  llama-server: {fmt_bin(LLAMA_SERVER_BIN)}\n"
+        f"  whisper-server: {fmt_bin(WHISPER_SERVER_BIN)}\n"
+    )
+
+    # Output formatting using a Panel
+    diagnostic_info = Group(
+        cpu_section,
+        "\n",
+        gpu_section,
+        "\n",
+        prereq_section,
+        "\n",
+        gateway_section
+    )
+
+    console.print(Panel(
+        diagnostic_info,
+        title="[bold green]Herd Doctor Diagnosis Report[/bold green]",
+        border_style="green",
+        expand=False
+    ))
 
 
 def main():

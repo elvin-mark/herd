@@ -139,6 +139,12 @@ herd setup --dir ./my-builds
 ```
 This command automatically writes the compiled absolute binary paths to a configuration file `~/.herd/config.json`, which Herd loads at startup.
 
+### 10. Run System Diagnostics (`herd doctor`)
+Audits your system environment, hardware compatibility, compiling prerequisites, and gateway server status. It checks CPU AVX2/AVX512/Neon instruction capabilities and NVIDIA GPU VRAM availability:
+```bash
+herd doctor
+```
+
 ---
 
 ## API Usage & Control Center
