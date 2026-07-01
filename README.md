@@ -155,6 +155,22 @@ herd benchmark unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M
 herd benchmark unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M -p "Write a song.,Tell a joke." -r 2
 ```
 
+### 12. Smart Model Recommendations (`herd suggest`)
+Audits your active hardware (CPU, RAM, GPU VRAM) and outputs custom-tailored LLM and Whisper model suggestions from Hugging Face that are guaranteed to run fast and fit comfortably on your machine:
+```bash
+herd suggest
+```
+
+### 13. Speech-to-Text Transcription (`herd transcribe`)
+Transcribes or translates audio files locally into raw text (`.txt`) or standard subtitle files (`.srt` / `.vtt`) using Whisper:
+```bash
+# Transcribe to plain text using first auto-detected local Whisper model
+herd transcribe meeting.wav
+
+# Transcribe using specific model and save as WebVTT subtitles
+herd transcribe lecture.wav --model ggerganov/whisper.cpp:ggml-base.en.bin --format vtt --output lecture.vtt
+```
+
 ### Interactive Chat Slash Commands
 During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:
 *   `/help` — Displays the help menu listing all available chat commands.

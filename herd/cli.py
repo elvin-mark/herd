@@ -1137,6 +1137,234 @@ def benchmark(
     asyncio.run(run_benchmark_async(model_name, custom_list, rounds))
 
 
+@app.command(name="suggest")
+def suggest():
+    """Analyzes system hardware (RAM and VRAM) and suggests compatible LLMs and Whisper models."""
+    import psutil
+    from rich.panel import Panel
+
+    console.print("\n🔍 [bold green]Auditing hardware to generate model recommendations...[/bold green]\n")
+
+    # Check RAM
+    try:
+        ram_bytes = psutil.virtual_memory().total
+        ram_gb = ram_bytes / (1024 * 1024 * 1024)
+    except Exception:
+        ram_gb = 8.0  # Fallback default
+
+    # Check GPU
+    gpu = check_gpu_info()
+    vram_gb = gpu["vram_gb"] if gpu else 0.0
+
+    # CPU recommendations based on RAM
+    if ram_gb >= 16.0:
+        cpu_llm = "unsloth/Qwen3.5-7B-Instruct-GGUF:Q4_K_M"
+        cpu_desc = "Runs comfortably on CPU. Balanced speed/reasoning."
+    elif ram_gb >= 8.0:
+        cpu_llm = "unsloth/Qwen3.5-3B-Instruct-GGUF:Q4_K_M"
+        cpu_desc = "Optimal size for standard CPU memory. Good code/chat."
+    else:
+        cpu_llm = "Qwen/Qwen3.5-0.8B:Q8_0"
+        cpu_desc = "Lightweight model to prevent memory swapping on low RAM."
+
+    # GPU recommendations based on VRAM
+    gpu_llm = None
+    gpu_desc = ""
+    if vram_gb >= 16.0:
+        gpu_llm = "unsloth/Qwen3.5-14B-Instruct-GGUF:Q8_0"
+        gpu_desc = "Fits fully in VRAM. Outstanding coding/reasoning speed."
+    elif vram_gb >= 8.0:
+        gpu_llm = "unsloth/Llama-3-8B-Instruct-GGUF:Q8_0"
+        gpu_desc = "Fits fully in VRAM. Great generalist assistant at extreme speeds."
+    elif vram_gb >= 4.0:
+        gpu_llm = "unsloth/Qwen3.5-3B-Instruct-GGUF:Q8_0"
+        gpu_desc = "Fits in low VRAM. Good chat response speeds."
+
+    # Whisper recommendations (universal)
+    whisper_rec = "ggerganov/whisper.cpp:ggml-base.en.bin"
+    whisper_desc = "Lightweight English-only model. Transcribes near real-time."
+    whisper_multilingual = "ggerganov/whisper.cpp:ggml-small.bin"
+    whisper_multi_desc = "Great for transcribing Spanish, French, and 90+ other languages."
+
+    # Build the report string
+    report = []
+    report.append("[bold white]Detected Hardware:[/bold white]")
+    report.append(f"  System RAM: [cyan]{ram_gb:.1f} GB[/cyan]")
+    if gpu:
+        report.append(f"  GPU Name: [cyan]{gpu['name']}[/cyan]")
+        report.append(f"  GPU VRAM: [green]{vram_gb:.2f} GB[/green]")
+    else:
+        report.append("  GPU Name: [yellow]No NVIDIA GPU detected[/yellow] (CPU execution only)")
+    report.append("")
+
+    report.append("[bold green]💻 Recommended LLM (CPU Mode):[/bold green]")
+    report.append(f"  Model: [white]{cpu_llm}[/white]")
+    report.append(f"  Details: {cpu_desc}")
+    report.append("  Run Command: [bold cyan]herd run " + cpu_llm + "[/bold cyan]")
+    report.append("")
+
+    if gpu_llm:
+        report.append("[bold green]🎮 Recommended LLM (GPU Accelerated Mode):[/bold green]")
+        report.append(f"  Model: [white]{gpu_llm}[/white]")
+        report.append(f"  Details: {gpu_desc}")
+        report.append("  Run Command: [bold cyan]herd run " + gpu_llm + "[/bold cyan]")
+        report.append("")
+
+    report.append("[bold green]🎙️ Recommended Speech-to-Text (Whisper):[/bold green]")
+    report.append(f"  English: [white]{whisper_rec}[/white] ({whisper_desc})")
+    report.append(f"  Multilingual: [white]{whisper_multilingual}[/white] ({whisper_multi_desc})")
+    report.append("  Pull Command: [bold cyan]herd pull " + whisper_rec + "[/bold cyan]")
+
+    console.print(Panel(
+        "\n".join(report),
+        title="[bold green]Herd Model Recommendation Report[/bold green]",
+        border_style="green",
+        expand=False
+    ))
+
+
+def ms_to_srt_time(ms: int) -> str:
+    """Converts milliseconds to SRT time format HH:MM:SS,mmm"""
+    secs, msecs = divmod(ms, 1000)
+    mins, secs = divmod(secs, 60)
+    hrs, mins = divmod(mins, 60)
+    return f"{hrs:02d}:{mins:02d}:{secs:02d},{msecs:03d}"
+
+
+def ms_to_vtt_time(ms: int) -> str:
+    """Converts milliseconds to VTT time format HH:MM:SS.mmm"""
+    secs, msecs = divmod(ms, 1000)
+    mins, secs = divmod(secs, 60)
+    hrs, mins = divmod(mins, 60)
+    return f"{hrs:02d}:{mins:02d}:{secs:02d}.{msecs:03d}"
+
+
+@app.command(name="transcribe")
+def transcribe(
+    audio_file: str = typer.Argument(..., help="Path to the local audio file to transcribe."),
+    model_name: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Whisper model identifier. If not specified, auto-selects the first locally downloaded Whisper model.",
+    ),
+    output_format: str = typer.Option(
+        "txt",
+        "--format",
+        "-f",
+        help="Output transcription format (txt, srt, vtt).",
+    ),
+    output_file: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Path to save the output transcription. Defaults to <audio_file_name>.<format>.",
+    ),
+    language: Optional[str] = typer.Option(
+        None,
+        "--language",
+        "-l",
+        help="Target language code (e.g. en, es, fr). If not set, auto-detects language.",
+    ),
+):
+    """Transcribes an audio file into text, subtitle formats (SRT/VTT), or raw text using Whisper."""
+    # 1. Ensure audio file exists
+    if not os.path.exists(audio_file):
+        console.print(f"[red]Error: Audio file not found at: {audio_file}[/red]")
+        raise typer.Exit(1)
+
+    # 2. Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # 3. Resolve Whisper model to use
+    chosen_model = model_name
+    if not chosen_model:
+        # Find local Whisper models
+        whisper_models = [
+            m["name"]
+            for m in get_local_models_info()
+            if "whisper" in m["name"].lower() or m["filename"].endswith(".bin")
+        ]
+        if whisper_models:
+            chosen_model = whisper_models[0]
+            console.print(f"[yellow]No model specified. Auto-selected local Whisper model: [bold]{chosen_model}[/bold][/yellow]")
+        else:
+            console.print("[red]Error: No Whisper models found locally. Please download one first.[/red]")
+            console.print("Example: [bold cyan]herd pull ggerganov/whisper.cpp:ggml-base.en.bin[/bold cyan]")
+            raise typer.Exit(1)
+
+    # 4. Resolve output path
+    fmt = output_format.lower()
+    if fmt not in ["txt", "srt", "vtt"]:
+        console.print(f"[red]Error: Unsupported output format '{output_format}'. Choose from: txt, srt, vtt.[/red]")
+        raise typer.Exit(1)
+
+    if not output_file:
+        base, _ = os.path.splitext(audio_file)
+        dest_path = f"{base}.{fmt}"
+    else:
+        dest_path = output_file
+
+    console.print(f"Loading Whisper model [bold cyan]{chosen_model}[/bold cyan] in Gateway...")
+
+    # 5. Send transcription request to the Gateway
+    url = f"http://127.0.0.1:{HERD_PORT}/v1/audio/transcriptions"
+
+    # Open and stream file
+    try:
+        with open(audio_file, "rb") as f_bin:
+            files = {"file": (os.path.basename(audio_file), f_bin, "audio/wav")}
+            data = {
+                "model": chosen_model,
+                "response_format": "json"
+            }
+            if language:
+                data["language"] = language
+
+            console.print("[bold green]Transcribing audio file...[/bold green] (this may take a few moments)")
+            response = httpx.post(url, files=files, data=data, timeout=None)
+    except Exception as e:
+        console.print(f"[red]Error contacting Gateway transcription server: {e}[/red]")
+        raise typer.Exit(1)
+
+    if response.status_code != 200:
+        console.print(f"[red]Transcription failed: {response.text}[/red]")
+        raise typer.Exit(1)
+
+    result = response.json()
+
+    # 6. Format and save the transcription
+    segments = result.get("segments", [])
+
+    try:
+        with open(dest_path, "w", encoding="utf-8") as f:
+            if fmt == "txt":
+                f.write(result.get("text", "").strip())
+            elif fmt == "srt":
+                for idx, seg in enumerate(segments):
+                    from_ms = seg.get("offsets", {}).get("from", 0)
+                    to_ms = seg.get("offsets", {}).get("to", 0)
+                    start_str = ms_to_srt_time(from_ms)
+                    end_str = ms_to_srt_time(to_ms)
+                    text = seg.get("text", "").strip()
+                    f.write(f"{idx + 1}\n{start_str} --> {end_str}\n{text}\n\n")
+            elif fmt == "vtt":
+                f.write("WEBVTT\n\n")
+                for idx, seg in enumerate(segments):
+                    from_ms = seg.get("offsets", {}).get("from", 0)
+                    to_ms = seg.get("offsets", {}).get("to", 0)
+                    start_str = ms_to_vtt_time(from_ms)
+                    end_str = ms_to_vtt_time(to_ms)
+                    text = seg.get("text", "").strip()
+                    f.write(f"{start_str} --> {end_str}\n{text}\n\n")
+
+        console.print(f"\n[bold green]Success![/bold green] Transcription saved to: [bold cyan]{dest_path}[/bold cyan]")
+    except Exception as e:
+        console.print(f"[red]Error writing transcription file: {e}[/red]")
+        raise typer.Exit(1)
+
+
 def main():
     app()
 
