@@ -1003,7 +1003,7 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
         cpus = []
 
         for r in range(rounds):
-            console.print(f"  Round {r + 1}/{rounds}...", end="", flush=True)
+            print(f"  Round {r + 1}/{rounds}...", end="", flush=True)
 
             url_chat = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
             payload = {
