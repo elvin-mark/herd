@@ -171,6 +171,16 @@ herd transcribe meeting.wav
 herd transcribe lecture.wav --model ggerganov/whisper.cpp:ggml-base.en.bin --format vtt --output lecture.vtt
 ```
 
+### 14. Local Network Exposer & Pairing (`herd share`)
+Exposes connection details and prints a scanable terminal ASCII QR code to quickly pair and configure mobile/desktop clients (e.g. Chatbox, LibreChat) to your local gateway:
+```bash
+# Display local network API base URL and Dashboard URL
+herd share
+
+# Generate an ASCII QR code for easy mobile scan/pair
+herd share --qr
+```
+
 ### Interactive Chat Slash Commands
 During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:
 *   `/help` — Displays the help menu listing all available chat commands.

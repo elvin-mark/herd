@@ -1365,6 +1365,57 @@ def transcribe(
         raise typer.Exit(1)
 
 
+def get_local_ip() -> str:
+    """Finds the primary local IP address of this machine."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.254.254.254', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+
+@app.command(name="share")
+def share(
+    qr: bool = typer.Option(
+        False,
+        "--qr",
+        "-q",
+        help="Generate an ASCII QR code in the terminal for easy mobile pairing.",
+    ),
+):
+    """Exposes connection strings and generates pairing helper for local network devices."""
+    ip = get_local_ip()
+    port = HERD_PORT
+    url = f"http://{ip}:{port}/v1"
+
+    console.print("\n📶 [bold green]Herd Connection & Exposer Helper[/bold green]\n")
+    console.print("Your Gateway is accessible on the local network at:")
+    console.print(f"  API Base URL:  [bold cyan]{url}[/bold cyan]")
+    console.print(f"  Web Dashboard: [bold cyan]http://{ip}:{port}[/bold cyan]")
+    console.print("")
+    console.print("Configure your mobile client (e.g. Chatbox, LibreChat) with this API Base URL.")
+    console.print("")
+
+    if qr:
+        try:
+            import qrcode
+            console.print("[bold yellow]Scan this QR Code to copy the API Base URL on your mobile device:[/bold yellow]\n")
+            qr_obj = qrcode.QRCode()
+            qr_obj.add_data(url)
+            qr_obj.make()
+            qr_obj.print_ascii(tty=True)
+            console.print("")
+        except ImportError:
+            console.print("[yellow]Notice: 'qrcode' package is not installed. To display QR codes, install it via:[/yellow]")
+            console.print("  [bold cyan]pip install qrcode[/bold cyan]")
+            console.print("")
+
+
 def main():
     app()
 
