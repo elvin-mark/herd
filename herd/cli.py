@@ -1387,10 +1387,101 @@ def share(
         "-q",
         help="Generate an ASCII QR code in the terminal for easy mobile pairing.",
     ),
+    public: bool = typer.Option(
+        False,
+        "--public",
+        "-p",
+        help="Expose the gateway to the public internet using a free Cloudflare Tunnel.",
+    ),
 ):
-    """Exposes connection strings and generates pairing helper for local network devices."""
-    ip = get_local_ip()
+    """Exposes connection strings and generates pairing helper for local network or public devices."""
     port = HERD_PORT
+
+    if public:
+        cloudflared_bin = shutil.which("cloudflared")
+        if not cloudflared_bin:
+            console.print("[red]Error: 'cloudflared' is not installed or not in PATH.[/red]")
+            console.print("Please install Cloudflare Tunnel first. Examples:")
+            console.print("  [bold white]macOS:[/bold white] brew install cloudflared")
+            console.print("  [bold white]Linux:[/bold white] sudo apt install cloudflared")
+            raise typer.Exit(1)
+
+        console.print("[bold cyan]Starting public Cloudflare Tunnel...[/bold cyan]")
+        try:
+            process = subprocess.Popen(
+                [cloudflared_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                start_new_session=True
+            )
+
+            # Read lines to find the trycloudflare URL
+            public_url = None
+            start_time = time.time()
+            while time.time() - start_time < 15.0:  # 15s timeout
+                line = process.stdout.readline()
+                if not line:
+                    break
+                import re
+                match = re.search(r'(https://[a-zA-Z0-9-]+\.trycloudflare\.com)', line)
+                if match:
+                    public_url = match.group(1)
+                    break
+
+            if not public_url:
+                console.print("[red]Error: Failed to retrieve Cloudflare Tunnel URL. Check if cloudflared is working correctly.[/red]")
+                process.terminate()
+                process.wait()
+                raise typer.Exit(1)
+
+            console.print("\n🌎 [bold green]Public Exposure Active![/bold green]\n")
+            console.print(f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]")
+            console.print(f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]")
+            console.print("")
+            console.print("[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]")
+
+            if qr:
+                try:
+                    import qrcode
+                    console.print("\n[bold yellow]Scan this QR Code to copy the Public API URL on your mobile device:[/bold yellow]\n")
+                    qr_obj = qrcode.QRCode()
+                    qr_obj.add_data(f"{public_url}/v1")
+                    qr_obj.make()
+                    qr_obj.print_ascii(tty=True)
+                    console.print("")
+                except ImportError:
+                    pass
+
+            console.print("[bold yellow]--- Press Ctrl+C to stop the tunnel and revoke the public URL ---[/bold yellow]\n")
+
+            # Block and keep reading to keep process alive, print errors if any
+            while True:
+                line = process.stdout.readline()
+                if not line:
+                    break
+                # Silently consume output to avoid terminal clutter, but keep loop alive
+                pass
+
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Stopping Cloudflare Tunnel...[/yellow]")
+        finally:
+            try:
+                import signal
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                process.wait()
+            except Exception:
+                try:
+                    process.terminate()
+                    process.wait()
+                except Exception:
+                    pass
+            console.print("[green]Public URL revoked successfully.[/green]")
+        return
+
+    # Default local share logic
+    ip = get_local_ip()
     url = f"http://{ip}:{port}/v1"
 
     console.print("\n📶 [bold green]Herd Connection & Exposer Helper[/bold green]\n")
