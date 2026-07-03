@@ -278,6 +278,15 @@ herd config set default_embedding sentence-transformers/all-MiniLM-L6-v2:Q8_0
 
 # Set the default Whisper model for STT transcribing
 herd config set default_whisper ggerganov/whisper.cpp:ggml-base.en.bin
+
+# Route all local CLI commands directly to a remote Herd gateway
+herd config set remote_gateway http://192.168.1.100:11434
+```
+
+### 26. Local Reverse Proxy Gateway (`herd proxy`)
+Spawns a local reverse-proxy gateway server (port `11434`) that transparently forwards all API endpoints (such as `/v1/chat/completions`, model load/unload commands, and RAG operations) to a remote Herd instance. It fully preserves server-sent event (SSE) streaming, allowing local client apps (like Chatbox or LibreChat) to offload model execution to a remote GPU host:
+```bash
+herd proxy http://192.168.1.100:11434
 ```
 
 ### Interactive Chat Slash Commands
