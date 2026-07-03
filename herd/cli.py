@@ -28,6 +28,7 @@ from herd.services.downloader import (
     parse_model_identifier,
     resolve_model_path,
 )
+from herd.services.rag import index_directory, get_embedding, search_vectors
 
 app = typer.Typer(
     name="herd",
@@ -1665,6 +1666,133 @@ def clean(
             console.print(f"[red]Failed to delete {f_name}: {e}[/red]")
 
     console.print(f"[green]Successfully deleted {deleted_count} inactive log file(s).[/green]")
+
+
+@app.command(name="index")
+def index(
+    directory: str = typer.Argument(..., help="Path to the local directory to index."),
+    model_name: str = typer.Option(
+        ...,
+        "--model",
+        "-m",
+        help="The embedding model identifier to use (e.g. sentence-transformers/all-MiniLM-L6-v2:Q8_0).",
+    ),
+):
+    """Recursively chunks and embeds files in a directory, storing them in the local database."""
+    if not os.path.exists(directory):
+        console.print(f"[red]Error: Directory does not exist: {directory}[/red]")
+        raise typer.Exit(1)
+
+    # 1. Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # 2. Pre-load the embedding model
+    console.print(f"Ensuring embedding model [bold magenta]{model_name}[/bold magenta] is loaded...")
+    url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load embedding model: {e}[/red]")
+        raise typer.Exit(1)
+
+    # 3. Perform indexing
+    console.print(f"Indexing directory [bold cyan]{directory}[/bold cyan]...")
+    try:
+        count = asyncio.run(index_directory(directory, model_name))
+        console.print(f"[bold green]Success![/bold green] Indexed {count} text chunks in the database.")
+    except Exception as e:
+        console.print(f"[red]Failed to index directory: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command(name="ask")
+def ask(
+    model_name: str = typer.Argument(..., help="LLM model identifier to ask (e.g. Qwen/Qwen3.5-0.8B:Q8_0)."),
+    query: str = typer.Argument(..., help="The question to ask the model using indexed context."),
+    embedding_model: str = typer.Option(
+        ...,
+        "--model",
+        "-m",
+        help="The embedding model identifier to query context from.",
+    ),
+):
+    """Semantic query: retrieves relevant indexed chunks and answers your question using the LLM."""
+    # 1. Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # 2. Pre-load the models
+    url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": embedding_model, "is_embedding": True}, timeout=45.0)
+        httpx.post(url_load, json={"model": model_name}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load models: {e}[/red]")
+        raise typer.Exit(1)
+
+    # 3. Retrieve context
+    console.print("Searching semantic index for context...")
+    try:
+        query_vector = asyncio.run(get_embedding(query, embedding_model))
+        matches = search_vectors(query_vector, embedding_model, top_k=5)
+    except Exception as e:
+        console.print(f"[red]Failed to query embeddings: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not matches:
+        console.print("[yellow]Warning: No context found in index for this embedding model. Answering without custom context.[/yellow]")
+        context = ""
+    else:
+        console.print("\n[bold white]Retrieved Context Sources:[/bold white]")
+        for idx, m in enumerate(matches):
+            basename = os.path.basename(m["file_path"])
+            console.print(f"  [{idx + 1}] {basename} (similarity: {m['similarity']:.3f})")
+        context = "\n\n".join([
+            f"Source: {os.path.basename(m['file_path'])}\nContent:\n{m['text']}"
+            for m in matches
+        ])
+
+    # 4. Prompt construction
+    system_prompt = (
+        "You are a helpful assistant. Use the following retrieved context to answer the user's question. "
+        "If you do not know the answer, say so.\n\n"
+        f"Context:\n{context}"
+    )
+
+    # 5. Stream response
+    async def ask_async():
+        url_chat = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query}
+            ],
+            "stream": True
+        }
+        console.print("\n[bold green]Answer:[/bold green]")
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream("POST", url_chat, json=payload) as response:
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            content = data["choices"][0]["delta"].get("content", "")
+                            print(content, end="", flush=True)
+                        except Exception:
+                            pass
+        print("\n")
+
+    try:
+        asyncio.run(ask_async())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation interrupted.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error during generation: {e}[/red]")
 
 
 def main():

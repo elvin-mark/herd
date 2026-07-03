@@ -200,6 +200,18 @@ herd clean
 herd clean --force
 ```
 
+### 17. Document Indexing (`herd index`)
+Recursively chunks and embeds files in a directory, storing their text and vector embeddings in the local SQLite vector database (`~/.herd/embeddings.db`):
+```bash
+herd index /path/to/my/documents -m sentence-transformers/all-MiniLM-L6-v2:Q8_0
+```
+
+### 18. Semantic QA over Indexed Docs (`herd ask`)
+Performs a semantic query, retrieves the most relevant indexed document chunks, and streams the answer from the local LLM using the retrieved context:
+```bash
+herd ask Qwen/Qwen3.5-0.8B:Q8_0 "How do I configure the API Gateway?" -m sentence-transformers/all-MiniLM-L6-v2:Q8_0
+```
+
 ### Interactive Chat Slash Commands
 During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:
 *   `/help` — Displays the help menu listing all available chat commands.
