@@ -64,4 +64,5 @@ def save_config(config: dict):
 DEFAULT_LLM = config_overrides.get("default_llm")
 DEFAULT_EMBEDDING = config_overrides.get("default_embedding")
 DEFAULT_WHISPER = config_overrides.get("default_whisper")
+REMOTE_GATEWAY = config_overrides.get("remote_gateway")
 

@@ -26,6 +26,7 @@ from herd.core.config import (
     DEFAULT_LLM,
     DEFAULT_EMBEDDING,
     DEFAULT_WHISPER,
+    REMOTE_GATEWAY,
 )
 from herd.services.downloader import (
     list_hf_repository_files,
@@ -34,6 +35,13 @@ from herd.services.downloader import (
     resolve_model_path,
 )
 from herd.services.rag import index_directory, get_embedding, search_vectors
+
+
+def get_gateway_url() -> str:
+    """Returns the API Gateway base URL, pointing to remote_gateway if configured, otherwise localhost."""
+    if REMOTE_GATEWAY:
+        return REMOTE_GATEWAY.rstrip("/")
+    return f"http://127.0.0.1:{HERD_PORT}"
 
 app = typer.Typer(
     name="herd",
@@ -45,6 +53,13 @@ console = Console()
 
 def is_gateway_running() -> bool:
     """Checks if the Herd gateway server is currently running."""
+    if REMOTE_GATEWAY:
+        try:
+            response = httpx.get(f"{get_gateway_url()}/health", timeout=2.0)
+            return response.status_code == 200
+        except Exception:
+            return False
+
     host = HERD_HOST
     if host == "0.0.0.0":
         host = "127.0.0.1"
@@ -57,6 +72,12 @@ def is_gateway_running() -> bool:
 
 def auto_start_gateway() -> bool:
     """Starts the Herd gateway server in the background if it isn't running."""
+    if REMOTE_GATEWAY:
+        if is_gateway_running():
+            return True
+        console.print(f"[red]Error: Remote Herd gateway at '{REMOTE_GATEWAY}' is unreachable.[/red]")
+        return False
+
     if is_gateway_running():
         return True
 
@@ -244,7 +265,7 @@ async def pull_model_async(model_name: str):
 
 async def stream_chat_completions(model_name: str, messages: list) -> str:
     """Sends a streaming chat completion request to Herd gateway."""
-    url = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
+    url = f"{get_gateway_url()}/v1/chat/completions"
     payload = {"model": model_name, "messages": messages, "stream": True}
 
     assistant_response = ""
@@ -292,7 +313,7 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
 
     # Load embedding model if RAG context is active
     if context_model:
-        url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+        url_load = f"{get_gateway_url()}/v1/models/load"
         try:
             httpx.post(url_load, json={"model": context_model, "is_embedding": True}, timeout=45.0)
             console.print(f"[dim]RAG Active: Retrieving context from embedding model '{context_model}'[/dim]\n")
@@ -478,21 +499,22 @@ def run(
 
     model_name = chosen_model
 
-    # 2. Check if model exists locally. If not, prompt to download
-    try:
-        resolve_model_path(model_name)
-    except FileNotFoundError:
-        console.print(f"[yellow]Model '{model_name}' not found locally.[/yellow]")
-        confirm = typer.confirm("Would you like to pull/download it now?")
-        if confirm:
-            asyncio.run(pull_model_async(model_name))
-        else:
-            console.print("[red]Aborted.[/red]")
-            raise typer.Exit(1)
+    # 2. Check if model exists locally. If not, prompt to download (only for local gateway)
+    if not REMOTE_GATEWAY:
+        try:
+            resolve_model_path(model_name)
+        except FileNotFoundError:
+            console.print(f"[yellow]Model '{model_name}' not found locally.[/yellow]")
+            confirm = typer.confirm("Would you like to pull/download it now?")
+            if confirm:
+                asyncio.run(pull_model_async(model_name))
+            else:
+                console.print("[red]Aborted.[/red]")
+                raise typer.Exit(1)
 
     # 3. Load model in gateway
     console.print(f"Loading [bold cyan]{model_name}[/bold cyan] in Herd gateway...")
-    url = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    url = f"{get_gateway_url()}/v1/models/load"
     try:
         response = httpx.post(
             url,
@@ -598,7 +620,7 @@ def ps():
         console.print("[yellow]Herd API gateway is not running.[/yellow]")
         return
 
-    url = f"http://127.0.0.1:{HERD_PORT}/v1/models/active"
+    url = f"{get_gateway_url()}/v1/models/active"
     try:
         response = httpx.get(url)
         response.raise_for_status()
@@ -640,7 +662,7 @@ def show_stats():
         console.print("[yellow]Herd API gateway is not running.[/yellow]")
         return
 
-    url = f"http://127.0.0.1:{HERD_PORT}/v1/models/stats"
+    url = f"{get_gateway_url()}/v1/models/stats"
     try:
         response = httpx.get(url)
         response.raise_for_status()
@@ -694,11 +716,11 @@ def stop(
         console.print("[yellow]Herd API gateway is not running.[/yellow]")
         return
 
-    url = f"http://127.0.0.1:{HERD_PORT}/v1/models/unload"
+    url = f"{get_gateway_url()}/v1/models/unload"
 
     if stop_all:
         # Fetch active models
-        active_url = f"http://127.0.0.1:{HERD_PORT}/v1/models/active"
+        active_url = f"{get_gateway_url()}/v1/models/active"
         try:
             active_res = httpx.get(active_url, timeout=5.0)
             if active_res.status_code != 200:
@@ -1091,16 +1113,17 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
     if not auto_start_gateway():
         raise typer.Exit(1)
 
-    # 2. Check if model exists locally
-    try:
-        resolve_model_path(model_name)
-    except FileNotFoundError:
-        console.print(f"[red]Error: Model '{model_name}' not found locally. Please pull it first.[/red]")
-        raise typer.Exit(1)
+    # 2. Check if model exists locally (only for local gateway)
+    if not REMOTE_GATEWAY:
+        try:
+            resolve_model_path(model_name)
+        except FileNotFoundError:
+            console.print(f"[red]Error: Model '{model_name}' not found locally. Please pull it first.[/red]")
+            raise typer.Exit(1)
 
     # 3. Load model in gateway
     console.print(f"Loading [bold cyan]{model_name}[/bold cyan] and running benchmark suite ({rounds} rounds per prompt)...")
-    url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    url_load = f"{get_gateway_url()}/v1/models/load"
     try:
         httpx.post(url_load, json={"model": model_name}, timeout=45.0)
     except Exception as e:
@@ -1121,7 +1144,7 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
         for r in range(rounds):
             print(f"  Round {r + 1}/{rounds}...", end="", flush=True)
 
-            url_chat = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
+            url_chat = f"{get_gateway_url()}/v1/chat/completions"
             payload = {
                 "model": model_name,
                 "messages": [{"role": "user", "content": prompt}],
@@ -2614,7 +2637,57 @@ def config_set(
 app.add_typer(db_app)
 app.add_typer(config_app)
 
+@app.command(name="proxy")
+def proxy(
+    remote_url: str = typer.Argument(..., help="The remote Herd gateway URL to proxy requests to (e.g. http://192.168.1.100:11434)."),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host interface to bind the local proxy gateway to."),
+    port: int = typer.Option(HERD_PORT, "--port", "-p", help="Port to run the local proxy gateway on."),
+):
+    """Starts a local reverse proxy that forwards all API requests transparently to a remote Herd instance."""
+    import uvicorn
+    from fastapi import FastAPI, Request
+    from fastapi.responses import StreamingResponse
+    import httpx
 
+    proxy_app = FastAPI(title="Herd Gateway Proxy")
+    target_base = remote_url.rstrip("/")
+
+    console.print(f"Starting Herd Proxy Gateway on [bold cyan]{host}:{port}[/bold cyan] -> [bold magenta]{target_base}[/bold magenta]...")
+
+    @proxy_app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+    async def reverse_proxy_route(request: Request, path: str):
+        remote_url_str = f"{target_base}/{path}"
+        query = request.url.query
+        if query:
+            remote_url_str = f"{remote_url_str}?{query}"
+
+        body = await request.body()
+        headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length"]}
+
+        async def stream_generator():
+            async with httpx.AsyncClient(timeout=None) as client:
+
+                try:
+                    async with client.stream(
+                        method=request.method,
+                        url=remote_url_str,
+                        headers=headers,
+                        content=body
+                    ) as response:
+                        async for chunk in response.aiter_bytes():
+                            yield chunk
+                except Exception as e:
+                    yield json.dumps({"error": f"Proxy request failed: {e}"}).encode()
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="application/json"
+        )
+
+    try:
+        uvicorn.run(proxy_app, host=host, port=port, log_level="warning")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopping proxy gateway...[/yellow]")
 def main():
     app()
 
