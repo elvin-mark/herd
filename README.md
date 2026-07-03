@@ -229,6 +229,25 @@ Compresses a GGUF model file locally using the precompiled `llama-quantize` comp
 herd quantize model-fp16.gguf model-q4_k_m.gguf Q4_K_M
 ```
 
+### 21. Real-Time Resource Monitor (`herd top`)
+Opens a live terminal HUD showing running model processes, ports, CPU percentage bar meters, RSS memory footprints, and idle timers:
+```bash
+herd top
+```
+
+### 22. RAG Index Database Manager (`herd db`)
+Provides utilities to inspect, query, and prune the local vector database index (`~/.herd/embeddings.db`):
+```bash
+# List all indexed files, directories, and chunk counts
+herd db list
+
+# Perform a raw semantic query and view matched source text chunks
+herd db search "API config instructions" -m sentence-transformers/all-MiniLM-L6-v2:Q8_0
+
+# Remove files under a specific directory from the database index
+herd db remove /path/to/my/documents
+```
+
 ### Interactive Chat Slash Commands
 During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:
 *   `/help` — Displays the help menu listing all available chat commands.
