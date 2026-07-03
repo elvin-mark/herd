@@ -149,3 +149,33 @@ def search_vectors(query_vector: List[float], embedding_model: str, top_k: int =
     # Sort results by similarity descending
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return results[:top_k]
+
+
+def list_indexed_files() -> List[tuple]:
+    """Retrieves file path, embedding model, and chunk counts for all indexed items."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT file_path, model_name, COUNT(*) FROM chunks GROUP BY file_path, model_name"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def remove_indexed_path(target_path: str) -> int:
+    """Deletes chunks matching the target path or located under the target directory."""
+    init_db()
+    abs_target = os.path.abspath(target_path)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # Match the exact file path or anything under it as a sub-path
+    cursor.execute(
+        "DELETE FROM chunks WHERE file_path = ? OR file_path LIKE ?",
+        (abs_target, abs_target + os.sep + "%")
+    )
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return deleted

@@ -1944,6 +1944,208 @@ def quantize(
         raise typer.Exit(1)
 
 
+@app.command(name="top")
+def top():
+    """Opens a real-time monitor displaying active model servers and resource utilization."""
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.console import Group
+    import time
+
+    host = HERD_HOST
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+    url = f"http://{host}:{HERD_PORT}/v1/models/active"
+
+    def make_display() -> Panel:
+        try:
+            res = httpx.get(url, timeout=1.0)
+            if res.status_code != 200:
+                return Panel("[red]Error: Gateway returned unsuccessful status.[/red]", title="Herd Top")
+            active = res.json()
+        except Exception:
+            return Panel("[yellow]Herd Gateway is not running.[/yellow]", title="Herd Top")
+
+        if not active:
+            return Panel("No models currently running.", title="Herd Top — Idle")
+
+        table = Table()
+        table.add_column("Model Server", style="cyan")
+        table.add_column("Port", style="yellow")
+        table.add_column("CPU %", style="green", width=25)
+        table.add_column("Memory", style="magenta")
+        table.add_column("Idle Time", style="blue")
+        table.add_column("Mode", style="white")
+
+        total_cpu = 0.0
+        total_mem = 0
+
+        for m in active:
+            model_name = m["model"]
+            port = m["port"]
+            cpu = m.get("cpu_percent", 0.0)
+            mem_bytes = m.get("memory_bytes", 0)
+            mem_str = m.get("memory_str", "0 B")
+            idle_sec = int(m.get("idle_seconds", 0))
+
+            total_cpu += cpu
+            total_mem += mem_bytes
+
+            # Mode description
+            if m.get("is_whisper"):
+                mode = "Speech"
+            elif m.get("is_embedding"):
+                mode = "Embedding"
+            else:
+                mode = "Chat"
+
+            # Formatting CPU bar
+            cpu_bar_count = int(cpu / 5.0)  # Scale to max 20 blocks for 100%
+            cpu_bar = "|" * min(cpu_bar_count, 20)
+            cpu_color = "green" if cpu < 50.0 else ("yellow" if cpu < 80.0 else "red")
+            cpu_display = f"[{cpu_color}]{cpu_bar:<20}[/] {cpu:.1f}%"
+
+            # Format idle time to mm:ss
+            mins, secs = divmod(idle_sec, 60)
+            idle_str = f"{mins:02d}:{secs:02d}"
+
+            table.add_row(model_name, str(port), cpu_display, mem_str, idle_str, mode)
+
+        total_mem_gb = total_mem / (1024 * 1024 * 1024)
+        total_mem_str = f"{total_mem_gb:.2f} GB" if total_mem_gb >= 0.1 else f"{total_mem / (1024 * 1024):.1f} MB"
+
+        summary = (
+            f"Active Models: [bold white]{len(active)}[/bold white] | "
+            f"Total CPU: [bold white]{total_cpu:.1f}%[/bold white] | "
+            f"Total Memory: [bold white]{total_mem_str}[/bold white]"
+        )
+
+        return Panel(
+            Group(summary, "", table),
+            title="[bold green]Herd Top — Real-Time Model Monitor[/bold green]",
+            border_style="green",
+            subtitle="[dim]Press Ctrl+C to exit[/dim]"
+        )
+
+    try:
+        with Live(make_display(), refresh_per_second=2) as live:
+            while True:
+                time.sleep(0.5)
+                live.update(make_display())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Exiting monitor...[/yellow]")
+
+
+db_app = typer.Typer(name="db", help="Manage the local RAG vector database index.")
+
+
+@db_app.command(name="list")
+def db_list():
+    """Lists all files and paths currently indexed in the vector database."""
+    from herd.services.rag import list_indexed_files
+    try:
+        rows = list_indexed_files()
+    except Exception as e:
+        console.print(f"[red]Error reading database: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not rows:
+        console.print("[yellow]The vector database index is empty.[/yellow]")
+        return
+
+    table = Table(title="Indexed Documents & Chunks")
+    table.add_column("File / Directory Path", style="cyan")
+    table.add_column("Embedding Model", style="magenta")
+    table.add_column("Total Chunks", style="green", justify="right")
+
+    for file_path, model_name, count in rows:
+        table.add_row(file_path, model_name, str(count))
+
+    console.print("\n")
+    console.print(table)
+    console.print("\n")
+
+
+@db_app.command(name="search")
+def db_search(
+    query: str = typer.Argument(..., help="The search term to query."),
+    model_name: str = typer.Option(
+        ...,
+        "--model",
+        "-m",
+        help="The embedding model used to query context (e.g. sentence-transformers/all-MiniLM-L6-v2:Q8_0).",
+    ),
+    limit: int = typer.Option(
+        5,
+        "--limit",
+        "-l",
+        help="Maximum matches to return.",
+    ),
+):
+    """Semantic search: queries the vector database for text segments matching the query."""
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # Pre-load the embedding model
+    url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load embedding model: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"Searching semantic index for '{query}'...")
+    try:
+        query_vector = asyncio.run(get_embedding(query, model_name))
+        matches = search_vectors(query_vector, model_name, top_k=limit)
+    except Exception as e:
+        console.print(f"[red]Failed to perform semantic search: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not matches:
+        console.print("[yellow]No semantic matches found.[/yellow]")
+        return
+
+    table = Table(title=f"Semantic Search Matches for '{query}'")
+    table.add_column("Similarity", style="green")
+    table.add_column("Source File", style="cyan")
+    table.add_column("Text Preview (Snippet)", style="white")
+
+    for m in matches:
+        filename = os.path.basename(m["file_path"])
+        preview = m["text"][:80].replace("\n", " ") + "..."
+        table.add_row(f"{m['similarity']:.3f}", filename, preview)
+
+    console.print("\n")
+    console.print(table)
+    console.print("\n")
+
+
+@db_app.command(name="remove")
+def db_remove(
+    path: str = typer.Argument(..., help="The file or directory path to remove from the index."),
+):
+    """Removes indexed chunks and files from the vector database."""
+    from herd.services.rag import remove_indexed_path
+
+    # Resolve absolute path to match DB entries
+    abs_path = os.path.abspath(path)
+
+    console.print(f"Removing indexed path [bold red]{abs_path}[/bold red] from database...")
+    try:
+        count = remove_indexed_path(abs_path)
+        if count > 0:
+            console.print(f"[bold green]Success![/bold green] Removed {count} chunks from the vector database.")
+        else:
+            console.print("[yellow]No indexed files found matching this path.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Failed to remove from database: {e}[/red]")
+        raise typer.Exit(1)
+
+
+app.add_typer(db_app)
+
+
 def main():
     app()
 
