@@ -1507,6 +1507,166 @@ def share(
             console.print("")
 
 
+def extract_gguf_metadata(file_path: str) -> dict:
+    """Heuristically extracts basic metadata (name, architecture) from the GGUF binary header."""
+    meta = {"architecture": "Unknown", "name": "Unknown"}
+    try:
+        with open(file_path, "rb") as f:
+            # Read first 128KB which contains the KV metadata header
+            header = f.read(128 * 1024)
+
+            # Check magic bytes 'GGUF'
+            if header[:4] != b"GGUF":
+                return meta
+
+            # Parse general.architecture
+            arch_idx = header.find(b"general.architecture")
+            if arch_idx != -1:
+                # "general.architecture" length is 20
+                window = header[arch_idx + 20 : arch_idx + 20 + 100]
+                if len(window) >= 12:
+                    val_type = int.from_bytes(window[:4], "little")
+                    if val_type == 8:  # GGUF String type
+                        str_len = int.from_bytes(window[4:12], "little")
+                        if 0 < str_len < 100 and len(window) >= 12 + str_len:
+                            arch_bytes = window[12 : 12 + str_len]
+                            meta["architecture"] = arch_bytes.decode("utf-8", errors="ignore").strip().capitalize()
+
+            # Parse general.name
+            name_idx = header.find(b"general.name")
+            if name_idx != -1:
+                # "general.name" length is 12
+                window = header[name_idx + 12 : name_idx + 12 + 100]
+                if len(window) >= 12:
+                    val_type = int.from_bytes(window[:4], "little")
+                    if val_type == 8:  # GGUF String type
+                        str_len = int.from_bytes(window[4:12], "little")
+                        if 0 < str_len < 100 and len(window) >= 12 + str_len:
+                            name_bytes = window[12 : 12 + str_len]
+                            meta["name"] = name_bytes.decode("utf-8", errors="ignore").strip()
+    except Exception:
+        pass
+    return meta
+
+
+@app.command(name="show")
+def show(
+    model_name: str = typer.Argument(..., help="Model identifier to view details for.")
+):
+    """Displays detailed metadata, file paths, size, and architecture details for a model."""
+    try:
+        model_path = resolve_model_path(model_name)
+    except FileNotFoundError:
+        console.print(f"[red]Error: Model '{model_name}' not found locally.[/red]")
+        raise typer.Exit(1)
+
+    import time
+    from rich.panel import Panel
+
+    file_size = os.path.getsize(model_path)
+    size_gb = file_size / (1024 * 1024 * 1024)
+    size_str = f"{size_gb:.2f} GB" if size_gb >= 1.0 else f"{file_size / (1024 * 1024):.2f} MB"
+
+    mtime = os.path.getmtime(model_path)
+    time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mtime))
+
+    # Extract GGUF header metadata
+    gguf_meta = extract_gguf_metadata(model_path)
+
+    # Estimate Quantization from filename
+    filename = os.path.basename(model_path)
+    import re
+    quant_match = re.search(r'([qI]?[0-9]_[A-Za-z0-9_]+)', filename, re.IGNORECASE)
+    quant = quant_match.group(1).upper() if quant_match else "Unknown / F16"
+
+    # Print Panel
+    info = []
+    info.append("[bold white]Model Details:[/bold white]")
+    info.append(f"  Identifier:   [cyan]{model_name}[/cyan]")
+    info.append(f"  GGUF Name:    {gguf_meta['name']}")
+    info.append(f"  Architecture: [magenta]{gguf_meta['architecture']}[/magenta]")
+    info.append(f"  Quantization: [green]{quant}[/green]")
+    info.append("")
+    info.append("[bold white]File Information:[/bold white]")
+    info.append(f"  Filename:     {filename}")
+    info.append(f"  Path:         {model_path}")
+    info.append(f"  Size:         {size_str}")
+    info.append(f"  Last Modified: {time_str}")
+
+    console.print(Panel(
+        "\n".join(info),
+        title=f"[bold green]Model Inspector: {model_name}[/bold green]",
+        border_style="green",
+        expand=False
+    ))
+
+
+@app.command(name="clean")
+def clean(
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Clean logs immediately without prompting for confirmation.",
+    ),
+):
+    """Cleans up inactive model logs in the log directory to free up disk space."""
+    if not os.path.exists(HERD_LOGS_DIR):
+        console.print("[yellow]Log directory does not exist. Nothing to clean.[/yellow]")
+        return
+
+    # Find active logs to preserve
+    active_log_names = {"gateway.log"}
+    if is_gateway_running():
+        host = HERD_HOST
+        if host == "0.0.0.0":
+            host = "127.0.0.1"
+        try:
+            res = httpx.get(f"http://{host}:{HERD_PORT}/v1/models/active")
+            active = res.json()
+            for m in active:
+                model_safe = m["model"].replace("/", "_").replace(":", "_")
+                active_log_names.add(f"{model_safe}.log")
+        except Exception:
+            pass
+
+    log_files = [f for f in os.listdir(HERD_LOGS_DIR) if f.endswith(".log")]
+    to_delete = [f for f in log_files if f not in active_log_names]
+
+    if not to_delete:
+        console.print("[green]No inactive logs found. Your log directory is clean![/green]")
+        return
+
+    # Calculate total size
+    total_bytes = 0
+    for f_name in to_delete:
+        total_bytes += os.path.getsize(os.path.join(HERD_LOGS_DIR, f_name))
+
+    size_str = (
+        f"{total_bytes / (1024 * 1024):.2f} MB"
+        if total_bytes >= 1024 * 1024
+        else f"{total_bytes / 1024:.2f} KB"
+    )
+
+    console.print(f"Found {len(to_delete)} inactive log file(s) ({size_str}).")
+
+    if not force:
+        confirm = typer.confirm("Are you sure you want to delete these log files?")
+        if not confirm:
+            console.print("[yellow]Cleanup aborted.[/yellow]")
+            return
+
+    deleted_count = 0
+    for f_name in to_delete:
+        try:
+            os.remove(os.path.join(HERD_LOGS_DIR, f_name))
+            deleted_count += 1
+        except Exception as e:
+            console.print(f"[red]Failed to delete {f_name}: {e}[/red]")
+
+    console.print(f"[green]Successfully deleted {deleted_count} inactive log file(s).[/green]")
+
+
 def main():
     app()
 

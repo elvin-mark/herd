@@ -179,6 +179,25 @@ herd share
 
 # Generate an ASCII QR code for easy mobile scan/pair
 herd share --qr
+
+# Expose to public internet using Cloudflare Tunnel
+herd share --public
+```
+
+### 15. Inspect Model Metadata (`herd show`)
+Displays detailed file locations, creation dates, sizes, and parsed GGUF header metadata (such as internal base architecture, baseline name, and quantization values) for any local model:
+```bash
+herd show Qwen/Qwen3.5-0.8B:Q8_0
+```
+
+### 16. Log Directory Maintenance (`herd clean`)
+Cleans up inactive model logs in `~/.herd/logs/` while automatically preserving logs for currently active model servers and the API gateway itself:
+```bash
+# Audit and prompt for confirmation before deleting logs
+herd clean
+
+# Force clean logs immediately
+herd clean --force
 ```
 
 ### Interactive Chat Slash Commands
