@@ -260,6 +260,22 @@ Inspects unstaged or staged modifications in the current Git repository using `g
 herd commit
 ```
 
+### 25. Configuration Defaults (`herd config`)
+Herd allows configuring global default models, ports, and execution timeouts in `~/.herd/config.json`. These defaults are automatically used as fallback settings across all commands (`run`, `copilot`, `commit`, `index`, `ask`, `transcribe`) so you don't need to specify model flags every time:
+```bash
+# Display a formatted table of all current settings and defaults
+herd config show
+
+# Set the default LLM model for chatting, copilot, and commits
+herd config set default_llm Qwen/Qwen3.5-0.8B:Q8_0
+
+# Set the default embedding model for indexing and semantic context queries
+herd config set default_embedding sentence-transformers/all-MiniLM-L6-v2:Q8_0
+
+# Set the default Whisper model for STT transcribing
+herd config set default_whisper ggerganov/whisper.cpp:ggml-base.en.bin
+```
+
 ### Interactive Chat Slash Commands
 During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:
 *   `/help` — Displays the help menu listing all available chat commands.
