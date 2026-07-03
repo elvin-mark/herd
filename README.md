@@ -248,6 +248,18 @@ herd db search "API config instructions" -m sentence-transformers/all-MiniLM-L6-
 herd db remove /path/to/my/documents
 ```
 
+### 23. Local Shell Copilot (`herd copilot`)
+Translates natural language instructions into local shell commands, explains what they do, and runs them upon user confirmation:
+```bash
+herd copilot "find all python files recursively and count their lines of code"
+```
+
+### 24. Automated Local Git Commits (`herd commit`)
+Inspects unstaged or staged modifications in the current Git repository using `git diff`, queries the local LLM to generate a clear Conventional Commit message, and commits changes upon confirmation:
+```bash
+herd commit
+```
+
 ### Interactive Chat Slash Commands
 During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:
 *   `/help` — Displays the help menu listing all available chat commands.
