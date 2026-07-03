@@ -2146,6 +2146,256 @@ def db_remove(
 app.add_typer(db_app)
 
 
+def find_running_llm() -> Optional[str]:
+    """Finds an active LLM (non-whisper, non-embedding) running in the gateway, or returns the first local model."""
+    if is_gateway_running():
+        try:
+            res = httpx.get(f"http://127.0.0.1:{HERD_PORT}/v1/models/active", timeout=1.0)
+            active = res.json()
+            for m in active:
+                if not m.get("is_whisper") and not m.get("is_embedding"):
+                    return m["model"]
+        except Exception:
+            pass
+
+    # Fallback to first downloaded LLM
+    models = get_local_models_info()
+    llms = [m["name"] for m in models if "whisper" not in m["name"].lower() and "mmproj" not in m["name"].lower()]
+    if llms:
+        return llms[0]
+    return None
+
+
+@app.command(name="copilot")
+def copilot(
+    instruction: str = typer.Argument(..., help="Natural language prompt describing what you want to execute in the terminal."),
+    model_name: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="LLM model identifier. If not specified, auto-detects the active or default LLM.",
+    ),
+):
+    """Translates natural language into a shell command, explains it, and executes it on confirmation."""
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
+        console.print("Example: [bold cyan]herd pull Qwen/Qwen3.5-0.8B:Q8_0[/bold cyan]")
+        raise typer.Exit(1)
+
+    # Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # Pre-load model
+    url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are a terminal copilot. Translate the user's natural language request into a single executable shell command "
+        "for the current operating system (Linux). "
+        "Your response must be in JSON format with exactly two keys:\n"
+        '1. "command": The single line shell command to execute.\n'
+        '2. "explanation": A brief, one-sentence explanation of what the command does.\n\n'
+        "Do not output any markdown formatting, backticks, or extra text. Output strictly valid JSON."
+    )
+
+    url_chat = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
+    payload = {
+        "model": chosen_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": instruction}
+        ],
+        "stream": False
+    }
+
+    console.print(f"Generating command using [bold cyan]{chosen_model}[/bold cyan]...")
+    try:
+        response = httpx.post(url_chat, json=payload, timeout=30.0)
+        if response.status_code != 200:
+            console.print(f"[red]Failed to generate command: {response.text}[/red]")
+            raise typer.Exit(1)
+        result = response.json()
+        raw_text = result["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        console.print(f"[red]Error contacting Gateway: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Clean markdown formatting if any
+    if raw_text.startswith("```json"):
+        raw_text = raw_text[7:]
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]
+    raw_text = raw_text.strip()
+
+    try:
+        data = json.loads(raw_text)
+        command = data["command"]
+        explanation = data["explanation"]
+    except Exception:
+        console.print(f"[red]Error: Failed to parse generated response as JSON. Raw output was:[/red]\n{raw_text}")
+        raise typer.Exit(1)
+
+    # Print proposal
+    from rich.panel import Panel
+    from rich.console import Group
+    panel_group = Group(
+        f"[bold white]Command:[/bold white]\n  [bold green]{command}[/bold green]\n",
+        f"[bold white]Explanation:[/bold white]\n  {explanation}"
+    )
+    console.print(Panel(
+        panel_group,
+        title="[bold cyan]Herd Shell Copilot Proposal[/bold cyan]",
+        border_style="cyan",
+        expand=False
+    ))
+
+    # Ask for confirmation
+    confirm = typer.confirm("Do you want to execute this command?")
+    if not confirm:
+        console.print("[yellow]Aborted.[/yellow]")
+        return
+
+    console.print("\n[bold cyan]Running command...[/bold cyan]\n")
+    try:
+        subprocess.run(command, shell=True)
+    except Exception as e:
+        console.print(f"[red]Command execution failed: {e}[/red]")
+
+
+@app.command(name="commit")
+def commit(
+    model_name: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="LLM model identifier. If not specified, auto-detects the active or default LLM.",
+    ),
+):
+    """Inspects Git repository modifications and generates conventional commits automatically offline."""
+    # 1. Prerequisite checks
+    if not shutil.which("git"):
+        console.print("[red]Error: 'git' is not installed or not in PATH.[/red]")
+        raise typer.Exit(1)
+    if not os.path.exists(".git"):
+        console.print("[red]Error: Current directory is not a Git repository.[/red]")
+        raise typer.Exit(1)
+
+    # 2. Get git diff
+    diff_res = subprocess.run(["git", "diff"], capture_output=True, text=True)
+    diff_text = diff_res.stdout.strip()
+
+    # If no unstaged, check staged changes
+    if not diff_text:
+        diff_res = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True)
+        diff_text = diff_res.stdout.strip()
+
+    if not diff_text:
+        console.print("[yellow]No changes detected in Git repository to commit.[/yellow]")
+        return
+
+    # Truncate diff if context limit exceeded
+    if len(diff_text) > 10000:
+        console.print("[yellow]Warning: Git diff is very large. Truncating to 10,000 characters.[/yellow]")
+        diff_text = diff_text[:10000] + "\n\n... [TRUNCATED] ..."
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
+        raise typer.Exit(1)
+
+    # Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # Pre-load model
+    url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are a Git commit message generator. Generate a clear, concise Conventional Commit message "
+        "for the following git diff. "
+        "The message must follow this format:\n"
+        "<type>(<scope>): <short description>\n\n"
+        "<body>\n\n"
+        "Example:\n"
+        "feat(RAG): add built-in local vector database search\n\n"
+        "- Implement SQLite database for chunk vector indexing\n"
+        "- Implement cosine similarity in pure Python\n\n"
+        "Output only the commit message. Do not wrap in markdown or backticks."
+    )
+
+    url_chat = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
+    payload = {
+        "model": chosen_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Here is the diff:\n\n{diff_text}"}
+        ],
+        "stream": False
+    }
+
+    console.print(f"Generating commit message using [bold cyan]{chosen_model}[/bold cyan]...")
+    try:
+        response = httpx.post(url_chat, json=payload, timeout=30.0)
+        if response.status_code != 200:
+            console.print(f"[red]Failed to generate commit message: {response.text}[/red]")
+            raise typer.Exit(1)
+        result = response.json()
+        commit_message = result["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        console.print(f"[red]Error contacting Gateway: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Clean markdown wrapping if present
+    if commit_message.startswith("```"):
+        lines = commit_message.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines[-1].startswith("```"):
+            lines = lines[:-1]
+        commit_message = "\n".join(lines).strip()
+
+    from rich.panel import Panel
+    console.print(Panel(
+        commit_message,
+        title="[bold cyan]Proposed Conventional Commit Message[/bold cyan]",
+        border_style="cyan",
+        expand=False
+    ))
+
+    confirm = typer.confirm("Would you like to commit these changes with this message?")
+    if not confirm:
+        console.print("[yellow]Aborted.[/yellow]")
+        return
+
+    # Write commit message to a temp file and run git commit
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
+        f.write(commit_message)
+        temp_path = f.name
+
+    try:
+        subprocess.run(["git", "commit", "-F", temp_path], check=True)
+        console.print("[bold green]Success![/bold green] Changes committed.")
+    except Exception as e:
+        console.print(f"[red]Failed to execute commit: {e}[/red]")
+    finally:
+        os.remove(temp_path)
+
+
+app.add_typer(db_app)
+
+
 def main():
     app()
 
