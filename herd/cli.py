@@ -278,12 +278,22 @@ async def stream_chat_completions(model_name: str, messages: list) -> str:
     return assistant_response
 
 
-async def chat_interactive(model_name: str):
+async def chat_interactive(model_name: str, context_model: Optional[str] = None):
     """Launches the CLI chat session loops."""
     console.print(
         f"\n[bold green]Chatting with {model_name} (Herd Gateway)[/bold green]"
     )
     console.print("Type [bold cyan]/help[/bold cyan] to see available commands. Press Ctrl+C to stop generation.\n")
+
+    # Load embedding model if RAG context is active
+    if context_model:
+        url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
+        try:
+            httpx.post(url_load, json={"model": context_model, "is_embedding": True}, timeout=45.0)
+            console.print(f"[dim]RAG Active: Retrieving context from embedding model '{context_model}'[/dim]\n")
+        except Exception as e:
+            console.print(f"[red]Warning: Failed to load RAG embedding model: {e}[/red]")
+            context_model = None
 
     messages = []
     while True:
@@ -343,11 +353,35 @@ async def chat_interactive(model_name: str):
                     console.print(f"[red]Unknown command: {cmd}. Type /help for assistance.[/red]")
                     continue
 
+            # Retrieve context if RAG is active
+            retrieved_context = ""
+            if context_model:
+                try:
+                    query_vector = await get_embedding(user_input, context_model)
+                    matches = search_vectors(query_vector, context_model, top_k=3)
+                    if matches:
+                        retrieved_context = "\n\n".join([
+                            f"Source: {os.path.basename(m['file_path'])}\n{m['text']}"
+                            for m in matches
+                        ])
+                except Exception:
+                    pass
+
             messages.append({"role": "user", "content": user_input})
             print("Response: ", end="")
 
             try:
-                assistant_response = await stream_chat_completions(model_name, messages)
+                payload_messages = messages.copy()
+                if retrieved_context:
+                    payload_messages[-1] = {
+                        "role": "user",
+                        "content": (
+                            "Use the following context to answer the question.\n\n"
+                            f"Context:\n{retrieved_context}\n\n"
+                            f"Question: {user_input}"
+                        )
+                    }
+                assistant_response = await stream_chat_completions(model_name, payload_messages)
                 messages.append({"role": "assistant", "content": assistant_response})
             except KeyboardInterrupt:
                 print("\n[yellow]Generation interrupted.[/yellow]")
@@ -392,6 +426,12 @@ def run(
         "--idle-timeout",
         "-t",
         help="Idle timeout in seconds before stopping the model process (0 to keep running indefinitely).",
+    ),
+    context_model: Optional[str] = typer.Option(
+        None,
+        "--context",
+        "-c",
+        help="Perform interactive RAG chat by semantic context retrieval from this embedding model.",
     ),
 ):
     """Starts a model and opens an interactive chat (or runs transcription server)."""
@@ -458,7 +498,7 @@ def run(
             f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/embeddings[/bold white]"
         )
     else:
-        asyncio.run(chat_interactive(model_name))
+        asyncio.run(chat_interactive(model_name, context_model))
 
 
 @app.command(name="list")
@@ -1793,6 +1833,115 @@ def ask(
         console.print("\n[yellow]Generation interrupted.[/yellow]")
     except Exception as e:
         console.print(f"[red]Error during generation: {e}[/red]")
+
+
+def find_llama_quantize() -> Optional[str]:
+    """Resolves the path to the llama-quantize binary, looking next to llama-server or on system PATH."""
+    if LLAMA_SERVER_BIN and os.path.exists(LLAMA_SERVER_BIN):
+        dir_path = os.path.dirname(LLAMA_SERVER_BIN)
+        quant_bin = os.path.join(dir_path, "llama-quantize")
+        if os.path.exists(quant_bin):
+            return quant_bin
+    return shutil.which("llama-quantize")
+
+
+@app.command(name="search")
+def search(
+    query: str = typer.Argument(..., help="Search term for GGUF models on Hugging Face Hub."),
+    limit: int = typer.Option(
+        10,
+        "--limit",
+        "-l",
+        help="Maximum number of search results to display.",
+    ),
+):
+    """Searches Hugging Face Hub for GGUF model repositories matching the query."""
+    url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit={limit}"
+    console.print(f"Searching Hugging Face Hub for GGUF models matching '[bold cyan]{query}[/bold cyan]'...")
+    try:
+        response = httpx.get(url, timeout=15.0)
+        if response.status_code != 200:
+            console.print(f"[red]Search failed: {response.text}[/red]")
+            raise typer.Exit(1)
+        results = response.json()
+    except Exception as e:
+        console.print(f"[red]Error connecting to Hugging Face Hub: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not results:
+        console.print("[yellow]No matching GGUF models found.[/yellow]")
+        return
+
+    table = Table(title=f"Hugging Face Search Results for '{query}'")
+    table.add_column("Repository ID", style="cyan", no_wrap=True)
+    table.add_column("Author", style="magenta")
+    table.add_column("Downloads", style="green", justify="right")
+    table.add_column("Likes", style="yellow", justify="right")
+
+    for r in results:
+        repo_id = r.get("id", "")
+        author = r.get("author", "Unknown")
+        downloads = r.get("downloads", 0)
+        likes = r.get("likes", 0)
+
+        # Format downloads count
+        if downloads >= 1_000_000:
+            dl_str = f"{downloads / 1_000_000:.1f}M"
+        elif downloads >= 1_000:
+            dl_str = f"{downloads / 1_000:.1f}k"
+        else:
+            dl_str = str(downloads)
+
+        table.add_row(repo_id, author, dl_str, str(likes))
+
+    console.print("\n")
+    console.print(table)
+    console.print("\nTo pull a model, use: [bold cyan]herd pull <repository_id>:<tag>[/bold cyan]\n")
+
+
+@app.command(name="quantize")
+def quantize(
+    input_file: str = typer.Argument(..., help="Path to the source GGUF file (e.g. FP16/FP32)."),
+    output_file: str = typer.Argument(..., help="Path to save the output quantized GGUF file."),
+    method: str = typer.Argument(..., help="Quantization method (e.g. Q4_K_M, Q8_0, Q5_K_M)."),
+):
+    """Quantizes (compresses) a GGUF model file locally using the compiled llama-quantize binary."""
+    if not os.path.exists(input_file):
+        console.print(f"[red]Error: Input file not found: {input_file}[/red]")
+        raise typer.Exit(1)
+
+    quant_bin = find_llama_quantize()
+    if not quant_bin:
+        console.print("[red]Error: 'llama-quantize' binary not found.[/red]")
+        console.print("Please make sure you have run [bold cyan]herd setup[/bold cyan] to build the compilation tools locally.")
+        raise typer.Exit(1)
+
+    console.print(f"Quantizing [bold cyan]{input_file}[/bold cyan] to [bold green]{output_file}[/bold green] using method [bold yellow]{method}[/bold yellow]...")
+    try:
+        cmd = [quant_bin, input_file, output_file, method]
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        for line in iter(process.stdout.readline, ""):
+            print(line, end="")
+        process.wait()
+
+        if process.returncode == 0:
+            console.print(f"\n[bold green]Success![/bold green] Quantized model saved to {output_file}")
+        else:
+            console.print(f"\n[red]Quantization failed with exit code: {process.returncode}[/red]")
+            raise typer.Exit(1)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Quantization interrupted.[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error running quantization: {e}[/red]")
+        raise typer.Exit(1)
 
 
 def main():

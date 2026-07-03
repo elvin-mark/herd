@@ -57,6 +57,11 @@ herd run unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M
 ```
 If the model has not been downloaded yet, Herd will ask if you want to pull it.
 
+You can also run an **interactive RAG chat** by passing the `--context` / `-c` option with an embedding model. Every message you type will be semantically matched against your indexed documents, and the relevant context will be automatically and transparently injected into the chat:
+```bash
+herd run unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M --context sentence-transformers/all-MiniLM-L6-v2:Q8_0
+```
+
 You can specify a custom idle timeout (in seconds) before the model process is automatically stopped to free up RAM/VRAM. Pass `0` to keep the model running indefinitely:
 ```bash
 # Set idle timeout to 10 minutes (600 seconds)
@@ -210,6 +215,18 @@ herd index /path/to/my/documents -m sentence-transformers/all-MiniLM-L6-v2:Q8_0
 Performs a semantic query, retrieves the most relevant indexed document chunks, and streams the answer from the local LLM using the retrieved context:
 ```bash
 herd ask Qwen/Qwen3.5-0.8B:Q8_0 "How do I configure the API Gateway?" -m sentence-transformers/all-MiniLM-L6-v2:Q8_0
+```
+
+### 19. Search Hugging Face Hub (`herd search`)
+Searches the Hugging Face Hub for GGUF model repositories matching the query, sorted by download counts and formatted in a structured summary table:
+```bash
+herd search qwen --limit 5
+```
+
+### 20. Compress GGUF Models (`herd quantize`)
+Compresses a GGUF model file locally using the precompiled `llama-quantize` compilation tool:
+```bash
+herd quantize model-fp16.gguf model-q4_k_m.gguf Q4_K_M
 ```
 
 ### Interactive Chat Slash Commands
