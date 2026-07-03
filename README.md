@@ -104,7 +104,11 @@ herd stats
 ### 6. Stop a Running Model (`herd stop`)
 Manually unload a model and terminate its process:
 ```bash
+# Stop a specific running model
 herd stop unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M
+
+# Stop all running models at once
+herd stop --all
 ```
 
 ### 7. View Server and Model Logs (`herd logs`)

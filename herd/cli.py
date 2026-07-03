@@ -685,21 +685,57 @@ def show_stats():
 
 
 @app.command()
-def stop(model_name: str = typer.Argument(..., help="Model identifier to stop.")):
+def stop(
+    model_name: Optional[str] = typer.Argument(None, help="Model identifier to stop. Required unless --all is specified."),
+    stop_all: bool = typer.Option(False, "--all", "-a", help="Stop all running model processes."),
+):
     """Stops a running model process."""
     if not is_gateway_running():
         console.print("[yellow]Herd API gateway is not running.[/yellow]")
         return
 
     url = f"http://127.0.0.1:{HERD_PORT}/v1/models/unload"
-    try:
-        response = httpx.post(url, json={"model": model_name})
-        if response.status_code == 200:
-            console.print(f"[green]Successfully stopped model '{model_name}'.[/green]")
-        else:
-            console.print(f"[red]Failed to stop model: {response.text}[/red]")
-    except Exception as e:
-        console.print(f"[red]Error stopping model: {e}[/red]")
+
+    if stop_all:
+        # Fetch active models
+        active_url = f"http://127.0.0.1:{HERD_PORT}/v1/models/active"
+        try:
+            active_res = httpx.get(active_url, timeout=5.0)
+            if active_res.status_code != 200:
+                console.print(f"[red]Failed to query active models: {active_res.text}[/red]")
+                raise typer.Exit(1)
+            active_models = active_res.json()
+        except Exception as e:
+            console.print(f"[red]Error fetching active models: {e}[/red]")
+            raise typer.Exit(1)
+
+        if not active_models:
+            console.print("[yellow]No active running models found.[/yellow]")
+            return
+
+        for m in active_models:
+            m_name = m["model"]
+            try:
+                response = httpx.post(url, json={"model": m_name})
+                if response.status_code == 200:
+                    console.print(f"[green]Successfully stopped model '{m_name}'.[/green]")
+                else:
+                    console.print(f"[red]Failed to stop model '{m_name}': {response.text}[/red]")
+            except Exception as e:
+                console.print(f"[red]Error stopping model '{m_name}': {e}[/red]")
+    else:
+        if not model_name:
+            console.print("[red]Error: Please specify a model name, or use --all (-a) to stop all running models.[/red]")
+            raise typer.Exit(1)
+
+        try:
+            response = httpx.post(url, json={"model": model_name})
+            if response.status_code == 200:
+                console.print(f"[green]Successfully stopped model '{model_name}'.[/green]")
+            else:
+                console.print(f"[red]Failed to stop model: {response.text}[/red]")
+        except Exception as e:
+            console.print(f"[red]Error stopping model: {e}[/red]")
 
 
 @app.command(name="serve")
