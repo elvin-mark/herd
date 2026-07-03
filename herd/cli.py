@@ -21,6 +21,11 @@ from herd.core.config import (
     LLAMA_SERVER_BIN,
     WHISPER_SERVER_BIN,
     IDLE_TIMEOUT,
+    load_config,
+    save_config,
+    DEFAULT_LLM,
+    DEFAULT_EMBEDDING,
+    DEFAULT_WHISPER,
 )
 from herd.services.downloader import (
     list_hf_repository_files,
@@ -408,7 +413,10 @@ def pull(
 
 @app.command()
 def run(
-    model_name: str = typer.Argument(..., help="Model identifier to run."),
+    model_name: Optional[str] = typer.Argument(
+        None,
+        help="Model identifier to run. If omitted, resolves to active model, configured default, or first local model.",
+    ),
     whisper: bool = typer.Option(
         False,
         "--whisper",
@@ -431,13 +439,44 @@ def run(
         None,
         "--context",
         "-c",
-        help="Perform interactive RAG chat by semantic context retrieval from this embedding model.",
+        help="Perform interactive RAG chat by semantic context retrieval from this embedding model. If 'auto', resolves to default_embedding config.",
     ),
 ):
     """Starts a model and opens an interactive chat (or runs transcription server)."""
     # 1. Ensure gateway is running
     if not auto_start_gateway():
         raise typer.Exit(1)
+
+    # Resolve context model default if set to 'auto' or omitted but available
+    if context_model == "auto" or (context_model is None and DEFAULT_EMBEDDING):
+        context_model = DEFAULT_EMBEDDING
+
+    # Resolve model
+    chosen_model = model_name
+    if not chosen_model:
+        if whisper:
+            chosen_model = DEFAULT_WHISPER
+            if not chosen_model:
+                models = get_local_models_info()
+                w_models = [m["name"] for m in models if "whisper" in m["name"].lower()]
+                if w_models:
+                    chosen_model = w_models[0]
+        elif embedding:
+            chosen_model = DEFAULT_EMBEDDING
+            if not chosen_model:
+                models = get_local_models_info()
+                emb_models = [m["name"] for m in models if "embedding" in m["name"].lower() or "bert" in m["name"].lower()]
+                if emb_models:
+                    chosen_model = emb_models[0]
+        else:
+            chosen_model = find_running_llm()
+
+    if not chosen_model:
+        console.print("[red]Error: No model name specified and no suitable default model configured.[/red]")
+        console.print("Please pull a model first or configure defaults using [bold cyan]herd config set[/bold cyan].")
+        raise typer.Exit(1)
+
+    model_name = chosen_model
 
     # 2. Check if model exists locally. If not, prompt to download
     try:
@@ -1321,19 +1360,22 @@ def transcribe(
     # 3. Resolve Whisper model to use
     chosen_model = model_name
     if not chosen_model:
-        # Find local Whisper models
-        whisper_models = [
-            m["name"]
-            for m in get_local_models_info()
-            if "whisper" in m["name"].lower() or m["filename"].endswith(".bin")
-        ]
-        if whisper_models:
-            chosen_model = whisper_models[0]
-            console.print(f"[yellow]No model specified. Auto-selected local Whisper model: [bold]{chosen_model}[/bold][/yellow]")
+        if DEFAULT_WHISPER:
+            chosen_model = DEFAULT_WHISPER
         else:
-            console.print("[red]Error: No Whisper models found locally. Please download one first.[/red]")
-            console.print("Example: [bold cyan]herd pull ggerganov/whisper.cpp:ggml-base.en.bin[/bold cyan]")
-            raise typer.Exit(1)
+            whisper_models = [
+                m["name"]
+                for m in get_local_models_info()
+                if "whisper" in m["name"].lower() or m["filename"].endswith(".bin")
+            ]
+            if whisper_models:
+                chosen_model = whisper_models[0]
+                console.print(f"[yellow]No model specified. Auto-selected local Whisper model: [bold]{chosen_model}[/bold][/yellow]")
+
+    if not chosen_model:
+        console.print("[red]Error: No Whisper models found locally and no default Whisper model configured.[/red]")
+        console.print("Please download a Whisper model first: [bold cyan]herd pull ggerganov/whisper.cpp:ggml-base.en.bin[/bold cyan]")
+        raise typer.Exit(1)
 
     # 4. Resolve output path
     fmt = output_format.lower()
@@ -1711,11 +1753,11 @@ def clean(
 @app.command(name="index")
 def index(
     directory: str = typer.Argument(..., help="Path to the local directory to index."),
-    model_name: str = typer.Option(
-        ...,
+    model_name: Optional[str] = typer.Option(
+        None,
         "--model",
         "-m",
-        help="The embedding model identifier to use (e.g. sentence-transformers/all-MiniLM-L6-v2:Q8_0).",
+        help="The embedding model identifier to use. If not specified, uses default_embedding config.",
     ),
 ):
     """Recursively chunks and embeds files in a directory, storing them in the local database."""
@@ -1726,6 +1768,19 @@ def index(
     # 1. Ensure gateway is running
     if not auto_start_gateway():
         raise typer.Exit(1)
+
+    chosen_model = model_name if model_name else DEFAULT_EMBEDDING
+    if not chosen_model:
+        models = get_local_models_info()
+        emb_models = [m["name"] for m in models if "embedding" in m["name"].lower() or "bert" in m["name"].lower()]
+        if emb_models:
+            chosen_model = emb_models[0]
+
+    if not chosen_model:
+        console.print("[red]Error: No embedding model specified and no default embedding model configured.[/red]")
+        raise typer.Exit(1)
+
+    model_name = chosen_model
 
     # 2. Pre-load the embedding model
     console.print(f"Ensuring embedding model [bold magenta]{model_name}[/bold magenta] is loaded...")
@@ -1748,13 +1803,16 @@ def index(
 
 @app.command(name="ask")
 def ask(
-    model_name: str = typer.Argument(..., help="LLM model identifier to ask (e.g. Qwen/Qwen3.5-0.8B:Q8_0)."),
     query: str = typer.Argument(..., help="The question to ask the model using indexed context."),
-    embedding_model: str = typer.Option(
-        ...,
+    model_name: Optional[str] = typer.Argument(
+        None,
+        help="LLM model identifier to ask. If omitted, uses active or default LLM.",
+    ),
+    embedding_model: Optional[str] = typer.Option(
+        None,
         "--model",
         "-m",
-        help="The embedding model identifier to query context from.",
+        help="The embedding model identifier to query context from. If omitted, uses default_embedding config.",
     ),
 ):
     """Semantic query: retrieves relevant indexed chunks and answers your question using the LLM."""
@@ -1762,11 +1820,29 @@ def ask(
     if not auto_start_gateway():
         raise typer.Exit(1)
 
+    # Resolve LLM model
+    chosen_llm = model_name if model_name else find_running_llm()
+    if not chosen_llm:
+        console.print("[red]Error: No LLM model specified and no default LLM configured.[/red]")
+        raise typer.Exit(1)
+
+    # Resolve embedding model
+    chosen_emb = embedding_model if embedding_model else DEFAULT_EMBEDDING
+    if not chosen_emb:
+        models = get_local_models_info()
+        emb_models = [m["name"] for m in models if "embedding" in m["name"].lower() or "bert" in m["name"].lower()]
+        if emb_models:
+            chosen_emb = emb_models[0]
+
+    if not chosen_emb:
+        console.print("[red]Error: No embedding model specified and no default embedding model configured.[/red]")
+        raise typer.Exit(1)
+
     # 2. Pre-load the models
     url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
     try:
-        httpx.post(url_load, json={"model": embedding_model, "is_embedding": True}, timeout=45.0)
-        httpx.post(url_load, json={"model": model_name}, timeout=45.0)
+        httpx.post(url_load, json={"model": chosen_emb, "is_embedding": True}, timeout=45.0)
+        httpx.post(url_load, json={"model": chosen_llm}, timeout=45.0)
     except Exception as e:
         console.print(f"[red]Failed to load models: {e}[/red]")
         raise typer.Exit(1)
@@ -1774,8 +1850,8 @@ def ask(
     # 3. Retrieve context
     console.print("Searching semantic index for context...")
     try:
-        query_vector = asyncio.run(get_embedding(query, embedding_model))
-        matches = search_vectors(query_vector, embedding_model, top_k=5)
+        query_vector = asyncio.run(get_embedding(query, chosen_emb))
+        matches = search_vectors(query_vector, chosen_emb, top_k=5)
     except Exception as e:
         console.print(f"[red]Failed to query embeddings: {e}[/red]")
         raise typer.Exit(1)
@@ -1804,7 +1880,7 @@ def ask(
     async def ask_async():
         url_chat = f"http://127.0.0.1:{HERD_PORT}/v1/chat/completions"
         payload = {
-            "model": model_name,
+            "model": chosen_llm,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": query}
@@ -2069,11 +2145,11 @@ def db_list():
 @db_app.command(name="search")
 def db_search(
     query: str = typer.Argument(..., help="The search term to query."),
-    model_name: str = typer.Option(
-        ...,
+    model_name: Optional[str] = typer.Option(
+        None,
         "--model",
         "-m",
-        help="The embedding model used to query context (e.g. sentence-transformers/all-MiniLM-L6-v2:Q8_0).",
+        help="The embedding model used to query context. If omitted, uses default_embedding config.",
     ),
     limit: int = typer.Option(
         5,
@@ -2085,6 +2161,19 @@ def db_search(
     """Semantic search: queries the vector database for text segments matching the query."""
     if not auto_start_gateway():
         raise typer.Exit(1)
+
+    chosen_model = model_name if model_name else DEFAULT_EMBEDDING
+    if not chosen_model:
+        models = get_local_models_info()
+        emb_models = [m["name"] for m in models if "embedding" in m["name"].lower() or "bert" in m["name"].lower()]
+        if emb_models:
+            chosen_model = emb_models[0]
+
+    if not chosen_model:
+        console.print("[red]Error: No embedding model specified and no default embedding model configured.[/red]")
+        raise typer.Exit(1)
+
+    model_name = chosen_model
 
     # Pre-load the embedding model
     url_load = f"http://127.0.0.1:{HERD_PORT}/v1/models/load"
@@ -2147,7 +2236,7 @@ app.add_typer(db_app)
 
 
 def find_running_llm() -> Optional[str]:
-    """Finds an active LLM (non-whisper, non-embedding) running in the gateway, or returns the first local model."""
+    """Finds an active LLM (non-whisper, non-embedding) running in the gateway, uses default_llm config, or returns the first local model."""
     if is_gateway_running():
         try:
             res = httpx.get(f"http://127.0.0.1:{HERD_PORT}/v1/models/active", timeout=1.0)
@@ -2157,6 +2246,10 @@ def find_running_llm() -> Optional[str]:
                     return m["model"]
         except Exception:
             pass
+
+    # Check configured default LLM
+    if DEFAULT_LLM:
+        return DEFAULT_LLM
 
     # Fallback to first downloaded LLM
     models = get_local_models_info()
@@ -2393,7 +2486,97 @@ def commit(
         os.remove(temp_path)
 
 
+config_app = typer.Typer(name="config", help="Manage default models and environment configurations.")
+
+
+@config_app.command(name="show")
+def config_show():
+    """Displays all current configurations, directory paths, and default models."""
+    from herd.core.config import CONFIG_FILE, HERD_HOST, HERD_PORT, IDLE_TIMEOUT, LLAMA_SERVER_BIN, WHISPER_SERVER_BIN
+
+    table = Table(title="Herd Configurations")
+    table.add_column("Setting / Parameter", style="cyan")
+    table.add_column("Value / Model Identifier", style="magenta")
+    table.add_column("Source", style="green")
+
+    # Load file values
+    disk_config = load_config()
+
+    def add_row(key: str, active_val, desc: str):
+        source = "Environment / System"
+        if key in disk_config:
+            source = "config.json"
+        elif active_val is None:
+            source = "Not Configured"
+        table.add_row(key, str(active_val) if active_val is not None else "-", source)
+
+    add_row("default_llm", DEFAULT_LLM, "Default LLM model identifier")
+    add_row("default_embedding", DEFAULT_EMBEDDING, "Default embedding model identifier")
+    add_row("default_whisper", DEFAULT_WHISPER, "Default Whisper model identifier")
+    add_row("HERD_HOST", HERD_HOST, "Gateway listen host")
+    add_row("HERD_PORT", HERD_PORT, "Gateway listen port")
+    add_row("HERD_IDLE_TIMEOUT", IDLE_TIMEOUT, "Gateway idle timeout in seconds")
+    add_row("LLAMA_SERVER_BIN", LLAMA_SERVER_BIN, "Resolved llama-server path")
+    add_row("WHISPER_SERVER_BIN", WHISPER_SERVER_BIN, "Resolved whisper-server path")
+    add_row("Config File Path", CONFIG_FILE, "Location of config override JSON")
+
+    console.print("\n")
+    console.print(table)
+    console.print("\nTo update defaults, run: [bold cyan]herd config set <key> <value>[/bold cyan]\n")
+
+
+@config_app.command(name="set")
+def config_set(
+    key: str = typer.Argument(..., help="The setting key to modify (e.g. default_llm, default_embedding, default_whisper)."),
+    value: str = typer.Argument(..., help="The value to assign to the key."),
+):
+    """Sets a configuration value in config.json."""
+    valid_keys = {
+        "default_llm",
+        "default_embedding",
+        "default_whisper",
+        "HERD_PORT",
+        "HERD_HOST",
+        "HERD_IDLE_TIMEOUT",
+        "LLAMA_SERVER_BIN",
+        "WHISPER_SERVER_BIN"
+    }
+
+    # Normalize key to lower or match
+    matched_key = None
+    for k in valid_keys:
+        if k.lower() == key.lower():
+            matched_key = k
+            break
+
+    if not matched_key:
+        console.print(f"[red]Error: Invalid config key '{key}'.[/red]")
+        console.print(f"Supported keys: {', '.join(sorted(list(valid_keys)))}")
+        raise typer.Exit(1)
+
+    config = load_config()
+
+    # Type conversion if necessary
+    val_to_save = value
+    if matched_key in ["HERD_PORT", "HERD_IDLE_TIMEOUT"]:
+        try:
+            val_to_save = int(value)
+        except ValueError:
+            console.print(f"[red]Error: Value for '{matched_key}' must be an integer.[/red]")
+            raise typer.Exit(1)
+
+    config[matched_key] = val_to_save
+    try:
+        save_config(config)
+        console.print(f"[bold green]Success![/bold green] Configured [bold cyan]{matched_key}[/bold cyan] = [bold magenta]{val_to_save}[/bold magenta] in config.json.")
+        console.print("[yellow]Please note: Restart running gateways or processes to apply port or timeout changes.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Failed to write configuration: {e}[/red]")
+        raise typer.Exit(1)
+
+
 app.add_typer(db_app)
+app.add_typer(config_app)
 
 
 def main():

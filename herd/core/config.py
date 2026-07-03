@@ -40,3 +40,28 @@ WHISPER_SERVER_BIN = (
 os.makedirs(HERD_HOME, exist_ok=True)
 os.makedirs(HERD_MODELS_DIR, exist_ok=True)
 os.makedirs(HERD_LOGS_DIR, exist_ok=True)
+
+
+def load_config() -> dict:
+    """Loads current config settings from config.json."""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_config(config: dict):
+    """Saves config settings back to config.json."""
+    os.makedirs(HERD_HOME, exist_ok=True)
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
+
+
+# Default model configurations
+DEFAULT_LLM = config_overrides.get("default_llm")
+DEFAULT_EMBEDDING = config_overrides.get("default_embedding")
+DEFAULT_WHISPER = config_overrides.get("default_whisper")
+
