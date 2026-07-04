@@ -302,7 +302,13 @@ herd watch screenshot.png "What error code is shown in the image?"
 herd watch https://example.com/logo.png "Describe the design and colors."
 ```
 
-### 28. Local Reverse Proxy Gateway (`herd proxy`)
+### 28. Autonomous AI Agent (`herd agent`)
+Launches an autonomous local AI agent loop (Thought -> Action -> Observation -> Repeat) that can read/write files, list directories, and execute shell commands locally to satisfy a high-level task:
+```bash
+herd agent "Find all python files in this project, scan for TODO comments, and write them into a TODO.md markdown table."
+```
+
+### 29. Local Reverse Proxy Gateway (`herd proxy`)
 Spawns a local reverse-proxy gateway server (port `11434`) that transparently forwards all API endpoints (such as `/v1/chat/completions`, model load/unload commands, and RAG operations) to a remote Herd instance. It fully preserves server-sent event (SSE) streaming, allowing local client apps (like Chatbox or LibreChat) to offload model execution to a remote GPU host:
 ```bash
 herd proxy http://192.168.1.100:11434
