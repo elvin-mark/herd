@@ -2688,6 +2688,185 @@ def proxy(
         uvicorn.run(proxy_app, host=host, port=port, log_level="warning")
     except KeyboardInterrupt:
         console.print("\n[yellow]Stopping proxy gateway...[/yellow]")
+@app.command(name="review")
+def review(
+    model_name: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="LLM model identifier. If omitted, uses active or default LLM.",
+    ),
+    pre_commit: bool = typer.Option(
+        False,
+        "--pre-commit",
+        help="Run in pre-commit hook mode (exit code 1 if critical issues are found, stages-only diff).",
+    ),
+    install_hook: bool = typer.Option(
+        False,
+        "--install",
+        "-i",
+        help="Install herd review as a local Git pre-commit hook.",
+    ),
+):
+    """Inspects Git repository modifications and audits code changes for quality, bugs, and security risks."""
+    # 1. Install hook option
+    if install_hook:
+        if not os.path.exists(".git"):
+            console.print("[red]Error: Current directory is not a Git repository.[/red]")
+            raise typer.Exit(1)
+        hook_dir = ".git/hooks"
+        os.makedirs(hook_dir, exist_ok=True)
+        hook_path = os.path.join(hook_dir, "pre-commit")
+
+        script = "#!/bin/sh\nherd review --pre-commit\n"
+        try:
+            with open(hook_path, "w") as f:
+                f.write(script)
+            os.chmod(hook_path, 0o755)
+            console.print("[bold green]Success![/bold green] Installed pre-commit hook at .git/hooks/pre-commit")
+            return
+        except Exception as e:
+            console.print(f"[red]Failed to install pre-commit hook: {e}[/red]")
+            raise typer.Exit(1)
+
+    # 2. Prerequisite checks
+    if not shutil.which("git"):
+        console.print("[red]Error: 'git' is not installed or not in PATH.[/red]")
+        raise typer.Exit(1)
+    if not os.path.exists(".git"):
+        console.print("[red]Error: Current directory is not a Git repository.[/red]")
+        raise typer.Exit(1)
+
+    # 3. Get git diff
+    if pre_commit:
+        # Pre-commit hook only audits staged changes
+        diff_res = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True)
+    else:
+        # Normal mode audits both staged + unstaged changes
+        diff_res = subprocess.run(["git", "diff", "HEAD"], capture_output=True, text=True)
+
+    diff_text = diff_res.stdout.strip()
+    if not diff_text:
+        console.print("[yellow]No modifications detected in Git repository to review.[/yellow]")
+        return
+
+    # Truncate diff if context limit exceeded
+    if len(diff_text) > 10000:
+        console.print("[yellow]Warning: Git diff is very large. Truncating to 10,000 characters.[/yellow]")
+        diff_text = diff_text[:10000] + "\n\n... [TRUNCATED] ..."
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
+        raise typer.Exit(1)
+
+    # Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # Pre-load model
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are a strict, automated AI code reviewer. Analyze the following Git diff for code quality, "
+        "logic errors, security vulnerabilities (like secrets exposure, SQL injection), and code smells.\n\n"
+        "Your output must be in JSON format containing a list of issues under the key \"issues\". "
+        "Each issue must have the following keys:\n"
+        '- "file": The file path containing the issue.\n'
+        '- "line": The line number or approximate line range.\n'
+        '- "severity": One of "critical" (security risk, crash bug, secrets leak) or "warning" (code smell, formatting, minor bug).\n'
+        '- "description": A clear, concise explanation of the issue and why it is problematic.\n'
+        '- "suggestion": Code recommendation or fix.\n\n'
+        "If no issues are found, return an empty list under \"issues\".\n"
+        "Output strictly valid JSON. Do not wrap in markdown code blocks."
+    )
+
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {
+        "model": chosen_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Here is the diff:\n\n{diff_text}"}
+        ],
+        "stream": False
+    }
+
+    console.print(f"Auditing code modifications using [bold cyan]{chosen_model}[/bold cyan]...")
+    try:
+        response = httpx.post(url_chat, json=payload, timeout=180.0)
+        if response.status_code != 200:
+            console.print(f"[red]Failed to generate review audit: {response.text}[/red]")
+            raise typer.Exit(1)
+        result = response.json()
+        raw_text = result["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        console.print(f"[red]Error contacting Gateway: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Clean markdown wrapping if present
+    if raw_text.startswith("```json"):
+        raw_text = raw_text[7:]
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]
+    raw_text = raw_text.strip()
+
+    try:
+        data = json.loads(raw_text)
+        if isinstance(data, list):
+            issues = data
+        elif isinstance(data, dict):
+            issues = data.get("issues", [])
+        else:
+            issues = []
+    except Exception:
+        console.print(f"[red]Error: Failed to parse generated review as JSON. Raw output was:[/red]\n{raw_text}")
+        raise typer.Exit(1)
+
+    if not issues:
+        console.print("[bold green]All checks passed! No issues detected in your modifications.[/bold green]")
+        return
+
+    # Count issues
+    criticals = [i for i in issues if i.get("severity", "").lower() == "critical"]
+    warnings = [i for i in issues if i.get("severity", "").lower() != "critical"]
+
+    console.print(f"\n[bold white]Review Audit Summary: Found {len(criticals)} critical issue(s) and {len(warnings)} warning(s).[/bold white]\n")
+
+    from rich.panel import Panel
+    from rich.console import Group
+
+    for issue in issues:
+        file_path = issue.get("file", "Unknown")
+        line = issue.get("line", "-")
+        severity = issue.get("severity", "warning").upper()
+        desc = issue.get("description", "")
+        suggestion = issue.get("suggestion", "")
+
+        border_style = "red" if severity.lower() == "critical" else "yellow"
+        title = f"[{border_style}]{severity}[/{border_style}] — {file_path}:{line}"
+
+        content_group = Group(
+            f"[bold white]Description:[/bold white] {desc}\n",
+            f"[bold white]Suggestion:[/bold white]\n  {suggestion}"
+        )
+
+        console.print(Panel(
+            content_group,
+            title=title,
+            border_style=border_style,
+            expand=False
+        ))
+
+    if pre_commit and criticals:
+        console.print("\n[bold red]Commit rejected: Critical issues found in staged files.[/bold red]")
+        raise typer.Exit(1)
+
+
 def main():
     app()
 
