@@ -729,7 +729,8 @@ async def stream_watch_async(model_name: str, image_data: str, prompt: str):
                         try:
                             data = json.loads(data_str)
                             token = data["choices"][0]["delta"].get("content", "")
-                            print(token, end="", flush=True)
+                            if token is not None:
+                                print(token, end="", flush=True)
                         except Exception:
                             pass
     print("\n")
