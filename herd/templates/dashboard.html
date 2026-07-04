@@ -3,20 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Herd - Control Center</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Herd Control Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #09090b;
-            --card-bg: #18181b;
-            --card-border: #27272a;
-            --text-primary: #f4f4f5;
-            --text-secondary: #a1a1aa;
+            --bg-color: #0b0b0f;
+            --card-bg: #13131a;
+            --card-border: #23232f;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
             --accent-cyan: #06b6d4;
             --accent-violet: #8b5cf6;
             --accent-emerald: #10b981;
             --accent-rose: #f43f5e;
+            --accent-amber: #f59e0b;
             --font-family: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
         }
 
         * {
@@ -32,9 +34,11 @@
             min-height: 100vh;
             padding: 2rem;
             line-height: 1.5;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
         }
 
-        /* Layout */
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -48,11 +52,12 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(24, 24, 27, 0.6);
+            background: rgba(19, 19, 26, 0.6);
             backdrop-filter: blur(12px);
             border: 1px solid var(--card-border);
             padding: 1.5rem 2rem;
-            border-radius: 16px;
+            border-radius: 20px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
         }
 
         .header-logo {
@@ -64,9 +69,10 @@
         .logo-img {
             width: 55px;
             height: 55px;
-            border-radius: 12px;
+            border-radius: 14px;
             border: 1px solid var(--card-border);
             object-fit: cover;
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
         }
 
         .header-title h1 {
@@ -75,6 +81,7 @@
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
         }
 
         .header-title p {
@@ -94,7 +101,7 @@
             gap: 0.6rem;
             background: rgba(16, 185, 129, 0.1);
             color: var(--accent-emerald);
-            padding: 0.5rem 1rem;
+            padding: 0.5rem 1.2rem;
             border-radius: 20px;
             font-size: 0.85rem;
             font-weight: 600;
@@ -109,7 +116,60 @@
             animation: pulse 1.8s infinite;
         }
 
-        /* Overview Cards */
+        /* Tabs Navigation */
+        .tabs-nav {
+            display: flex;
+            gap: 0.8rem;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: var(--font-family);
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.8rem 1.5rem;
+            cursor: pointer;
+            border-radius: 10px 10px 0 0;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-cyan);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -0.55rem;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+            border-radius: 3px;
+        }
+
+        /* Tab Contents */
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* Metrics */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -119,19 +179,20 @@
         .metric-card {
             background-color: var(--card-bg);
             border: 1px solid var(--card-border);
-            padding: 1.5rem;
-            border-radius: 16px;
+            padding: 1.8rem;
+            border-radius: 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
         .metric-card:hover {
             transform: translateY(-2px);
-            border-color: #3f3f46;
+            border-color: #3b3b4f;
         }
 
         .metric-info h3 {
@@ -149,11 +210,10 @@
 
         .metric-icon {
             font-size: 2.5rem;
-            opacity: 0.15;
+            opacity: 0.18;
             color: var(--accent-cyan);
         }
 
-        /* Dynamic Colors for Card Borders */
         .metric-card::after {
             content: '';
             position: absolute;
@@ -164,7 +224,7 @@
             background: linear-gradient(to bottom, var(--accent-cyan), var(--accent-violet));
         }
 
-        /* Section Title */
+        /* General Card Layouts */
         .section-header {
             display: flex;
             justify-content: space-between;
@@ -180,7 +240,6 @@
             gap: 0.8rem;
         }
 
-        /* Active Processes */
         .active-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
@@ -190,17 +249,18 @@
         .active-card {
             background-color: var(--card-bg);
             border: 1px solid var(--card-border);
-            border-radius: 16px;
-            padding: 1.5rem;
+            border-radius: 20px;
+            padding: 1.8rem;
             display: flex;
             flex-direction: column;
             gap: 1.2rem;
             position: relative;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
             transition: border-color 0.2s ease;
         }
 
         .active-card:hover {
-            border-color: #3f3f46;
+            border-color: #3b3b4f;
         }
 
         .active-header {
@@ -210,18 +270,19 @@
         }
 
         .active-model-name {
-            font-size: 1.15rem;
-            font-weight: 600;
+            font-size: 1.20rem;
+            font-weight: 700;
             word-break: break-all;
             max-width: 80%;
         }
 
         .active-badge {
             font-size: 0.75rem;
-            font-weight: 600;
-            padding: 0.3rem 0.6rem;
-            border-radius: 6px;
+            font-weight: 700;
+            padding: 0.35rem 0.75rem;
+            border-radius: 8px;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .badge-llm {
@@ -246,10 +307,10 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
-            background: rgba(9, 9, 11, 0.4);
-            padding: 1rem;
-            border-radius: 10px;
-            border: 1px solid rgba(39, 39, 42, 0.5);
+            background: rgba(11, 11, 15, 0.6);
+            padding: 1.2rem;
+            border-radius: 12px;
+            border: 1px solid rgba(35, 35, 47, 0.5);
         }
 
         .detail-item span {
@@ -257,17 +318,19 @@
             font-size: 0.75rem;
             color: var(--text-secondary);
             text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.2rem;
         }
 
         .detail-item p {
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 1rem;
         }
 
         .active-resources {
             display: flex;
             flex-direction: column;
-            gap: 0.6rem;
+            gap: 0.8rem;
         }
 
         .resource-bar-wrapper {
@@ -277,22 +340,24 @@
         .resource-bar-label {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 0.3rem;
+            margin-bottom: 0.4rem;
             color: var(--text-secondary);
         }
 
         .resource-bar {
             height: 8px;
-            background-color: #27272a;
-            border-radius: 4px;
+            background-color: #1e1e27;
+            border-radius: 6px;
             overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.02);
         }
 
         .resource-bar-fill {
             height: 100%;
             background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
             width: 0%;
-            transition: width 0.5s ease;
+            border-radius: 6px;
+            transition: width 0.5s cubic-bezier(0.1, 0.8, 0.25, 1);
         }
 
         .active-actions {
@@ -305,14 +370,20 @@
             font-family: var(--font-family);
             font-size: 0.85rem;
             font-weight: 600;
-            padding: 0.6rem 1.2rem;
+            padding: 0.7rem 1.4rem;
             border-radius: 10px;
             border: none;
             cursor: pointer;
             transition: all 0.2s ease;
-            display: flex;
+            display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 0.5rem;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .btn-stop {
@@ -321,7 +392,7 @@
             border: 1px solid rgba(244, 63, 94, 0.2);
         }
 
-        .btn-stop:hover {
+        .btn-stop:hover:not(:disabled) {
             background-color: var(--accent-rose);
             color: #fff;
         }
@@ -329,24 +400,37 @@
         .btn-load {
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
             color: #fff;
+            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.25);
         }
 
-        .btn-load:hover {
-            opacity: 0.9;
+        .btn-load:hover:not(:disabled) {
             transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35);
         }
 
         .btn-secondary {
-            background-color: #27272a;
+            background-color: #1e1e27;
             color: var(--text-primary);
             border: 1px solid var(--card-border);
         }
 
-        .btn-secondary:hover {
-            background-color: #3f3f46;
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #272733;
+            border-color: #3b3b4f;
         }
 
-        /* Stats & Library Sections */
+        .btn-danger {
+            background-color: rgba(244, 63, 94, 0.15);
+            color: var(--accent-rose);
+            border: 1px solid rgba(244, 63, 94, 0.25);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: var(--accent-rose);
+            color: #fff;
+        }
+
+        /* Bottom Sections */
         .bottom-sections {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -362,42 +446,34 @@
         .panel-card {
             background-color: var(--card-bg);
             border: 1px solid var(--card-border);
-            border-radius: 16px;
-            padding: 1.5rem;
+            border-radius: 20px;
+            padding: 1.8rem;
             display: flex;
             flex-direction: column;
-            gap: 1rem;
-            max-height: 500px;
+            gap: 1.2rem;
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .scrollable-panel {
+            max-height: 480px;
             overflow-y: auto;
+            padding-right: 0.5rem;
         }
 
-        /* Stats Table */
-        .stats-table-wrapper {
-            overflow-x: auto;
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
         }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            font-size: 0.85rem;
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
         }
-
-        th {
-            padding: 0.8rem 1rem;
-            color: var(--text-secondary);
-            border-bottom: 1px solid var(--card-border);
-            font-weight: 600;
-            text-transform: uppercase;
+        ::-webkit-scrollbar-thumb {
+            background: var(--card-border);
+            border-radius: 10px;
         }
-
-        td {
-            padding: 0.8rem 1rem;
-            border-bottom: 1px solid var(--card-border);
-        }
-
-        tr:last-child td {
-            border-bottom: none;
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f59;
         }
 
         /* Library Model List */
@@ -408,18 +484,19 @@
         }
 
         .library-item {
-            background-color: rgba(9, 9, 11, 0.4);
+            background-color: rgba(11, 11, 15, 0.5);
             border: 1px solid var(--card-border);
-            border-radius: 12px;
-            padding: 1rem;
+            border-radius: 14px;
+            padding: 1.2rem;
             display: flex;
             flex-direction: column;
-            gap: 0.8rem;
-            transition: border-color 0.2s ease;
+            gap: 1rem;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
         }
 
         .library-item:hover {
-            border-color: #3f3f46;
+            border-color: #3b3b4f;
+            background-color: rgba(11, 11, 15, 0.7);
         }
 
         .library-item-top {
@@ -429,13 +506,19 @@
         }
 
         .library-name {
-            font-weight: 600;
-            font-size: 0.95rem;
+            font-weight: 700;
+            font-size: 1rem;
+            word-break: break-all;
+            max-width: 75%;
         }
 
         .library-size {
             font-size: 0.8rem;
             color: var(--text-secondary);
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.02);
         }
 
         .library-controls {
@@ -443,16 +526,17 @@
             flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
-            gap: 0.8rem;
-            padding-top: 0.5rem;
+            gap: 1rem;
+            padding-top: 0.8rem;
             border-top: 1px dashed var(--card-border);
         }
 
         .library-params {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 1rem;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             color: var(--text-secondary);
         }
 
@@ -466,30 +550,314 @@
             white-space: nowrap;
         }
 
-        .param-group select {
-            background-color: #27272a;
+        .param-group select, .param-group input {
+            background-color: #1e1e27;
             border: 1px solid var(--card-border);
             color: var(--text-primary);
-            padding: 0.25rem 0.5rem;
-            border-radius: 6px;
+            padding: 0.35rem 0.6rem;
+            border-radius: 8px;
             font-family: var(--font-family);
             outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .param-group select:focus, .param-group input:focus {
+            border-color: var(--accent-cyan);
         }
 
         .param-group input[type="number"] {
-            background-color: #27272a;
-            border: 1px solid var(--card-border);
-            color: var(--text-primary);
-            width: 60px;
-            padding: 0.25rem 0.4rem;
-            border-radius: 6px;
-            outline: none;
-            font-family: var(--font-family);
+            width: 75px;
         }
 
-        .library-actions {
+        /* Stats Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        th {
+            padding: 1rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--card-border);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Inputs & Form styling */
+        .search-box {
+            position: relative;
             display: flex;
-            gap: 0.5rem;
+            gap: 0.8rem;
+            width: 100%;
+        }
+
+        .input-text {
+            flex: 1;
+            background-color: #1a1a24;
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 0.8rem 1.2rem;
+            border-radius: 12px;
+            font-family: var(--font-family);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .input-text:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+        }
+
+        /* Chat Playground CSS */
+        .playground-wrapper {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 2rem;
+            min-height: 600px;
+        }
+
+        @media (max-width: 900px) {
+            .playground-wrapper {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chat-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .chat-area {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 25px rgba(0,0,0,0.3);
+            height: 600px;
+        }
+
+        .chat-header {
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: rgba(0,0,0,0.15);
+        }
+
+        .chat-header-info h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .chat-header-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .chat-bubble {
+            max-width: 80%;
+            padding: 1rem 1.2rem;
+            border-radius: 16px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .bubble-user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bubble-assistant {
+            align-self: flex-start;
+            background-color: #1e1e29;
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+            border: 1px solid var(--card-border);
+        }
+
+        .bubble-system {
+            align-self: center;
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--accent-amber);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            font-size: 0.8rem;
+            text-align: center;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+        }
+
+        .chat-input-wrapper {
+            padding: 1.2rem 1.5rem;
+            border-top: 1px solid var(--card-border);
+            background-color: rgba(0,0,0,0.15);
+            display: flex;
+            gap: 1rem;
+        }
+
+        /* Model Hub Search and Download Tasks */
+        .download-tasks {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .download-task-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            position: relative;
+        }
+
+        .download-task-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .download-task-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+            word-break: break-all;
+            max-width: 80%;
+        }
+
+        .download-task-pct {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--accent-cyan);
+        }
+
+        .progress-track {
+            height: 6px;
+            background-color: #1a1a24;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-emerald));
+            width: 0%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        /* RAG Indexer Styles */
+        .rag-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .rag-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .source-card {
+            background-color: rgba(11, 11, 15, 0.4);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 1rem 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: border-color 0.2s ease;
+        }
+
+        .source-card:hover {
+            border-color: #3b3b4f;
+        }
+
+        .source-info h4 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            word-break: break-all;
+            margin-bottom: 0.2rem;
+        }
+
+        .source-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .search-results-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .match-card {
+            background-color: rgba(11, 11, 15, 0.6);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .match-score {
+            font-weight: 600;
+            color: var(--accent-emerald);
+            background-color: rgba(16, 185, 129, 0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+        }
+
+        .match-text {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            line-height: 1.5;
+            background-color: rgba(0,0,0,0.2);
+            padding: 0.8rem;
+            border-radius: 8px;
         }
 
         /* Animations */
@@ -508,7 +876,7 @@
             }
         }
 
-        /* Auto refresh toggle */
+        /* Toggle Auto Refresh */
         .toggle-wrapper {
             display: flex;
             align-items: center;
@@ -571,7 +939,7 @@
                 <img src="/assets/logo.jpg" alt="Herd Logo" class="logo-img" onerror="this.src='https://placehold.co/100?text=Herd'">
                 <div class="header-title">
                     <h1>Herd Control Center</h1>
-                    <p>Local AI process coordinator & API gateway</p>
+                    <p>Local AI Model Servicing & RAG Orchestrator</p>
                 </div>
             </div>
             
@@ -581,7 +949,7 @@
                     <label class="switch">
                         <input type="checkbox" id="refresh-toggle" checked>
                         <span class="slider"></span>
-                    </</label>
+                    </label>
                 </div>
                 <div class="status-badge">
                     <span class="status-dot"></span>
@@ -590,78 +958,242 @@
             </div>
         </header>
 
-        <!-- Overview Metrics -->
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-info">
-                    <h3>Active Models</h3>
-                    <div class="value" id="metrics-active">0</div>
+        <!-- Navigation Tabs -->
+        <nav class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab('instances')">Control Center</button>
+            <button class="tab-btn" onclick="switchTab('playground')">Chat Playground</button>
+            <button class="tab-btn" onclick="switchTab('hub')">Model Hub</button>
+            <button class="tab-btn" onclick="switchTab('rag')">RAG & Indexer</button>
+        </nav>
+
+        <!-- Tab: Control Center -->
+        <div id="tab-instances" class="tab-content active">
+            <!-- Metrics -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-info">
+                        <h3>Running Instances</h3>
+                        <div class="value" id="metrics-active">0</div>
+                    </div>
+                    <div class="metric-icon">🤖</div>
                 </div>
-                <div class="metric-icon">🦙</div>
-            </div>
-            
-            <div class="metric-card" style="--accent-cyan: var(--accent-violet)">
-                <div class="metric-info">
-                    <h3>Total RAM Footprint</h3>
-                    <div class="value" id="metrics-ram">0.00 GB</div>
+                <div class="metric-card" style="--accent-cyan: var(--accent-violet)">
+                    <div class="metric-info">
+                        <h3>RAM Allocation</h3>
+                        <div class="value" id="metrics-ram">0.00 GB</div>
+                    </div>
+                    <div class="metric-icon">💾</div>
                 </div>
-                <div class="metric-icon">💾</div>
+                <div class="metric-card" style="--accent-cyan: var(--accent-rose)">
+                    <div class="metric-info">
+                        <h3>Cumulative Requests</h3>
+                        <div class="value" id="metrics-requests">0</div>
+                    </div>
+                    <div class="metric-icon">⚡</div>
+                </div>
             </div>
 
-            <div class="metric-card" style="--accent-cyan: var(--accent-rose)">
-                <div class="metric-info">
-                    <h3>Total API Requests</h3>
-                    <div class="value" id="metrics-requests">0</div>
+            <!-- Active Instances -->
+            <div>
+                <div class="section-header">
+                    <h2>Active Model Instances</h2>
                 </div>
-                <div class="metric-icon">⚡</div>
+                <div class="active-grid" id="active-models-container">
+                    <div style="grid-column: 1 / -1; width: 100%; border: 1px solid var(--card-border); background-color: var(--card-bg); border-radius: 20px; align-items: center; display: flex; justify-content: center; padding: 4rem; text-align: center; color: var(--text-secondary);">
+                        <p>No model instances are currently running.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Sections -->
+            <div class="bottom-sections">
+                <!-- Local Catalog -->
+                <div class="panel-card">
+                    <h2>Local Catalog (On Disk)</h2>
+                    <div class="scrollable-panel">
+                        <div class="library-list" id="library-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats table -->
+                <div class="panel-card">
+                    <h2>Performance metrics</h2>
+                    <div class="scrollable-panel">
+                        <div class="stats-table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Model ID</th>
+                                        <th>Requests</th>
+                                        <th>Prompt Tok</th>
+                                        <th>Gen Tok</th>
+                                        <th>Avg Latency</th>
+                                        <th>Speed</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stats-table-body">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Active Model Processes -->
-        <div>
-            <div class="section-header">
-                <h2>Running Model Instances</h2>
-            </div>
-            <div class="active-grid" id="active-models-container">
-                <!-- Active models will populate here dynamically -->
-                <div class="panel-card" style="grid-column: 1 / -1; align-items: center; padding: 3rem; text-align: center; color: var(--text-secondary);">
-                    <p>No model instances are currently running.</p>
+        <!-- Tab: Chat Playground -->
+        <div id="tab-playground" class="tab-content">
+            <div class="playground-wrapper">
+                <!-- Chat Settings Sidebar -->
+                <div class="chat-sidebar">
+                    <div class="panel-card">
+                        <h3>Playground Setup</h3>
+                        
+                        <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
+                            <label>Active Model</label>
+                            <select id="chat-model-select" style="width: 100%; padding: 0.6rem 1rem;">
+                                <option value="">No Active LLM Running</option>
+                            </select>
+                        </div>
+
+                        <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
+                            <label>System Prompt</label>
+                            <textarea id="chat-system-prompt" class="input-text" style="width: 100%; height: 100px; resize: none; font-size: 0.85rem;" placeholder="You are a helpful coding assistant. Answer concisely."></textarea>
+                        </div>
+
+                        <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
+                            <label>Temperature</label>
+                            <div style="display: flex; justify-content: space-between; width: 100%; font-size: 0.85rem; color: var(--text-secondary);">
+                                <input type="range" id="chat-temp" min="0.0" max="1.5" step="0.1" value="0.7" style="width: 80%;">
+                                <span id="chat-temp-val">0.7</span>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-secondary" onclick="clearPlaygroundChat()" style="width: 100%;">
+                            🧹 Clear Session History
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chat Sandbox Panel -->
+                <div class="chat-area">
+                    <div class="chat-header">
+                        <div class="chat-header-info">
+                            <h3 id="chat-model-indicator">Select an active LLM on the left</h3>
+                            <p id="chat-status-indicator">Playground Sandbox</p>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-history" id="chat-history-container">
+                        <div class="bubble-system">Welcome to the Herd Chat Playground! Pre-load an LLM from the Control Center or select a running LLM to start chatting.</div>
+                    </div>
+
+                    <div class="chat-input-wrapper">
+                        <input type="text" id="chat-user-input" class="input-text" placeholder="Type a message to chat with the model..." onkeydown="handleChatSubmit(event)">
+                        <button class="btn btn-load" id="chat-send-btn" onclick="sendPlaygroundMessage()">Send ➔</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Bottom panels: Cumulative Stats and Model Library -->
-        <div class="bottom-sections">
-            <!-- Model Library -->
-            <div class="panel-card">
-                <h2>Model Library (Local)</h2>
-                <div class="library-list" id="library-container">
-                    <!-- Library models will populate here dynamically -->
-                </div>
+        <!-- Tab: Model Hub (HF downloader) -->
+        <div id="tab-hub" class="tab-content">
+            <!-- Downloader Active tasks -->
+            <div class="download-tasks" id="download-tasks-container">
+                <!-- Task progress bars populating here -->
             </div>
 
-            <!-- Cumulative Statistics -->
+            <!-- Hub search -->
             <div class="panel-card">
-                <h2>Cumulative Statistics</h2>
-                <div class="stats-table-wrapper">
+                <h2>Search Hugging Face GGUF Catalog</h2>
+                <div class="search-box">
+                    <input type="text" id="hf-search-query" class="input-text" placeholder="Search GGUF models on Hugging Face (e.g. Qwen3.5, Llama-3)..." onkeydown="handleHubSearch(event)">
+                    <button class="btn btn-load" onclick="searchHuggingFaceHub()">Search</button>
+                </div>
+
+                <div class="stats-table-wrapper" style="margin-top: 1rem;">
                     <table>
                         <thead>
                             <tr>
-                                <th>Model</th>
-                                <th>Requests</th>
-                                <th>Prompt Tok</th>
-                                <th>Gen Tok</th>
-                                <th>Latency</th>
-                                <th>Speed</th>
+                                <th>Repository ID</th>
+                                <th>Author</th>
+                                <th>Downloads</th>
+                                <th>Likes</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="stats-table-body">
-                            <!-- Stats rows will populate here dynamically -->
+                        <tbody id="hub-search-results">
                             <tr>
-                                <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No request statistics recorded yet.</td>
+                                <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 3rem;">Search for models to catalog.</td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: RAG & Indexer -->
+        <div id="tab-rag" class="tab-content">
+            <div class="rag-grid">
+                <!-- Local Indexed Folders -->
+                <div class="panel-card">
+                    <h2>Indexed Folders & Documents</h2>
+                    <div class="scrollable-panel">
+                        <div class="library-list" id="rag-indexed-list">
+                            <!-- Populated dynamically -->
+                            <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">No documents indexed yet.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Index Folder RAG controller -->
+                <div class="panel-card" style="height: fit-content;">
+                    <h2>Index New Local Folder</h2>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+                            <label>Directory Absolute Path</label>
+                            <input type="text" id="index-dir-path" class="input-text" style="width: 100%;" placeholder="/home/user/my-documents">
+                        </div>
+
+                        <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+                            <label>Embedding model to compile vectors with</label>
+                            <select id="index-model-select" style="width: 100%; padding: 0.6rem 1rem;">
+                                <!-- Local embedding models populated here -->
+                            </select>
+                        </div>
+
+                        <button class="btn btn-load" onclick="indexLocalFolder()" style="width: 100%;">
+                            🚀 Recursively Chunk & Embed Directory
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Semantic search RAG sandbox -->
+            <div class="panel-card">
+                <h2>RAG Vector Search Sandbox</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 280px; gap: 1.5rem;">
+                    <div class="search-box">
+                        <input type="text" id="rag-search-query" class="input-text" placeholder="Type a semantic query to check RAG results (e.g. What is our SQLite config?)..." onkeydown="handleRagSearch(event)">
+                    </div>
+                    <div class="param-group" style="width: 100%;">
+                        <label>Embedding Model:</label>
+                        <select id="rag-search-model-select" style="width: 100%; padding: 0.65rem 1rem;">
+                            <!-- Local embedding models populated here -->
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                    <button class="btn btn-load" onclick="searchRagIndex()">Execute Semantic Retrieval</button>
+                </div>
+
+                <div class="search-results-list" id="rag-search-results" style="margin-top: 1.5rem;">
+                    <!-- Results populated dynamically -->
                 </div>
             </div>
         </div>
@@ -673,20 +1205,35 @@
         const libraryContainer = document.getElementById('library-container');
         const statsTableBody = document.getElementById('stats-table-body');
         const refreshToggle = document.getElementById('refresh-toggle');
-        
         const metricsActive = document.getElementById('metrics-active');
         const metricsRam = document.getElementById('metrics-ram');
         const metricsRequests = document.getElementById('metrics-requests');
 
+        // Tab Navigation
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.toLowerCase().includes(tabName.substring(0,3)));
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const content = document.getElementById(`tab-${tabName}`);
+            if (content) content.classList.add('active');
+
+            if (tabName === 'playground') {
+                populatePlaygroundModelList();
+            } else if (tabName === 'rag') {
+                fetchRagIndexCatalog();
+            }
+        }
+
         let isRefreshing = true;
         let refreshInterval = null;
 
-        // Start Auto Refresh
         function startAutoRefresh() {
             refreshInterval = setInterval(fetchData, 2000);
         }
 
-        // Stop Auto Refresh
         function stopAutoRefresh() {
             clearInterval(refreshInterval);
         }
@@ -705,6 +1252,13 @@
         async function init() {
             await fetchData();
             startAutoRefresh();
+            
+            // Listen to temp range slider
+            const slider = document.getElementById('chat-temp');
+            const sliderVal = document.getElementById('chat-temp-val');
+            slider.addEventListener('input', (e) => {
+                sliderVal.textContent = e.target.value;
+            });
         }
 
         // Fetch All API Data
@@ -719,6 +1273,8 @@
                 updateActiveModels(activeRes);
                 updateStats(statsRes);
                 updateLibrary(libraryRes, activeRes);
+                updateSharedDropdowns(libraryRes);
+                pollDownloadProgress();
             } catch (err) {
                 console.error('Error fetching dashboard data:', err);
             }
@@ -728,7 +1284,6 @@
         function updateActiveModels(active) {
             metricsActive.textContent = active.length;
             
-            // Calculate total RAM
             let totalBytes = 0;
             active.forEach(a => totalBytes += (a.memory_bytes || 0));
             const totalGb = totalBytes / (1024 * 1024 * 1024);
@@ -736,10 +1291,10 @@
 
             if (active.length === 0) {
                 activeContainer.innerHTML = `
-                    <div style="grid-column: 1 / -1; width: 100%; border: 1px solid var(--card-border); background-color: var(--card-bg); border-radius: 16px; align-items: center; display: flex; justify-content: center; padding: 4rem; text-align: center; color: var(--text-secondary);">
+                    <div style="grid-column: 1 / -1; width: 100%; border: 1px solid var(--card-border); background-color: var(--card-bg); border-radius: 20px; align-items: center; display: flex; justify-content: center; padding: 4rem; text-align: center; color: var(--text-secondary);">
                         <div>
                             <span style="font-size: 2.5rem; display: block; margin-bottom: 0.8rem;">💤</span>
-                            <p>No model instances are currently running.<br>Use the Library below or make an API request to start a model.</p>
+                            <p>No model instances are currently running.<br>Use the Library below or select the model in your CLI to load them.</p>
                         </div>
                     </div>
                 `;
@@ -786,7 +1341,6 @@
                                     <span>${a.memory_str}</span>
                                 </div>
                                 <div class="resource-bar">
-                                    <!-- Assume 8GB max scale for visualization -->
                                     <div class="resource-bar-fill" style="width: ${Math.min((a.memory_bytes || 0) / (8 * 1024 * 1024 * 1024) * 100, 100)}%; background: linear-gradient(90deg, var(--accent-violet), var(--accent-rose));"></div>
                                 </div>
                             </div>
@@ -806,15 +1360,17 @@
         function updateStats(stats) {
             let totalReqs = 0;
             const rows = Object.entries(stats).map(([model, data]) => {
-                totalReqs += (data.requests || 0);
-                const avgSpeed = data.avg_speed_tok_sec > 0 ? `${data.avg_speed_tok_sec.toFixed(1)} tok/s` : 'N/A';
+                totalReqs += (data.request_count || 0);
+                const avgSpeed = data.avg_speed_tps > 0 ? `${data.avg_speed_tps.toFixed(1)} tok/s` : 'N/A';
+                const errors = data.error_count || 0;
+                
                 return `
                     <tr>
-                        <td style="font-weight: 600; font-family: monospace; font-size: 0.8rem; word-break: break-all;">${model}</td>
-                        <td>${data.requests} <span style="color: var(--accent-rose); font-size: 0.75rem;">(${data.errors})</span></td>
+                        <td style="font-weight: 700; font-family: monospace; font-size: 0.8rem; word-break: break-all;">${model}</td>
+                        <td>${data.request_count} ${errors > 0 ? `<span style="color: var(--accent-rose); font-size: 0.75rem;">(${errors} err)</span>` : ''}</td>
                         <td>${data.prompt_tokens.toLocaleString()}</td>
                         <td>${data.completion_tokens.toLocaleString()}</td>
-                        <td>${data.avg_latency_sec.toFixed(2)}s</td>
+                        <td>${(data.avg_latency_ms / 1000).toFixed(2)}s</td>
                         <td style="color: var(--accent-emerald); font-weight: 600;">${avgSpeed}</td>
                     </tr>
                 `;
@@ -840,7 +1396,7 @@
             if (!library.data || library.data.length === 0) {
                 libraryContainer.innerHTML = `
                     <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
-                        <p>No local models found on disk.<br>Run <code>herd pull &lt;model_name&gt;</code> in your terminal to download models.</p>
+                        <p>No local models found on disk.<br>Use the Model Hub tab to pull models.</p>
                     </div>
                 `;
                 return;
@@ -849,12 +1405,17 @@
             libraryContainer.innerHTML = library.data.map((m, idx) => {
                 const isRunning = activeModels.has(m.id);
                 const isWhisper = m.id.toLowerCase().includes('whisper');
+                const isEmbedding = m.id.toLowerCase().includes('embed') || m.id.toLowerCase().includes('bert');
                 
+                let selectedType = 'llm';
+                if (isWhisper) selectedType = 'whisper';
+                else if (isEmbedding) selectedType = 'embedding';
+
                 return `
                     <div class="library-item">
                         <div class="library-item-top">
                             <span class="library-name">${m.id}</span>
-                            <span class="library-size">Downloaded</span>
+                            <span class="library-size">Local File</span>
                         </div>
                         
                         <div class="library-controls">
@@ -862,9 +1423,9 @@
                                 <div class="param-group">
                                     <label>Type:</label>
                                     <select id="type-${idx}" ${isRunning ? 'disabled' : ''}>
-                                        <option value="llm" ${isWhisper ? '' : 'selected'}>LLM</option>
-                                        <option value="embedding">Embedding</option>
-                                        <option value="whisper" ${isWhisper ? 'selected' : ''}>Whisper</option>
+                                        <option value="llm" ${selectedType === 'llm' ? 'selected' : ''}>LLM</option>
+                                        <option value="embedding" ${selectedType === 'embedding' ? 'selected' : ''}>Embedding</option>
+                                        <option value="whisper" ${selectedType === 'whisper' ? 'selected' : ''}>Whisper</option>
                                     </select>
                                 </div>
                                 <div class="param-group">
@@ -880,7 +1441,7 @@
                                     </button>
                                 ` : `
                                     <button class="btn btn-load" onclick="loadModel('${m.id}', ${idx})">
-                                        ▶ Load Model
+                                        ▶ Load Instance
                                     </button>
                                 `}
                             </div>
@@ -890,7 +1451,33 @@
             }).join('');
         }
 
-        // Action: Stop Model
+        // Shared dropdown updates
+        function updateSharedDropdowns(library) {
+            const indexModelSelect = document.getElementById('index-model-select');
+            const searchModelSelect = document.getElementById('rag-search-model-select');
+            if (!indexModelSelect || !library.data) return;
+
+            const prevIndexVal = indexModelSelect.value;
+            const prevSearchVal = searchModelSelect.value;
+
+            // Filter local models containing 'embed' or 'bert'
+            const embModels = library.data.filter(m => m.id.toLowerCase().includes('embed') || m.id.toLowerCase().includes('bert'));
+
+            if (embModels.length === 0) {
+                const opt = `<option value="">No local embedding models found</option>`;
+                indexModelSelect.innerHTML = opt;
+                searchModelSelect.innerHTML = opt;
+            } else {
+                const options = embModels.map(m => `<option value="${m.id}">${m.id}</option>`).join('');
+                indexModelSelect.innerHTML = options;
+                searchModelSelect.innerHTML = options;
+
+                if (prevIndexVal) indexModelSelect.value = prevIndexVal;
+                if (prevSearchVal) searchModelSelect.value = prevSearchVal;
+            }
+        }
+
+        // Stop Model API call
         async function stopModel(modelName) {
             try {
                 const res = await fetch('/v1/models/unload', {
@@ -900,16 +1487,17 @@
                 });
                 if (res.ok) {
                     fetchData();
+                    populatePlaygroundModelList();
                 } else {
                     const data = await res.json();
-                    alert(`Failed to stop model: ${data.error || res.statusText}`);
+                    alert(`Error unloading: ${data.error || res.statusText}`);
                 }
             } catch (err) {
                 alert(`Error stopping model: ${err}`);
             }
         }
 
-        // Action: Load Model
+        // Load Model API call
         async function loadModel(modelName, idx) {
             const type = document.getElementById(`type-${idx}`).value;
             const timeoutVal = parseInt(document.getElementById(`timeout-${idx}`).value, 10);
@@ -918,7 +1506,6 @@
             const isEmbedding = type === 'embedding';
 
             try {
-                // Show temporary loading UI indicator
                 const btn = document.querySelector(`[onclick="loadModel('${modelName}', ${idx})"]`);
                 if (btn) {
                     btn.disabled = true;
@@ -938,10 +1525,11 @@
                 
                 if (res.ok) {
                     fetchData();
+                    populatePlaygroundModelList();
                 } else {
                     const data = await res.json();
-                    alert(`Failed to load model: ${data.error || res.statusText}`);
-                    fetchData(); // reset buttons
+                    alert(`Error loading: ${data.error || res.statusText}`);
+                    fetchData();
                 }
             } catch (err) {
                 alert(`Error loading model: ${err}`);
@@ -949,7 +1537,436 @@
             }
         }
 
-        // Run Init
+        /* Playground JavaScript */
+        async function populatePlaygroundModelList() {
+            const select = document.getElementById('chat-model-select');
+            try {
+                const active = await fetch('/v1/models/active').then(r => r.json());
+                const prevVal = select.value;
+
+                // Filter active LLMs (not whisper, not embedding)
+                const llms = active.filter(a => !a.is_whisper && !a.is_embedding);
+                
+                if (llms.length === 0) {
+                    select.innerHTML = `<option value="">No Active LLM Running</option>`;
+                    document.getElementById('chat-model-indicator').textContent = 'Select an active LLM on the left';
+                    document.getElementById('chat-status-indicator').textContent = 'Playground Sandbox';
+                } else {
+                    select.innerHTML = llms.map(l => `<option value="${l.model}">${l.model}</option>`).join('');
+                    if (prevVal && llms.some(l => l.model === prevVal)) {
+                        select.value = prevVal;
+                    } else {
+                        select.value = llms[0].model;
+                    }
+                    updatePlaygroundHeader();
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function updatePlaygroundHeader() {
+            const select = document.getElementById('chat-model-select');
+            const header = document.getElementById('chat-model-indicator');
+            if (select.value) {
+                header.textContent = select.value;
+                document.getElementById('chat-status-indicator').textContent = 'Online & Ready';
+            } else {
+                header.textContent = 'Select an active LLM on the left';
+                document.getElementById('chat-status-indicator').textContent = 'Playground Sandbox';
+            }
+        }
+
+        document.getElementById('chat-model-select').addEventListener('change', updatePlaygroundHeader);
+
+        let playgroundChatMessages = [];
+
+        function clearPlaygroundChat() {
+            playgroundChatMessages = [];
+            document.getElementById('chat-history-container').innerHTML = `
+                <div class="bubble-system">Session history cleared. Send a message to start a new chat.</div>
+            `;
+        }
+
+        function handleChatSubmit(e) {
+            if (e.key === 'Enter') {
+                sendPlaygroundMessage();
+            }
+        }
+
+        async function sendPlaygroundMessage() {
+            const select = document.getElementById('chat-model-select');
+            const model = select.value;
+            if (!model) {
+                alert("Please start/select an LLM from the Control Center first.");
+                return;
+            }
+
+            const input = document.getElementById('chat-user-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            input.value = '';
+
+            const container = document.getElementById('chat-history-container');
+            
+            // Append User message
+            container.innerHTML += `<div class="chat-bubble bubble-user">${message}</div>`;
+            container.scrollTop = container.scrollHeight;
+
+            const systemPrompt = document.getElementById('chat-system-prompt').value.trim();
+            const temp = parseFloat(document.getElementById('chat-temp').value);
+
+            // Construct payload messages
+            const messages = [];
+            if (systemPrompt) {
+                messages.push({ role: 'system', content: systemPrompt });
+            }
+            
+            playgroundChatMessages.push({ role: 'user', content: message });
+            playgroundChatMessages.forEach(m => messages.push(m));
+
+            // Create placeholder assistant bubble
+            const assistantBubbleId = 'assistant-bubble-' + Date.now();
+            container.innerHTML += `<div class="chat-bubble bubble-assistant" id="${assistantBubbleId}">⏳ ...</div>`;
+            container.scrollTop = container.scrollHeight;
+
+            const bubbleElement = document.getElementById(assistantBubbleId);
+            
+            try {
+                const res = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: messages,
+                        temperature: temp,
+                        stream: true
+                    })
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    bubbleElement.innerHTML = `<span style="color: var(--accent-rose);">Error: ${data.error || res.statusText}</span>`;
+                    return;
+                }
+
+                bubbleElement.innerHTML = '';
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let assistantAnswer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (trimmed.startsWith('data: ')) {
+                            const dataStr = trimmed.slice(6).trim();
+                            if (dataStr === '[DONE]') break;
+                            try {
+                                const data = JSON.parse(dataStr);
+                                const token = data.choices[0].delta.content || '';
+                                assistantAnswer += token;
+                                
+                                // Format linebreaks
+                                bubbleElement.textContent = assistantAnswer;
+                                container.scrollTop = container.scrollHeight;
+                            } catch(e) {}
+                        }
+                    }
+                }
+                playgroundChatMessages.push({ role: 'assistant', content: assistantAnswer });
+            } catch (err) {
+                bubbleElement.innerHTML = `<span style="color: var(--accent-rose);">Connection error: ${err}</span>`;
+            }
+        }
+
+        /* Model Hub Downloader JS */
+        function handleHubSearch(e) {
+            if (e.key === 'Enter') {
+                searchHuggingFaceHub();
+            }
+        }
+
+        async function searchHuggingFaceHub() {
+            const query = document.getElementById('hf-search-query').value.trim();
+            if (!query) return;
+
+            const tbody = document.getElementById('hub-search-results');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 3rem;">🔍 Searching Hugging Face Hub...</td>
+                </tr>
+            `;
+
+            try {
+                const results = await fetch(`/v1/hf/search?query=${query}`).then(r => r.json());
+                if (results.error) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: var(--accent-rose); padding: 3rem;">Search failed: ${results.error}</td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                if (results.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 3rem;">No GGUF models matched query.</td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = results.map(r => {
+                    const repo = r.id;
+                    const author = r.author || 'Unknown';
+                    const dl = r.downloads || 0;
+                    const likes = r.likes || 0;
+                    const dlStr = dl >= 1000000 ? `${(dl/1000000).toFixed(1)}M` : (dl >= 1000 ? `${(dl/1000).toFixed(1)}k` : dl);
+
+                    return `
+                        <tr>
+                            <td style="font-weight: 700; font-family: monospace; font-size: 0.85rem;">${repo}</td>
+                            <td>${author}</td>
+                            <td>${dlStr}</td>
+                            <td>❤️ ${likes}</td>
+                            <td>
+                                <button class="btn btn-secondary" onclick="pullModel('${repo}')" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
+                                    ⬇ Pull Model
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--accent-rose); padding: 3rem;">Error connecting to gateway: ${err}</td>
+                    </tr>
+                `;
+            }
+        }
+
+        async function pullModel(repoId) {
+            try {
+                const res = await fetch('/v1/models/pull', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: repoId })
+                }).then(r => r.json());
+
+                if (res.status === 'started') {
+                    alert(`Download started for model: ${repoId}\nCheck the progress bars above.`);
+                    pollDownloadProgress();
+                } else if (res.status === 'already_pulling') {
+                    alert("This model is already currently downloading.");
+                } else {
+                    alert(`Failed to start: ${res.error || 'Unknown error'}`);
+                }
+            } catch(e) {
+                alert(`Error: ${e}`);
+            }
+        }
+
+        async function pollDownloadProgress() {
+            const container = document.getElementById('download-tasks-container');
+            try {
+                const tasks = await fetch('/v1/models/pull/status').then(r => r.json());
+                const entries = Object.entries(tasks).filter(([name, data]) => data.status === 'downloading' || data.status === 'pending');
+                
+                if (entries.length === 0) {
+                    container.innerHTML = '';
+                    return;
+                }
+
+                container.innerHTML = entries.map(([name, data]) => {
+                    const progress = data.progress || 0;
+                    return `
+                        <div class="download-task-card">
+                            <div class="download-task-info">
+                                <span class="download-task-name">Downloading: ${name}</span>
+                                <span class="download-task-pct">${progress}%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-bar-fill" style="width: ${progress}%;"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch(e) {
+                console.error('Error polling pull status:', e);
+            }
+        }
+
+        /* RAG & Indexer JavaScript */
+        async function fetchRagIndexCatalog() {
+            const container = document.getElementById('rag-indexed-list');
+            try {
+                const list = await fetch('/v1/db/list').then(r => r.json());
+                
+                if (list.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                            <p>No documents or folders currently indexed.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = list.map(doc => {
+                    return `
+                        <div class="source-card">
+                            <div class="source-info">
+                                <h4>${doc.file_path}</h4>
+                                <p>Model: ${doc.model_name} | Chunks: <strong>${doc.chunks}</strong></p>
+                            </div>
+                            <button class="btn btn-stop" onclick="removeIndexedDoc('${doc.file_path}')" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
+                                Remove
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function removeIndexedDoc(filePath) {
+            const confirm = window.confirm(`Are you sure you want to remove '${filePath}' from the vector database?`);
+            if (!confirm) return;
+
+            try {
+                const res = await fetch('/v1/db/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: filePath })
+                }).then(r => r.json());
+
+                if (res.status === 'removed') {
+                    fetchRagIndexCatalog();
+                } else {
+                    alert(`Failed to remove: ${res.error}`);
+                }
+            } catch(e) {
+                alert(`Error removing document: ${e}`);
+            }
+        }
+
+        async function indexLocalFolder() {
+            const dir = document.getElementById('index-dir-path').value.trim();
+            const select = document.getElementById('index-model-select');
+            const model = select.value;
+
+            if (!dir) {
+                alert("Please enter a directory path.");
+                return;
+            }
+            if (!model) {
+                alert("Please select a local embedding model.");
+                return;
+            }
+
+            try {
+                const res = await fetch('/v1/db/index', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ directory: dir, model: model })
+                }).then(r => r.json());
+
+                if (res.status === 'indexing_started') {
+                    alert("Folder chunking & embedding started in the background.\nPlease refresh in a few moments to see the results.");
+                    document.getElementById('index-dir-path').value = '';
+                    fetchRagIndexCatalog();
+                } else {
+                    alert(`Failed: ${res.error}`);
+                }
+            } catch(e) {
+                alert(`Error starting indexing: ${e}`);
+            }
+        }
+
+        function handleRagSearch(e) {
+            if (e.key === 'Enter') {
+                searchRagIndex();
+            }
+        }
+
+        async function searchRagIndex() {
+            const query = document.getElementById('rag-search-query').value.trim();
+            const select = document.getElementById('rag-search-model-select');
+            const model = select.value;
+
+            if (!query) return;
+            if (!model) {
+                alert("Please select an embedding model.");
+                return;
+            }
+
+            const resultsContainer = document.getElementById('rag-search-results');
+            resultsContainer.innerHTML = `
+                <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                    🔎 Performing cosine similarity vector search...
+                </div>
+            `;
+
+            try {
+                const matches = await fetch('/v1/db/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, model: model, limit: 5 })
+                }).then(r => r.json());
+
+                if (matches.error) {
+                    resultsContainer.innerHTML = `
+                        <div style="text-align: center; color: var(--accent-rose); padding: 2rem;">
+                            Error: ${matches.error}
+                        </div>
+                    `;
+                    return;
+                }
+
+                if (matches.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                            No matches found in the index for this embedding model.
+                        </div>
+                    `;
+                    return;
+                }
+
+                resultsContainer.innerHTML = matches.map(m => {
+                    return `
+                        <div class="match-card">
+                            <div class="match-header">
+                                <span>Source: <strong>${m.file_path}</strong></span>
+                                <span class="match-score">Similarity: ${m.similarity.toFixed(4)}</span>
+                            </div>
+                            <div class="match-text">${m.text}</div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch(e) {
+                resultsContainer.innerHTML = `
+                    <div style="text-align: center; color: var(--accent-rose); padding: 2rem;">
+                        Connection error: ${e}
+                    </div>
+                `;
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>

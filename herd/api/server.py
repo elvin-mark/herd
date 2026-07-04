@@ -4,7 +4,7 @@ import json
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response, Form, UploadFile
+from fastapi import FastAPI, Request, Response, Form, UploadFile, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
@@ -571,3 +571,160 @@ async def audio_translations(
         translate=True,
         model=model,
     )
+
+
+# Global dictionary to track background downloads
+pull_tasks = {}
+
+
+@app.get("/v1/hf/search")
+async def hf_search(query: str, limit: int = 10):
+    """Searches Hugging Face Hub for GGUF models."""
+    url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit={limit}"
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.get(url, timeout=10.0)
+            if res.status_code != 200:
+                return JSONResponse(status_code=res.status_code, content={"error": res.text})
+            return res.json()
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/v1/models/pull")
+async def pull_model(request: Request, background_tasks: BackgroundTasks):
+    """Starts pulling a model in the background and tracks progress."""
+    body = await request.json()
+    model_name = body.get("model")
+    if not model_name:
+        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
+
+    if model_name in pull_tasks and pull_tasks[model_name]["status"] in ["downloading", "pending"]:
+        return {"status": "already_pulling"}
+
+    pull_tasks[model_name] = {"status": "pending", "progress": 0, "error": None}
+
+    async def download_worker(name: str):
+        from herd.services.downloader import parse_model_identifier, list_hf_repository_files
+        try:
+            author, repo, tag = parse_model_identifier(name)
+            files = await list_hf_repository_files(author, repo)
+            model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
+            if not model_files:
+                pull_tasks[name] = {"status": "failed", "progress": 0, "error": "No model files found"}
+                return
+
+            chosen_file = model_files[0]
+            if tag:
+                matches = [f for f in model_files if tag.lower() in f.lower()]
+                if matches:
+                    chosen_file = matches[0]
+
+            download_url = f"https://huggingface.co/{author}/{repo}/resolve/main/{chosen_file}"
+            dest_path = os.path.join(HERD_MODELS_DIR, "huggingface", author, repo, chosen_file)
+
+            pull_tasks[name]["status"] = "downloading"
+
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            async with httpx.AsyncClient(timeout=None) as client:
+                async with client.stream("GET", download_url) as r:
+                    r.raise_for_status()
+                    total = int(r.headers.get("content-length", 0))
+                    downloaded = 0
+                    with open(dest_path, "wb") as f:
+                        async for chunk in r.aiter_bytes(chunk_size=1024*1024):
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total > 0:
+                                pull_tasks[name]["progress"] = int((downloaded / total) * 100)
+
+            pull_tasks[name]["status"] = "completed"
+            pull_tasks[name]["progress"] = 100
+        except Exception as e:
+            pull_tasks[name] = {"status": "failed", "progress": 0, "error": str(e)}
+
+    background_tasks.add_task(download_worker, model_name)
+    return {"status": "started"}
+
+
+@app.get("/v1/models/pull/status")
+async def pull_status():
+    """Gets status of all pulling tasks."""
+    return pull_tasks
+
+
+@app.get("/v1/db/list")
+async def db_list():
+    """Lists indexed files in the local database."""
+    from herd.services.rag import list_indexed_files
+    try:
+        rows = list_indexed_files()
+        data = [{"file_path": r[0], "model_name": r[1], "chunks": r[2]} for r in rows]
+        return data
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/v1/db/remove")
+async def db_remove(request: Request):
+    """Removes a file path from the vector database index."""
+    from herd.services.rag import remove_indexed_path
+    body = await request.json()
+    path = body.get("path")
+    if not path:
+        return JSONResponse(status_code=400, content={"error": "Missing 'path' field"})
+    try:
+        abs_path = os.path.abspath(path)
+        count = remove_indexed_path(abs_path)
+        return {"status": "removed", "count": count}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/v1/db/index")
+async def db_index(request: Request, background_tasks: BackgroundTasks):
+    """Triggers RAG indexing on a local directory in the background."""
+    from herd.services.rag import index_directory
+    body = await request.json()
+    directory = body.get("directory")
+    model_name = body.get("model")
+    if not directory or not model_name:
+        return JSONResponse(status_code=400, content={"error": "Missing 'directory' or 'model' field"})
+
+    if not os.path.exists(directory):
+        return JSONResponse(status_code=404, content={"error": "Directory not found"})
+
+    try:
+        await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Failed to start embedding model: {e}"})
+
+    async def index_worker(d: str, m: str):
+        try:
+            await index_directory(d, m)
+        except Exception as e:
+            logger.error(f"Background indexing failed: {e}")
+
+    background_tasks.add_task(index_worker, directory, model_name)
+    return {"status": "indexing_started"}
+
+
+@app.post("/v1/db/search")
+async def db_search(request: Request):
+    """Performs semantic vector RAG search matching the user query."""
+    from herd.services.rag import get_embedding, search_vectors
+    body = await request.json()
+    query = body.get("query")
+    model_name = body.get("model")
+    limit = body.get("limit", 5)
+
+    if not query or not model_name:
+        return JSONResponse(status_code=400, content={"error": "Missing 'query' or 'model' field"})
+
+    try:
+        await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
+        query_vector = await get_embedding(query, model_name)
+        matches = search_vectors(query_vector, model_name, top_k=limit)
+        return matches
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
