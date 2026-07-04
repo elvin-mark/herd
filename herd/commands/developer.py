@@ -529,3 +529,156 @@ def review(
     if pre_commit and criticals:
         console.print("\n[bold red]Commit rejected: Critical issues found in staged files.[/bold red]")
         raise typer.Exit(1)
+
+
+def heal(
+    ctx: typer.Context,
+    command: Optional[str] = typer.Argument(None, help="The command string to execute (e.g. 'python3 script.py')."),
+    model_name: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="LLM model identifier to diagnose the issue.",
+    ),
+):
+    """Executes a shell command and automatically diagnoses/heals it using local LLMs on failure."""
+    command_parts = []
+    if command:
+        command_parts.append(command)
+    if ctx.args:
+        command_parts.extend(ctx.args)
+
+    if not command_parts:
+        console.print("[red]Error: Please specify a command to execute.[/red]")
+        raise typer.Exit(1)
+
+    command_str = " ".join(command_parts)
+
+    console.print(f"[bold cyan]Executing command:[/bold cyan] {command_str}\n")
+
+    # Run the command and capture logs in real-time
+    output_buffer = []
+    try:
+        process = subprocess.Popen(
+            command_str,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        for line in process.stdout:
+            print(line, end="")
+            output_buffer.append(line)
+            if len(output_buffer) > 100:  # keep last 100 lines
+                output_buffer.pop(0)
+        process.wait()
+        exit_code = process.returncode
+    except Exception as e:
+        console.print(f"\n[red]Failed to execute subprocess: {e}[/red]")
+        raise typer.Exit(1)
+
+    if exit_code == 0:
+        console.print("\n[bold green]Command completed successfully (exit code 0).[/bold green]")
+        return
+
+    console.print(f"\n[bold red]⚠️ Command failed with exit code {exit_code}. Analyzing failure logs...[/bold red]")
+
+    # Resolve LLM model
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
+        raise typer.Exit(1)
+
+    # Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # Pre-load model
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    logs_text = "".join(output_buffer)
+
+    system_prompt = (
+        "You are an expert systems and operations debugging assistant. Diagnose why the user's terminal command failed "
+        "given the command string and the execution logs (stdout/stderr trace).\n\n"
+        "Your response must be in JSON format with exactly three keys:\n"
+        "1. \"error_explanation\": A clear, concise (1-2 sentences) explanation of what caused the crash.\n"
+        "2. \"suggested_fix\": The single terminal command or action to run that will fix the error (e.g. `pip install numpy`, `chmod +x script.sh`, or correct parameters/syntax).\n"
+        "3. \"can_auto_run\": A boolean indicating if Herd can automatically execute this suggested fix command on confirmation (set to true ONLY if it is a safe command-line utility execution like installing a package, changing permissions, creating a folder, or running a clean syntax command; set to false if it requires manual file edits or unsafe actions).\n\n"
+        "Do not output markdown code blocks. Output strictly valid JSON."
+    )
+
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {
+        "model": chosen_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Command: {command_str}\n\nExecution Logs:\n{logs_text}"}
+        ],
+        "stream": False
+    }
+
+    try:
+        response = httpx.post(url_chat, json=payload, timeout=45.0)
+        if response.status_code != 200:
+            console.print(f"[red]Failed to analyze logs: {response.text}[/red]")
+            raise typer.Exit(1)
+        result = response.json()
+        raw_text = result["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        console.print(f"[red]Error contacting Gateway: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Clean markdown wrapping if present
+    if raw_text.startswith("```json"):
+        raw_text = raw_text[7:]
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]
+    raw_text = raw_text.strip()
+
+    try:
+        data = json.loads(raw_text)
+        explanation = data["error_explanation"]
+        suggested_fix = data["suggested_fix"]
+        can_auto_run = data["can_auto_run"]
+    except Exception:
+        console.print(f"[red]Error: Failed to parse diagnosis response as JSON. Raw output was:[/red]\n{raw_text}")
+        raise typer.Exit(1)
+
+    # Print diagnosis panel
+    from rich.panel import Panel
+    from rich.console import Group
+    panel_group = Group(
+        f"[bold white]Diagnosis:[/bold white]\n  {explanation}\n",
+        f"[bold white]Suggested Fix:[/bold white]\n  [bold yellow]{suggested_fix}[/bold yellow]"
+    )
+    console.print(Panel(
+        panel_group,
+        title="[bold red]Herd Self-Healing System Diagnosis[/bold red]",
+        border_style="red",
+        expand=False
+    ))
+
+    if can_auto_run and suggested_fix:
+        confirm_fix = typer.confirm(f"\nWould you like to execute the suggested fix command: {suggested_fix}?")
+        if confirm_fix:
+            console.print(f"\n[bold cyan]Executing fix:[/bold cyan] {suggested_fix}\n")
+            try:
+                subprocess.run(suggested_fix, shell=True, check=True)
+                console.print("[bold green]Fix executed successfully![/bold green]")
+
+                # Ask to rerun original command
+                confirm_rerun = typer.confirm(f"\nWould you like to re-run the original command: {command_str}?")
+                if confirm_rerun:
+                    console.print(f"\n[bold cyan]Re-running original command:[/bold cyan] {command_str}\n")
+                    subprocess.run(command_str, shell=True)
+            except Exception as e:
+                console.print(f"[red]Failed to execute fix or original command: {e}[/red]")
+    else:
+        console.print("\n[yellow]This issue requires manual intervention or file editing. Please apply the fix above manually.[/yellow]")

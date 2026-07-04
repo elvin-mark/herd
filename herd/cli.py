@@ -4,7 +4,7 @@ import typer
 from herd.commands.models import list_models, pull, stop, ps, show_stats, clean, search, quantize, top
 from herd.commands.chat import run, benchmark
 from herd.commands.audio import transcribe
-from herd.commands.developer import suggest, copilot, commit, review
+from herd.commands.developer import suggest, copilot, commit, review, heal
 from herd.commands.db import index, ask, db_app
 from herd.commands.config import config_app
 from herd.commands.server import serve, logs, setup, share, proxy
@@ -38,6 +38,7 @@ app.command(name="suggest")(suggest)
 app.command(name="copilot")(copilot)
 app.command(name="commit")(commit)
 app.command(name="review")(review)
+app.command(name="heal")(heal)
 
 # Register RAG indexing & ask commands
 app.command(name="index")(index)
