@@ -1,0 +1,380 @@
+import os
+import time
+import json
+import subprocess
+import shutil
+import typer
+import uvicorn
+from typing import Optional
+
+from herd.core.config import (
+    HERD_HOST,
+    HERD_PORT,
+    HERD_HOME,
+    HERD_LOGS_DIR,
+)
+from herd.core.utils import console
+
+
+def serve(
+    host: str = typer.Option(
+        HERD_HOST,
+        "--host",
+        "-h",
+        help="Host IP address to bind the gateway server to (use '0.0.0.0' for local network access).",
+    ),
+    port: int = typer.Option(
+        HERD_PORT, "--port", "-p", help="Port to run the gateway server on."
+    ),
+):
+    """Starts the central Herd API Gateway server."""
+    # Ensure gateway port and host are set in env so other processes know about it
+    os.environ["HERD_PORT"] = str(port)
+    os.environ["HERD_HOST"] = host
+    console.print(
+        f"[bold green]Starting Herd API Gateway on {host}:{port}...[/bold green]"
+    )
+    # Correct path to the FastAPI app module under the new package layout
+    uvicorn.run("herd.api.server:app", host=host, port=port, log_level="info")
+
+
+def logs(
+    model_name: Optional[str] = typer.Argument(
+        None,
+        help="Model identifier to view logs for. If omitted, tails the gateway logs.",
+    ),
+    follow: bool = typer.Option(
+        False, "--follow", "-f", help="Follow log output in real-time."
+    ),
+    lines: int = typer.Option(
+        20, "--lines", "-n", help="Number of lines to show from the end of the logs."
+    ),
+):
+    """Views or live-tails logs for a model process or the central gateway."""
+    if model_name:
+        model_safe = model_name.replace("/", "_").replace(":", "_")
+        log_path = os.path.join(HERD_LOGS_DIR, f"{model_safe}.log")
+        target_desc = f"Model '{model_name}'"
+    else:
+        log_path = os.path.join(HERD_LOGS_DIR, "gateway.log")
+        target_desc = "Herd Gateway"
+
+    if not os.path.exists(log_path):
+        console.print(f"[red]No logs found at: {log_path}[/red]")
+        raise typer.Exit(1)
+
+    console.print(
+        f"[bold green]Tailing last {lines} lines of {target_desc} logs...[/bold green]"
+    )
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            from collections import deque
+
+            last_lines = deque(f, maxlen=lines)
+            for line in last_lines:
+                print(line, end="")
+
+            if follow:
+                f.seek(0, 2)
+                console.print(
+                    "\n[bold yellow]--- Following logs (Press Ctrl+C to exit) ---[/bold yellow]\n"
+                )
+                while True:
+                    line = f.readline()
+                    if not line:
+                        time.sleep(0.1)
+                        continue
+                    print(line, end="", flush=True)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Log tailing stopped.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error reading logs: {e}[/red]")
+
+
+def setup(
+    dir_path: Optional[str] = typer.Option(
+        None,
+        "--dir",
+        "-d",
+        help="Directory where llama.cpp and whisper.cpp will be cloned and compiled. Defaults to HERD_HOME/src.",
+    ),
+    cuda: bool = typer.Option(
+        False, "--cuda", help="Compile llama.cpp and whisper.cpp with CUDA support."
+    ),
+):
+    """Clones, compiles, and configures llama.cpp and whisper.cpp locally."""
+    if not dir_path:
+        dir_path = os.path.join(HERD_HOME, "src")
+
+    os.makedirs(dir_path, exist_ok=True)
+
+    git_bin = shutil.which("git")
+    cmake_bin = shutil.which("cmake")
+    if not git_bin:
+        console.print("[red]Error: 'git' is not installed or not in PATH. Please install git first.[/red]")
+        raise typer.Exit(1)
+    if not cmake_bin:
+        console.print("[red]Error: 'cmake' is not installed or not in PATH. Please install cmake first.[/red]")
+        raise typer.Exit(1)
+
+    llama_dir = os.path.join(dir_path, "llama.cpp")
+    whisper_dir = os.path.join(dir_path, "whisper.cpp")
+
+    # 1. Setup llama.cpp
+    if not os.path.exists(llama_dir):
+        console.print("[bold cyan]Cloning llama.cpp...[/bold cyan]")
+        subprocess.run(
+            [git_bin, "clone", "--depth", "1", "https://github.com/ggerganov/llama.cpp.git", llama_dir],
+            check=True
+        )
+    else:
+        console.print("[yellow]llama.cpp directory already exists. Skipping clone.[/yellow]")
+
+    console.print("[bold cyan]Compiling llama-server...[/bold cyan]")
+    cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
+    if cuda:
+        cmake_args.append("-DGGML_CUDA=ON")
+
+    cores = os.cpu_count() or 1
+    subprocess.run(cmake_args, cwd=llama_dir, check=True)
+    subprocess.run(
+        [cmake_bin, "--build", "build", "--config", "Release", "--target", "llama-server", "--parallel", str(cores)],
+        cwd=llama_dir,
+        check=True
+    )
+
+    # 2. Setup whisper.cpp
+    if not os.path.exists(whisper_dir):
+        console.print("[bold cyan]Cloning whisper.cpp...[/bold cyan]")
+        subprocess.run(
+            [git_bin, "clone", "--depth", "1", "https://github.com/ggerganov/whisper.cpp.git", whisper_dir],
+            check=True
+        )
+    else:
+        console.print("[yellow]whisper.cpp directory already exists. Skipping clone.[/yellow]")
+
+    console.print("[bold cyan]Compiling whisper-server...[/bold cyan]")
+    whisper_cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
+    if cuda:
+        whisper_cmake_args.append("-DGGML_CUDA=ON")
+
+    subprocess.run(whisper_cmake_args, cwd=whisper_dir, check=True)
+    subprocess.run(
+        [cmake_bin, "--build", "build", "--config", "Release", "--target", "whisper-server", "--parallel", str(cores)],
+        cwd=whisper_dir,
+        check=True
+    )
+
+    # 3. Configure binary paths
+    llama_bin_path = os.path.abspath(os.path.join(llama_dir, "build", "bin", "llama-server"))
+    whisper_bin_path = os.path.abspath(os.path.join(whisper_dir, "build", "bin", "whisper-server"))
+    if not os.path.exists(whisper_bin_path):
+        fallback_path = os.path.abspath(os.path.join(whisper_dir, "build", "whisper-server"))
+        if os.path.exists(fallback_path):
+            whisper_bin_path = fallback_path
+
+    config_path = os.path.join(HERD_HOME, "config.json")
+    config_data = {
+        "LLAMA_SERVER_BIN": llama_bin_path,
+        "WHISPER_SERVER_BIN": whisper_bin_path
+    }
+
+    with open(config_path, "w") as f:
+        json.dump(config_data, f, indent=4)
+
+    console.print("\n[bold green]Herd setup completed successfully![/bold green]")
+    console.print(f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:")
+    console.print(f"  llama-server: [bold white]{llama_bin_path}[/bold white]")
+    console.print(f"  whisper-server: [bold white]{whisper_bin_path}[/bold white]")
+
+
+def get_local_ip() -> str:
+    """Finds the primary local IP address of this machine."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.254.254.254', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+
+def share(
+    qr: bool = typer.Option(
+        False,
+        "--qr",
+        "-q",
+        help="Generate an ASCII QR code in the terminal for easy mobile pairing.",
+    ),
+    public: bool = typer.Option(
+        False,
+        "--public",
+        "-p",
+        help="Expose the gateway to the public internet using a free Cloudflare Tunnel.",
+    ),
+):
+    """Exposes connection strings and generates pairing helper for local network or public devices."""
+    port = HERD_PORT
+
+    if public:
+        cloudflared_bin = shutil.which("cloudflared")
+        if not cloudflared_bin:
+            console.print("[red]Error: 'cloudflared' is not installed or not in PATH.[/red]")
+            console.print("Please install Cloudflare Tunnel first. Examples:")
+            console.print("  [bold white]macOS:[/bold white] brew install cloudflared")
+            console.print("  [bold white]Linux:[/bold white] sudo apt install cloudflared")
+            raise typer.Exit(1)
+
+        console.print("[bold cyan]Starting public Cloudflare Tunnel...[/bold cyan]")
+        try:
+            process = subprocess.Popen(
+                [cloudflared_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                start_new_session=True
+            )
+
+            # Read lines to find the trycloudflare URL
+            public_url = None
+            start_time = time.time()
+            while time.time() - start_time < 15.0:  # 15s timeout
+                line = process.stdout.readline()
+                if not line:
+                    break
+                import re
+                match = re.search(r'(https://[a-zA-Z0-9-]+\.trycloudflare\.com)', line)
+                if match:
+                    public_url = match.group(1)
+                    break
+
+            if not public_url:
+                console.print("[red]Error: Failed to retrieve Cloudflare Tunnel URL. Check if cloudflared is working correctly.[/red]")
+                process.terminate()
+                process.wait()
+                raise typer.Exit(1)
+
+            console.print("\n🌎 [bold green]Public Exposure Active![/bold green]\n")
+            console.print(f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]")
+            console.print(f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]")
+            console.print("")
+            console.print("[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]")
+
+            if qr:
+                try:
+                    import qrcode
+                    console.print("\n[bold yellow]Scan this QR Code to copy the Public API URL on your mobile device:[/bold yellow]\n")
+                    qr_obj = qrcode.QRCode()
+                    qr_obj.add_data(f"{public_url}/v1")
+                    qr_obj.make()
+                    qr_obj.print_ascii(tty=True)
+                    console.print("")
+                except ImportError:
+                    pass
+
+            console.print("[bold yellow]--- Press Ctrl+C to stop the tunnel and revoke the public URL ---[/bold yellow]\n")
+
+            # Block and keep reading to keep process alive, print errors if any
+            while True:
+                line = process.stdout.readline()
+                if not line:
+                    break
+                # Silently consume output to avoid terminal clutter, but keep loop alive
+                pass
+
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Stopping Cloudflare Tunnel...[/yellow]")
+        finally:
+            try:
+                import signal
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                process.wait()
+            except Exception:
+                try:
+                    process.terminate()
+                    process.wait()
+                except Exception:
+                    pass
+            console.print("[green]Public URL revoked successfully.[/green]")
+        return
+
+    # Default local share logic
+    ip = get_local_ip()
+    url = f"http://{ip}:{port}/v1"
+
+    console.print("\n📶 [bold green]Herd Connection & Exposer Helper[/bold green]\n")
+    console.print("Your Gateway is accessible on the local network at:")
+    console.print(f"  API Base URL:  [bold cyan]{url}[/bold cyan]")
+    console.print(f"  Web Dashboard: [bold cyan]http://{ip}:{port}[/bold cyan]")
+    console.print("")
+    console.print("Configure your mobile client (e.g. Chatbox, LibreChat) with this API Base URL.")
+    console.print("")
+
+    if qr:
+        try:
+            import qrcode
+            console.print("[bold yellow]Scan this QR Code to copy the API Base URL on your mobile device:[/bold yellow]\n")
+            qr_obj = qrcode.QRCode()
+            qr_obj.add_data(url)
+            qr_obj.make()
+            qr_obj.print_ascii(tty=True)
+            console.print("")
+        except ImportError:
+            console.print("[yellow]Notice: 'qrcode' package is not installed. To display QR codes, install it via:[/yellow]")
+            console.print("  [bold cyan]pip install qrcode[/bold cyan]")
+            console.print("")
+
+
+def proxy(
+    remote_url: str = typer.Argument(..., help="The remote Herd gateway URL to proxy requests to (e.g. http://192.168.1.100:11434)."),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host interface to bind the local proxy gateway to."),
+    port: int = typer.Option(HERD_PORT, "--port", "-p", help="Port to run the local proxy gateway on."),
+):
+    """Starts a local reverse proxy that forwards all API requests transparently to a remote Herd instance."""
+    from fastapi import FastAPI, Request
+    from fastapi.responses import StreamingResponse
+    import httpx
+
+    proxy_app = FastAPI(title="Herd Gateway Proxy")
+    target_base = remote_url.rstrip("/")
+
+    console.print(f"Starting Herd Proxy Gateway on [bold cyan]{host}:{port}[/bold cyan] -> [bold magenta]{target_base}[/bold magenta]...")
+
+    @proxy_app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+    async def reverse_proxy_route(request: Request, path: str):
+        remote_url_str = f"{target_base}/{path}"
+        query = request.url.query
+        if query:
+            remote_url_str = f"{remote_url_str}?{query}"
+
+        body = await request.body()
+        headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length"]}
+
+        async def stream_generator():
+            async with httpx.AsyncClient(timeout=None) as client:
+                try:
+                    async with client.stream(
+                        method=request.method,
+                        url=remote_url_str,
+                        headers=headers,
+                        content=body
+                    ) as response:
+                        async for chunk in response.aiter_bytes():
+                            yield chunk
+                except Exception as e:
+                    yield json.dumps({"error": f"Proxy request failed: {e}"}).encode()
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="application/json"
+        )
+
+    try:
+        uvicorn.run(proxy_app, host=host, port=port, log_level="warning")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopping proxy gateway...[/yellow]")
