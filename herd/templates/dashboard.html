@@ -1090,7 +1090,14 @@
                         <div class="bubble-system">Welcome to the Herd Chat Playground! Pre-load an LLM from the Control Center or select a running LLM to start chatting.</div>
                     </div>
 
+                    <div id="chat-image-preview-container" style="display: none; align-items: center; gap: 0.5rem; padding: 0.5rem 1.5rem; border-top: 1px solid var(--card-border); background-color: rgba(0,0,0,0.1);">
+                        <img id="chat-image-preview" src="" style="max-height: 50px; border-radius: 8px; border: 1px solid var(--card-border);">
+                        <button class="btn btn-stop" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="clearChatImageAttachment()">Remove</button>
+                    </div>
+
                     <div class="chat-input-wrapper">
+                        <input type="file" id="chat-file-input" style="display: none;" accept="image/*" onchange="handleChatImageUpload(event)">
+                        <button class="btn btn-secondary" onclick="document.getElementById('chat-file-input').click()" style="padding: 0.8rem 1.2rem; font-size: 1rem;" title="Attach Image">📎</button>
                         <input type="text" id="chat-user-input" class="input-text" placeholder="Type a message to chat with the model..." onkeydown="handleChatSubmit(event)">
                         <button class="btn btn-load" id="chat-send-btn" onclick="sendPlaygroundMessage()">Send ➔</button>
                     </div>
@@ -1594,6 +1601,28 @@
             }
         }
 
+        let currentImageBase64 = null;
+
+        function handleChatImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                currentImageBase64 = evt.target.result;
+                document.getElementById('chat-image-preview').src = currentImageBase64;
+                document.getElementById('chat-image-preview-container').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearChatImageAttachment() {
+            currentImageBase64 = null;
+            document.getElementById('chat-file-input').value = '';
+            document.getElementById('chat-image-preview').src = '';
+            document.getElementById('chat-image-preview-container').style.display = 'none';
+        }
+
         async function sendPlaygroundMessage() {
             const select = document.getElementById('chat-model-select');
             const model = select.value;
@@ -1604,14 +1633,24 @@
 
             const input = document.getElementById('chat-user-input');
             const message = input.value.trim();
-            if (!message) return;
+            if (!message && !currentImageBase64) return;
 
             input.value = '';
 
             const container = document.getElementById('chat-history-container');
             
-            // Append User message
-            container.innerHTML += `<div class="chat-bubble bubble-user">${message}</div>`;
+            // Append User message (include image thumbnail if attached)
+            let userBubbleContent = '';
+            if (currentImageBase64) {
+                userBubbleContent += `<img src="${currentImageBase64}" style="max-width: 100%; max-height: 200px; display: block; border-radius: 8px; margin-bottom: 0.5rem; border: 1px solid var(--card-border);">`;
+            }
+            if (message) {
+                userBubbleContent += `<span>${message}</span>`;
+            } else {
+                userBubbleContent += `<span style="font-style: italic; color: rgba(255,255,255,0.7);">[Attached Image]</span>`;
+            }
+            
+            container.innerHTML += `<div class="chat-bubble bubble-user">${userBubbleContent}</div>`;
             container.scrollTop = container.scrollHeight;
 
             const systemPrompt = document.getElementById('chat-system-prompt').value.trim();
@@ -1623,7 +1662,23 @@
                 messages.push({ role: 'system', content: systemPrompt });
             }
             
-            playgroundChatMessages.push({ role: 'user', content: message });
+            // Format content structure for VLM
+            let userMsgContent;
+            if (currentImageBase64) {
+                userMsgContent = [
+                    { type: 'text', text: message || "Describe the image." },
+                    { type: 'image_url', image_url: { url: currentImageBase64 } }
+                ];
+            } else {
+                userMsgContent = message;
+            }
+
+            playgroundChatMessages.push({ role: 'user', content: userMsgContent });
+            
+            // Clear attachment after queueing
+            clearChatImageAttachment();
+
+            // Format message list for OpenAI compatibility
             playgroundChatMessages.forEach(m => messages.push(m));
 
             // Create placeholder assistant bubble

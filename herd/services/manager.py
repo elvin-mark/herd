@@ -124,6 +124,17 @@ class ProcessManager:
                 ]
                 if is_embedding:
                     cmd.append("--embedding")
+                else:
+                    # Detect if a multimodal projector file is present in the model's directory
+                    model_dir = os.path.dirname(model_path)
+                    mmproj_file = None
+                    if os.path.isdir(model_dir):
+                        for f in os.listdir(model_dir):
+                            if f.startswith("mmproj") and (f.endswith(".gguf") or f.endswith(".bin")):
+                                mmproj_file = os.path.join(model_dir, f)
+                                break
+                    if mmproj_file:
+                        cmd.extend(["--mmproj", mmproj_file])
 
             # 5. Start process with logs redirected to a file
             model_safe = model_name.replace("/", "_").replace(":", "_")

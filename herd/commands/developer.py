@@ -4,6 +4,7 @@ import subprocess
 import shutil
 import httpx
 import typer
+import asyncio
 from typing import Optional
 from rich.panel import Panel
 from rich.console import Group
@@ -682,3 +683,119 @@ def heal(
                 console.print(f"[red]Failed to execute fix or original command: {e}[/red]")
     else:
         console.print("\n[yellow]This issue requires manual intervention or file editing. Please apply the fix above manually.[/yellow]")
+
+
+async def stream_watch_async(model_name: str, image_data: str, prompt: str):
+    """Sends a streaming chat completion request with vision multimodal payload."""
+    url = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {
+        "model": model_name,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": image_data
+                        }
+                    }
+                ]
+            }
+        ],
+        "stream": True
+    }
+
+    console.print(f"\n[bold green]Querying multimodal model {model_name}...[/bold green]\n")
+    async with httpx.AsyncClient(timeout=None) as client:
+        async with client.stream("POST", url, json=payload) as response:
+            if response.status_code != 200:
+                err_body = await response.aread()
+                console.print(f"[red]Request failed: {err_body.decode()}[/red]")
+                raise typer.Exit(1)
+            async for chunk in response.aiter_bytes():
+                if not chunk:
+                    continue
+                lines = chunk.decode("utf-8", errors="ignore").split("\n")
+                for line in lines:
+                    if line.startswith("data: "):
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            token = data["choices"][0]["delta"].get("content", "")
+                            print(token, end="", flush=True)
+                        except Exception:
+                            pass
+    print("\n")
+
+
+def watch(
+    image_path: str = typer.Argument(..., help="Path to local image file (or URL) to analyze."),
+    prompt: str = typer.Argument("Describe the image.", help="The prompt/question to ask the model about the image."),
+    model_name: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="VLM model identifier to run.",
+    ),
+):
+    """Analyzes visual inputs (images, URLs) using multimodal vision-language models (VLM)."""
+    # 1. Encode image
+    import base64
+    import mimetypes
+
+    if image_path.startswith("http://") or image_path.startswith("https://"):
+        console.print(f"Downloading image from [bold cyan]{image_path}[/bold cyan]...")
+        try:
+            res = httpx.get(image_path)
+            res.raise_for_status()
+            mime_type = res.headers.get("content-type", "image/jpeg")
+            encoded_string = base64.b64encode(res.content).decode('utf-8')
+            image_data = f"data:{mime_type};base64,{encoded_string}"
+        except Exception as e:
+            console.print(f"[red]Error downloading image: {e}[/red]")
+            raise typer.Exit(1)
+    else:
+        if not os.path.exists(image_path):
+            console.print(f"[red]Error: Image file not found: {image_path}[/red]")
+            raise typer.Exit(1)
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if not mime_type:
+            mime_type = "image/jpeg"
+        try:
+            with open(image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            image_data = f"data:{mime_type};base64,{encoded_string}"
+        except Exception as e:
+            console.print(f"[red]Error reading image: {e}[/red]")
+            raise typer.Exit(1)
+
+    # 2. Resolve VLM
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No VLM models found. Please pull a model first.[/red]")
+        raise typer.Exit(1)
+
+    # Ensure gateway is running
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # Pre-load model
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    # 3. Stream watch query
+    try:
+        asyncio.run(stream_watch_async(chosen_model, image_data, prompt))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation stopped.[/yellow]")

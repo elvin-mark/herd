@@ -286,7 +286,23 @@ herd config set default_whisper ggerganov/whisper.cpp:ggml-base.en.bin
 herd config set remote_gateway http://192.168.1.100:11434
 ```
 
-### 26. Local Reverse Proxy Gateway (`herd proxy`)
+### 26. Self-Healing Command Debugger (`herd heal`)
+Runs a shell command in real-time, intercepts process crashes (non-zero exit codes), retrieves the terminal failure traceback, queries the local LLM for diagnosis, and proposes/executes the fix upon confirmation:
+```bash
+herd heal "python3 app.py"
+```
+
+### 27. Multimodal Vision Analyzer (`herd watch`)
+Analyzes local image paths or remote image URLs using vision-language models (VLM) with automatic multimodal projector loading support:
+```bash
+# Analyze a local screenshot
+herd watch screenshot.png "What error code is shown in the image?"
+
+# Query a remote image URL
+herd watch https://example.com/logo.png "Describe the design and colors."
+```
+
+### 28. Local Reverse Proxy Gateway (`herd proxy`)
 Spawns a local reverse-proxy gateway server (port `11434`) that transparently forwards all API endpoints (such as `/v1/chat/completions`, model load/unload commands, and RAG operations) to a remote Herd instance. It fully preserves server-sent event (SSE) streaming, allowing local client apps (like Chatbox or LibreChat) to offload model execution to a remote GPU host:
 ```bash
 herd proxy http://192.168.1.100:11434
