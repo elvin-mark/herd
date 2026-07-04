@@ -16,6 +16,58 @@ from herd.core.config import (
 from herd.core.utils import console
 
 
+def start_public_tunnel(port: int):
+    cloudflared_bin = shutil.which("cloudflared")
+    if not cloudflared_bin:
+        console.print("[red]Error: 'cloudflared' is not installed or not in PATH.[/red]")
+        console.print("Please install Cloudflare Tunnel first. Examples:")
+        console.print("  [bold white]macOS:[/bold white] brew install cloudflared")
+        console.print("  [bold white]Linux:[/bold white] sudo apt install cloudflared")
+        return None
+
+    console.print("[bold cyan]Starting public Cloudflare Tunnel...[/bold cyan]")
+    try:
+        process = subprocess.Popen(
+            [cloudflared_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            start_new_session=True
+        )
+        return process
+    except Exception as e:
+        console.print(f"[red]Failed to start Cloudflare Tunnel: {e}[/red]")
+        return None
+
+
+def run_tunnel_monitor(process, port):
+    # Read lines to find the trycloudflare URL
+    public_url = None
+    start_time = time.time()
+    while time.time() - start_time < 15.0:  # 15s timeout
+        line = process.stdout.readline()
+        if not line:
+            break
+        import re
+        match = re.search(r'(https://[a-zA-Z0-9-]+\.trycloudflare\.com)', line)
+        if match:
+            public_url = match.group(1)
+            break
+
+    if not public_url:
+        console.print("[red]Error: Failed to retrieve Cloudflare Tunnel URL. Check if cloudflared is working correctly.[/red]")
+        process.terminate()
+        process.wait()
+        return
+
+    console.print("\n🌎 [bold green]Public Exposure Active![/bold green]\n")
+    console.print(f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]")
+    console.print(f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]")
+    console.print("")
+    console.print("[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]\n")
+
+
 def serve(
     host: str = typer.Option(
         HERD_HOST,
@@ -26,6 +78,11 @@ def serve(
     port: int = typer.Option(
         HERD_PORT, "--port", "-p", help="Port to run the gateway server on."
     ),
+    public: bool = typer.Option(
+        False,
+        "--public",
+        help="Expose the gateway to the public internet using a free Cloudflare Tunnel.",
+    ),
 ):
     """Starts the central Herd API Gateway server."""
     # Ensure gateway port and host are set in env so other processes know about it
@@ -34,8 +91,35 @@ def serve(
     console.print(
         f"[bold green]Starting Herd API Gateway on {host}:{port}...[/bold green]"
     )
-    # Correct path to the FastAPI app module under the new package layout
-    uvicorn.run("herd.api.server:app", host=host, port=port, log_level="info")
+
+    tunnel_proc = None
+    if public:
+        tunnel_proc = start_public_tunnel(port)
+        if tunnel_proc:
+            import threading
+            def monitor():
+                time.sleep(2.0)
+                run_tunnel_monitor(tunnel_proc, port)
+            t = threading.Thread(target=monitor, daemon=True)
+            t.start()
+
+    try:
+        # Correct path to the FastAPI app module under the new package layout
+        uvicorn.run("herd.api.server:app", host=host, port=port, log_level="info")
+    finally:
+        if tunnel_proc:
+            console.print("\n[yellow]Stopping Cloudflare Tunnel...[/yellow]")
+            try:
+                import signal
+                os.killpg(os.getpgid(tunnel_proc.pid), signal.SIGTERM)
+                tunnel_proc.wait()
+            except Exception:
+                try:
+                    tunnel_proc.terminate()
+                    tunnel_proc.wait()
+                except Exception:
+                    pass
+            console.print("[green]Public URL revoked successfully.[/green]")
 
 
 def logs(

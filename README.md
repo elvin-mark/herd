@@ -132,6 +132,9 @@ herd serve --port 11434
 
 # Bind to all network interfaces for local network access
 herd serve --host 0.0.0.0 --port 11434
+
+# Start the gateway and expose it globally via Cloudflare Tunnel
+herd serve --public
 ```
 
 ### 9. Build and Configure Binaries Locally (`herd setup`)
