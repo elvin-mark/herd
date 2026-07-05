@@ -2,8 +2,9 @@
 
 # ==============================================================================
 # Herd CLI Functionality Integration Test Script
-# Model: LiquidAI/LFM2.5-VL-450m:LFM2.5-VL-450M.F16
-# Run manually: chmod +x test_cli.sh && ./test_cli.sh
+# Model: LiquidAI/LFM2.5-VL-450M-GGUF:LFM2.5-VL-450M-BF16.gguf
+# Embedding: second-state/All-MiniLM-L6-v2-Embedding-GGUF:all-MiniLM-L6-v2-Q8_0.gguf
+# Run manually: chmod +x tests/scripts/test_cli.sh && ./tests/scripts/test_cli.sh
 # ==============================================================================
 
 # Terminal colors
