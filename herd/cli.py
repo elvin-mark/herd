@@ -17,7 +17,7 @@ from herd.commands.audio import transcribe
 from herd.commands.developer import suggest, copilot, commit, review, heal, watch, agent
 from herd.commands.db import index, ask, db_app
 from herd.commands.config import config_app
-from herd.commands.server import serve, logs, setup, share, proxy
+from herd.commands.server import serve, logs, setup, share, proxy, doctor
 
 app = typer.Typer(
     name="herd",
@@ -60,6 +60,7 @@ app.command(name="logs", rich_help_panel="Gateway & Configuration")(logs)
 app.command(name="setup", rich_help_panel="Gateway & Configuration")(setup)
 app.command(name="share", rich_help_panel="Gateway & Configuration")(share)
 app.command(name="proxy", rich_help_panel="Gateway & Configuration")(proxy)
+app.command(name="doctor", rich_help_panel="Gateway & Configuration")(doctor)
 
 # 6. Register Sub-Typer Applications with Rich Help Panels
 app.add_typer(db_app, rich_help_panel="Semantic RAG Database")

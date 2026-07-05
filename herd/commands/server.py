@@ -565,3 +565,115 @@ def proxy(
         uvicorn.run(proxy_app, host=host, port=port, log_level="warning")
     except KeyboardInterrupt:
         console.print("\n[yellow]Stopping proxy gateway...[/yellow]")
+
+
+def doctor():
+    """Audits system environment, CPU instruction sets, GPU capabilities, and local server status."""
+    import platform
+    import shutil
+    import psutil
+    import httpx
+
+    console.print("\n[bold cyan]📋 Herd System Doctor Diagnosis[/bold cyan]\n")
+
+    # 1. Host OS Info
+    console.print("[bold yellow]1. Operating System Details:[/bold yellow]")
+    console.print(f"  OS Type:      [bold white]{platform.system()}[/bold white]")
+    console.print(f"  Kernel:       [bold white]{platform.release()}[/bold white]")
+    console.print(f"  Architecture: [bold white]{platform.machine()}[/bold white]")
+
+    # 2. CPU Capabilities
+    console.print("\n[bold yellow]2. Processor Capabilities:[/bold yellow]")
+    cores_physical = psutil.cpu_count(logical=False)
+    cores_logical = psutil.cpu_count(logical=True)
+    console.print(f"  Cores:        [bold white]{cores_physical} physical, {cores_logical} logical[/bold white]")
+
+    # Try to scan for AVX flags on Linux/MacOS
+    cpu_flags = []
+    try:
+        if platform.system() == "Linux":
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.strip().startswith("flags"):
+                        flags = line.split(":", 1)[1].strip().split()
+                        for flag in ["avx", "avx2", "avx512f", "fma"]:
+                            if flag in flags:
+                                cpu_flags.append(flag.upper())
+                        break
+        elif platform.system() == "Darwin":
+            res = subprocess.run(["sysctl", "-a"], capture_output=True, text=True)
+            for flag in ["AVX1_0", "AVX2", "AVX512F", "FMA"]:
+                if flag in res.stdout:
+                    cpu_flags.append(flag.replace("1_0", "").upper())
+    except Exception:
+        pass
+
+    if cpu_flags:
+        console.print(f"  CPU Flags:    [bold green]{', '.join(cpu_flags)}[/bold green] (Inference-capable)")
+    else:
+        console.print("  CPU Flags:    [bold white]Standard instruction set[/bold white]")
+
+    # 3. GPU/CUDA Capabilities
+    console.print("\n[bold yellow]3. GPU / Hardware Acceleration:[/bold yellow]")
+    nvidia_smi = shutil.which("nvidia-smi")
+    if nvidia_smi:
+        try:
+            res = subprocess.run([nvidia_smi, "--query-gpu=name,memory.total,memory.free", "--format=csv,noheader,nounits"], capture_output=True, text=True)
+            if res.returncode == 0:
+                gpu_lines = res.stdout.strip().split("\n")
+                for line in gpu_lines:
+                    parts = line.split(",")
+                    name = parts[0].strip()
+                    total = parts[1].strip()
+                    free = parts[2].strip()
+                    console.print(f"  GPU Device:   [bold green]{name}[/bold green]")
+                    console.print(f"  VRAM:         [bold green]{free} MB free / {total} MB total[/bold green]")
+            else:
+                console.print("  GPU Device:   [bold yellow]NVIDIA Driver present but query failed[/bold yellow]")
+        except Exception:
+            console.print("  GPU Device:   [bold yellow]Error querying nvidia-smi[/bold yellow]")
+    else:
+        console.print("  GPU Device:   [bold white]No NVIDIA GPU detected (CPU mode active)[/bold white]")
+
+    # 4. Binary Dependencies
+    console.print("\n[bold yellow]4. Compiled Server Binaries:[/bold yellow]")
+    config_path = os.path.join(HERD_HOME, "config.json")
+    llama_bin = None
+    whisper_bin = None
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+                llama_bin = cfg.get("LLAMA_SERVER_BIN")
+                whisper_bin = cfg.get("WHISPER_SERVER_BIN")
+        except Exception:
+            pass
+
+    # Check llama-server
+    if not llama_bin or not os.path.exists(llama_bin):
+        llama_bin = shutil.which("llama-server")
+    if llama_bin and os.path.exists(llama_bin):
+        console.print(f"  llama-server:   [bold green]Found[/bold green] ({llama_bin})")
+    else:
+        console.print("  llama-server:   [bold red]Missing[/bold red] (Run 'herd setup' to compile)")
+
+    # Check whisper-server
+    if not whisper_bin or not os.path.exists(whisper_bin):
+        whisper_bin = shutil.which("whisper-server")
+    if whisper_bin and os.path.exists(whisper_bin):
+        console.print(f"  whisper-server: [bold green]Found[/bold green] ({whisper_bin})")
+    else:
+        console.print("  whisper-server: [bold red]Missing[/bold red] (Run 'herd setup' to compile)")
+
+    # 5. Gateway Server Status
+    console.print("\n[bold yellow]5. Herd Gateway Server Link:[/bold yellow]")
+    gateway_url = f"http://{HERD_HOST}:{HERD_PORT}"
+    try:
+        res = httpx.get(f"{gateway_url}/health", timeout=1.0)
+        if res.status_code == 200:
+            console.print(f"  Connection:   [bold green]Online[/bold green] ({gateway_url})")
+        else:
+            console.print(f"  Connection:   [bold red]Offline[/bold red] (Status code {res.status_code})")
+    except Exception:
+        console.print(f"  Connection:   [bold red]Offline[/bold red] (Gateway not running on port {HERD_PORT})")
+    console.print("")
