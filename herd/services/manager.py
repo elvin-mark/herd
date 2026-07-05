@@ -296,7 +296,7 @@ class ProcessManager:
                     return True
                 elif response.status_code == 503:
                     # Still loading model
-                    logger.info(
+                    logger.debug(
                         f"Model on port {port} is still loading. Retrying..."
                     )
                 elif response.status_code == 404:
