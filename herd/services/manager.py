@@ -141,7 +141,7 @@ class ProcessManager:
                     "127.0.0.1",
                 ]
                 if is_embedding:
-                    cmd.append("--embedding")
+                    cmd.extend(["--embedding", "--pooling", "mean"])
                 else:
                     # Detect if a multimodal projector file is present in the model's directory
                     model_dir = os.path.dirname(model_path)

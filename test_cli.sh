@@ -14,9 +14,11 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 MODEL_NAME="LiquidAI/LFM2.5-VL-450M-GGUF:LFM2.5-VL-450M-BF16.gguf"
+EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2:Q8_0"
 
 echo -e "${CYAN}=== Starting Herd CLI Functionality Integration Tests ===${NC}"
-echo -e "Target Model: ${YELLOW}${MODEL_NAME}${NC}\n"
+echo -e "LLM Model:       ${YELLOW}${MODEL_NAME}${NC}"
+echo -e "Embedding Model: ${YELLOW}${EMBED_MODEL}${NC}\n"
 
 # 1. Verify 'herd' command is installed and executable
 echo -e "${CYAN}[Step 1/8] Verifying Herd CLI installation...${NC}"
@@ -35,14 +37,21 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "\n"
 
-# 3. Pull the target lightweight test model
-echo -e "${CYAN}[Step 3/8] Pulling test model: ${YELLOW}${MODEL_NAME}${NC}..."
+# 3. Pull the target test models
+echo -e "${CYAN}[Step 3/8] Pulling test models...${NC}"
+echo -e "Pulling LLM: ${YELLOW}${MODEL_NAME}${NC}"
 herd pull "$MODEL_NAME"
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error: Failed to pull the model.${NC}"
+    echo -e "${RED}Error: Failed to pull LLM model.${NC}"
     exit 1
 fi
-echo -e "${GREEN}Model pulled successfully.${NC}\n"
+echo -e "Pulling Embedding Model: ${YELLOW}${EMBED_MODEL}${NC}"
+herd pull "$EMBED_MODEL"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error: Failed to pull embedding model.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Models pulled successfully.${NC}\n"
 
 # 4. List downloaded models and verify presence
 echo -e "${CYAN}[Step 4/8] Verifying model presence in local catalog...${NC}"
@@ -53,9 +62,9 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "\n"
 
-# 5. Index local source files into the vector database
-echo -e "${CYAN}[Step 5/8] Recursively indexing local source files (herd/core) into RAG DB...${NC}"
-herd index ./herd/core --model "$MODEL_NAME"
+# 5. Index local source files into the vector database using embedding model
+echo -e "${CYAN}[Step 5/8] Indexing local files (herd/core) using ${YELLOW}${EMBED_MODEL}${NC}..."
+herd index ./herd/core --model "$EMBED_MODEL"
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: RAG indexing failed.${NC}"
     exit 1
@@ -64,7 +73,7 @@ echo -e "${GREEN}Local codebase directory indexed successfully.${NC}\n"
 
 # 6. Run semantic search query against the index
 echo -e "${CYAN}[Step 6/8] Executing semantic search against indexed files...${NC}"
-herd ask "What are the default host and port configs?" --model "$MODEL_NAME"
+herd ask "What are the default host and port configs?" "$MODEL_NAME" --model "$EMBED_MODEL"
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Semantic RAG search failed.${NC}"
     exit 1
@@ -79,11 +88,16 @@ echo -e "\n${YELLOW}--- Gateway Metrics Stats (herd stats) ---${NC}"
 herd stats
 echo -e "\n"
 
-# 8. Unload model to release VRAM and verify termination
-echo -e "${CYAN}[Step 8/8] Stopping and unloading model to release system memory...${NC}"
+# 8. Unload models to release VRAM and verify termination
+echo -e "${CYAN}[Step 8/8] Stopping and unloading models to release system memory...${NC}"
 herd stop "$MODEL_NAME"
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Error: Failed to unload the model.${NC}"
+    echo -e "${RED}Error: Failed to unload LLM model.${NC}"
+    exit 1
+fi
+herd stop "$EMBED_MODEL"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error: Failed to unload embedding model.${NC}"
     exit 1
 fi
 echo -e "\n${YELLOW}--- Active Gateway Models After Stop (herd ps) ---${NC}"
