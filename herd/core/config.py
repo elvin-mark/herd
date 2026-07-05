@@ -103,8 +103,8 @@ LLAMA_COMMIT = settings.llama_commit
 WHISPER_COMMIT = settings.whisper_commit
 
 # Pinned upstream version tags/commits for stable builds
-PINNED_LLAMA_COMMIT = "b3600"
-PINNED_WHISPER_COMMIT = "v1.7.4"
+PINNED_LLAMA_COMMIT = "ebd048fc5e4b43ec4e0b4abe0b9bf66e1724dad0"
+PINNED_WHISPER_COMMIT = "0ae02cdb2c7317b50991367c165736ce42ed96ac"
 
 
 def load_config() -> dict:
@@ -117,12 +117,8 @@ def save_config(config: dict):
     settings.default_embedding = config.get(
         "default_embedding", settings.default_embedding
     )
-    settings.default_whisper = config.get(
-        "default_whisper", settings.default_whisper
-    )
-    settings.remote_gateway = config.get(
-        "remote_gateway", settings.remote_gateway
-    )
+    settings.default_whisper = config.get("default_whisper", settings.default_whisper)
+    settings.remote_gateway = config.get("remote_gateway", settings.remote_gateway)
     if "LLAMA_SERVER_BIN" in config:
         settings.llama_server_bin = config["LLAMA_SERVER_BIN"]
     if "WHISPER_SERVER_BIN" in config:

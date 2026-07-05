@@ -241,26 +241,20 @@ def setup(
 
     # 1. Setup llama.cpp
     if not os.path.exists(llama_dir):
-        console.print(f"[bold cyan]Cloning llama.cpp ({PINNED_LLAMA_COMMIT})...[/bold cyan]")
+        console.print("[bold cyan]Cloning llama.cpp...[/bold cyan]")
         subprocess.run(
             [
                 git_bin,
                 "clone",
-                "--branch",
-                PINNED_LLAMA_COMMIT,
-                "--depth",
-                "1",
                 "https://github.com/ggerganov/llama.cpp.git",
                 llama_dir,
             ],
             check=True,
         )
-    else:
-        console.print(
-            f"[yellow]llama.cpp directory already exists. Ensuring version matches {PINNED_LLAMA_COMMIT}...[/yellow]"
-        )
-        subprocess.run([git_bin, "fetch", "origin", PINNED_LLAMA_COMMIT, "--depth=1"], cwd=llama_dir, check=True)
-        subprocess.run([git_bin, "checkout", PINNED_LLAMA_COMMIT], cwd=llama_dir, check=True)
+    
+    console.print(f"Checking out pinned version {PINNED_LLAMA_COMMIT}...")
+    subprocess.run([git_bin, "fetch", "origin"], cwd=llama_dir, check=True)
+    subprocess.run([git_bin, "checkout", PINNED_LLAMA_COMMIT], cwd=llama_dir, check=True)
 
     console.print("[bold cyan]Compiling llama-server...[/bold cyan]")
     cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
@@ -287,26 +281,20 @@ def setup(
 
     # 2. Setup whisper.cpp
     if not os.path.exists(whisper_dir):
-        console.print(f"[bold cyan]Cloning whisper.cpp ({PINNED_WHISPER_COMMIT})...[/bold cyan]")
+        console.print("[bold cyan]Cloning whisper.cpp...[/bold cyan]")
         subprocess.run(
             [
                 git_bin,
                 "clone",
-                "--branch",
-                PINNED_WHISPER_COMMIT,
-                "--depth",
-                "1",
                 "https://github.com/ggerganov/whisper.cpp.git",
                 whisper_dir,
             ],
             check=True,
         )
-    else:
-        console.print(
-            f"[yellow]whisper.cpp directory already exists. Ensuring version matches {PINNED_WHISPER_COMMIT}...[/yellow]"
-        )
-        subprocess.run([git_bin, "fetch", "origin", PINNED_WHISPER_COMMIT, "--depth=1"], cwd=whisper_dir, check=True)
-        subprocess.run([git_bin, "checkout", PINNED_WHISPER_COMMIT], cwd=whisper_dir, check=True)
+    
+    console.print(f"Checking out pinned version {PINNED_WHISPER_COMMIT}...")
+    subprocess.run([git_bin, "fetch", "origin"], cwd=whisper_dir, check=True)
+    subprocess.run([git_bin, "checkout", PINNED_WHISPER_COMMIT], cwd=whisper_dir, check=True)
 
     console.print("[bold cyan]Compiling whisper-server...[/bold cyan]")
     whisper_cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
