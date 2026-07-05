@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # CPU-only Herd Gateway Service
+  herd-cpu:
+    image: herd-cli:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "11434:11434"
+    volumes:
+      - herd-model-cache:/root/.herd
+    environment:
+      - HERD_HOST=0.0.0.0
+      - HERD_PORT=11434
+      - HERD_IDLE_TIMEOUT=300
+    restart: unless-stopped
+
+  # CUDA GPU-accelerated Service (Requires NVIDIA Container Toolkit)
+  # herd-gpu:
+  #   image: herd-cli-cuda:latest
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.cuda
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - herd-model-cache:/root/.herd
+  #   environment:
+  #     - HERD_HOST=0.0.0.0
+  #     - HERD_PORT=11434
+  #     - HERD_IDLE_TIMEOUT=300
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   restart: unless-stopped
+
+volumes:
+  herd-model-cache:
+    name: herd-data-volume
