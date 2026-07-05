@@ -554,9 +554,10 @@ async def load_model(request: Request):
 
     # Check if this model targets a registered cloud provider
     if ":" in model_name:
-        parts = model_name.split(":", 1)
         from herd.core.config import settings
 
+        settings.reload()
+        parts = model_name.split(":", 1)
         if parts[0] in settings.providers:
             return {"status": "loaded", "port": 0, "provider": parts[0]}
 
@@ -586,9 +587,10 @@ async def unload_model(request: Request):
 
     # Check if this model targets a registered cloud provider
     if ":" in model_name:
-        parts = model_name.split(":", 1)
         from herd.core.config import settings
 
+        settings.reload()
+        parts = model_name.split(":", 1)
         if parts[0] in settings.providers:
             return {"status": "unloaded"}
 
@@ -610,9 +612,10 @@ async def chat_completions(request: Request):
 
     # Check if this model targets a registered cloud provider
     if ":" in model_name:
-        parts = model_name.split(":", 1)
         from herd.core.config import settings
 
+        settings.reload()
+        parts = model_name.split(":", 1)
         if parts[0] in settings.providers:
             provider = parts[0]
             target_model = parts[1]
@@ -646,9 +649,10 @@ async def completions(request: Request):
 
     # Check if this model targets a registered cloud provider
     if ":" in model_name:
-        parts = model_name.split(":", 1)
         from herd.core.config import settings
 
+        settings.reload()
+        parts = model_name.split(":", 1)
         if parts[0] in settings.providers:
             provider = parts[0]
             target_model = parts[1]
@@ -682,9 +686,10 @@ async def embeddings(request: Request):
 
     # Check if this model targets a registered cloud provider
     if ":" in model_name:
-        parts = model_name.split(":", 1)
         from herd.core.config import settings
 
+        settings.reload()
+        parts = model_name.split(":", 1)
         if parts[0] in settings.providers:
             provider = parts[0]
             target_model = parts[1]
