@@ -261,10 +261,16 @@ def run(
 
     model_name = chosen_model
 
-    # 2. Check if model exists locally. If not, prompt to download (only for local gateway)
-    from herd.core.config import REMOTE_GATEWAY
+    # 2. Check if model exists locally. If not, prompt to download (only for local gateway, skipping cloud providers)
+    from herd.core.config import REMOTE_GATEWAY, settings
 
-    if not REMOTE_GATEWAY:
+    is_cloud = False
+    if ":" in model_name:
+        parts = model_name.split(":", 1)
+        if parts[0] in settings.providers:
+            is_cloud = True
+
+    if not REMOTE_GATEWAY and not is_cloud:
         try:
             resolve_model_path(model_name)
         except FileNotFoundError:
@@ -336,8 +342,16 @@ async def run_benchmark_async(
     if not auto_start_gateway():
         raise typer.Exit(1)
 
-    # 2. Check if model exists locally (only for local gateway)
-    if not REMOTE_GATEWAY:
+    # 2. Check if model exists locally (only for local gateway, skipping cloud providers)
+    from herd.core.config import settings
+
+    is_cloud = False
+    if ":" in model_name:
+        parts = model_name.split(":", 1)
+        if parts[0] in settings.providers:
+            is_cloud = True
+
+    if not REMOTE_GATEWAY and not is_cloud:
         try:
             resolve_model_path(model_name)
         except FileNotFoundError:

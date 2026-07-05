@@ -552,6 +552,14 @@ async def load_model(request: Request):
     if not model_name:
         raise HerdError("Missing 'model' field", status_code=400)
 
+    # Check if this model targets a registered cloud provider
+    if ":" in model_name:
+        parts = model_name.split(":", 1)
+        from herd.core.config import settings
+
+        if parts[0] in settings.providers:
+            return {"status": "loaded", "port": 0, "provider": parts[0]}
+
     try:
         port = await manager.get_or_start_server(
             model_name,
@@ -575,6 +583,14 @@ async def unload_model(request: Request):
     model_name = body.get("model")
     if not model_name:
         raise HerdError("Missing 'model' field", status_code=400)
+
+    # Check if this model targets a registered cloud provider
+    if ":" in model_name:
+        parts = model_name.split(":", 1)
+        from herd.core.config import settings
+
+        if parts[0] in settings.providers:
+            return {"status": "unloaded"}
 
     await manager.stop_model(model_name)
     return {"status": "unloaded"}
