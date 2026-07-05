@@ -30,7 +30,7 @@ Make sure to keep this code confidential and do not share it with external vendo
 EOF
 
 cat << 'EOF' > "$TEMP_DIR/doc2.txt"
-Herd is designed by Elvin Mark. It runs local GGUF models on system CPU or CUDA GPU hardware.
+Herd is designed by the Antigravity team. It runs local GGUF models on system CPU or CUDA GPU hardware.
 The default configuration file is stored in ~/.herd/config.json.
 EOF
 echo -e "${GREEN}Created doc1.txt and doc2.txt.${NC}\n"
