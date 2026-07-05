@@ -87,8 +87,8 @@ fi
 
 # 6. Database cleanups
 echo -e "${CYAN}[Step 6/6] Cleaning up RAG databases and temporary paths...${NC}"
-herd db remove --path "$TEMP_DIR/doc1.txt" > /dev/null
-herd db remove --path "$TEMP_DIR/doc2.txt" > /dev/null
+herd db remove "$TEMP_DIR/doc1.txt" > /dev/null
+herd db remove "$TEMP_DIR/doc2.txt" > /dev/null
 rm -rf "$TEMP_DIR"
 
 echo -e "${YELLOW}Verifying SQLite clean status:${NC}"
