@@ -14,7 +14,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 MODEL_NAME="LiquidAI/LFM2.5-VL-450M-GGUF:LFM2.5-VL-450M-BF16.gguf"
-EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2:Q8_0"
+EMBED_MODEL="second-state/All-MiniLM-L6-v2-Embedding-GGUF:all-MiniLM-L6-v2-Q8_0.gguf"
 
 echo -e "${CYAN}=== Starting Herd CLI Functionality Integration Tests ===${NC}"
 echo -e "LLM Model:       ${YELLOW}${MODEL_NAME}${NC}"
