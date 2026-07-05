@@ -175,6 +175,123 @@ async def get_prometheus_metrics_endpoint():
     )
 
 
+async def proxy_to_cloud(
+    provider: str, target_model: str, request: Request, body: dict, path: str
+) -> Response:
+    """Proxies an HTTP request to a remote cloud provider, supporting streaming response and recording metrics."""
+    from herd.core.config import settings
+
+    prov_config = settings.providers.get(provider)
+    if not prov_config:
+        raise HerdError(
+            f"Cloud provider '{provider}' is not configured in settings.",
+            status_code=400,
+        )
+
+    api_key = prov_config.get("api_key")
+    base_url = prov_config.get("base_url", "").rstrip("/")
+    if not api_key:
+        raise HerdError(
+            f"API key is missing for provider '{provider}'.", status_code=400
+        )
+    if not base_url:
+        raise HerdError(
+            f"Base URL is missing for provider '{provider}'.", status_code=400
+        )
+
+    # Rewrite model field to match the remote provider target model name
+    body["model"] = target_model
+    url = f"{base_url}{path}"
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    client = get_async_http_client()
+    req = client.build_request(
+        method="POST",
+        url=url,
+        headers=headers,
+        json=body,
+        params=request.query_params,
+    )
+
+    start_time = time.time()
+    try:
+        response = await client.send(req, stream=True)
+    except Exception as e:
+        logger.error(
+            f"Failed to connect to cloud provider '{provider}' at {url}: {e}"
+        )
+        raise HerdError(f"Cloud provider connection failed: {e}", status_code=502)
+
+    if response.status_code >= 400:
+        content = await response.aread()
+        try:
+            err_json = json.loads(content)
+            err_msg = (
+                err_json.get("error", {}).get("message")
+                or err_json.get("error")
+                or str(content)
+            )
+        except Exception:
+            err_msg = content.decode("utf-8", errors="ignore")
+        raise HerdError(
+            f"Cloud provider '{provider}' returned error {response.status_code}: {err_msg}",
+            status_code=response.status_code,
+        )
+
+    async def response_generator():
+        full_response_text = b""
+        try:
+            async for chunk in response.aiter_bytes():
+                full_response_text += chunk
+                yield chunk
+        finally:
+            await response.aclose()
+
+            # Record request metrics at the end of streaming/non-streaming transmission
+            duration = time.time() - start_time
+            prompt_tokens = 0
+            completion_tokens = 0
+
+            try:
+                import re
+
+                text = full_response_text.decode("utf-8", errors="ignore")
+                match_p = re.search(r'"prompt_tokens"\s*:\s*(\d+)', text)
+                if match_p:
+                    prompt_tokens = int(match_p.group(1))
+                match_c = re.search(r'"completion_tokens"\s*:\s*(\d+)', text)
+                if match_c:
+                    completion_tokens = int(match_c.group(1))
+            except Exception as e:
+                logger.error(f"Error parsing tokens from response text: {e}")
+
+            # Record cloud metrics under provider:target_model identifier
+            collector.record_request(
+                model_name=f"{provider}:{target_model}",
+                endpoint=path,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                duration_sec=duration,
+                is_error=(response.status_code >= 400),
+            )
+
+    res_headers = dict(response.headers)
+    res_headers.pop("transfer-encoding", None)
+    res_headers.pop("content-length", None)
+    media_type = res_headers.get("content-type")
+
+    return StreamingResponse(
+        response_generator(),
+        status_code=response.status_code,
+        headers=res_headers,
+        media_type=media_type,
+    )
+
+
 async def proxy_to_port(
     port: int, path: str, request: Request, body_bytes: bytes, model_name: str
 ) -> Response:
@@ -475,6 +592,18 @@ async def chat_completions(request: Request):
     if not model_name:
         raise HerdError("Missing 'model' field", status_code=400)
 
+    # Check if this model targets a registered cloud provider
+    if ":" in model_name:
+        parts = model_name.split(":", 1)
+        from herd.core.config import settings
+
+        if parts[0] in settings.providers:
+            provider = parts[0]
+            target_model = parts[1]
+            return await proxy_to_cloud(
+                provider, target_model, request, body, "/v1/chat/completions"
+            )
+
     try:
         port = await manager.get_or_start_server(
             model_name, is_whisper=False, is_embedding=False
@@ -499,6 +628,18 @@ async def completions(request: Request):
     if not model_name:
         raise HerdError("Missing 'model' field", status_code=400)
 
+    # Check if this model targets a registered cloud provider
+    if ":" in model_name:
+        parts = model_name.split(":", 1)
+        from herd.core.config import settings
+
+        if parts[0] in settings.providers:
+            provider = parts[0]
+            target_model = parts[1]
+            return await proxy_to_cloud(
+                provider, target_model, request, body, "/v1/completions"
+            )
+
     try:
         port = await manager.get_or_start_server(
             model_name, is_whisper=False, is_embedding=False
@@ -522,6 +663,18 @@ async def embeddings(request: Request):
     model_name = body.get("model")
     if not model_name:
         raise HerdError("Missing 'model' field", status_code=400)
+
+    # Check if this model targets a registered cloud provider
+    if ":" in model_name:
+        parts = model_name.split(":", 1)
+        from herd.core.config import settings
+
+        if parts[0] in settings.providers:
+            provider = parts[0]
+            target_model = parts[1]
+            return await proxy_to_cloud(
+                provider, target_model, request, body, "/v1/embeddings"
+            )
 
     try:
         port = await manager.get_or_start_server(

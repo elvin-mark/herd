@@ -54,8 +54,26 @@ def config_show():
 
     console.print("\n")
     console.print(table)
+
+    # Show active providers
+    providers = disk_config.get("providers", {})
+    if providers:
+        console.print("\n[bold cyan]Configured Cloud Providers:[/bold cyan]")
+        p_table = Table()
+        p_table.add_column("Provider", style="cyan")
+        p_table.add_column("Base URL", style="magenta")
+        p_table.add_column("API Key Status", style="green")
+        for p_name, p_info in providers.items():
+            key = p_info.get("api_key", "")
+            key_masked = f"Active (***{key[-4:]})" if key else "Missing"
+            p_table.add_row(p_name, p_info.get("base_url", "-"), key_masked)
+        console.print(p_table)
+
     console.print(
-        "\nTo update defaults, run: [bold cyan]herd config set <key> <value>[/bold cyan]\n"
+        "\nTo update defaults, run: [bold cyan]herd config set <key> <value>[/bold cyan]"
+    )
+    console.print(
+        "To manage providers, run: [bold cyan]herd config set-provider <name> --api-key <key>[/bold cyan]\n"
     )
 
 
@@ -112,6 +130,87 @@ def config_set(
         )
         console.print(
             "[yellow]Please note: Restart running gateways or processes to apply port or timeout changes.[/yellow]"
+        )
+    except Exception as e:
+        console.print(f"[red]Failed to write configuration: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@config_app.command(name="set-provider")
+def config_set_provider(
+    name: str = typer.Argument(
+        ...,
+        help="The cloud provider name (e.g. groq, openai, deepseek).",
+    ),
+    api_key: str = typer.Option(
+        ...,
+        "--api-key",
+        "-k",
+        help="The API authorization key for the provider.",
+    ),
+    base_url: str = typer.Option(
+        None,
+        "--base-url",
+        "-u",
+        help="Optional custom base URL. Defaults to standard provider API endpoint if omitted.",
+    ),
+):
+    """Configures credentials and endpoints for a remote cloud model provider."""
+    standard_urls = {
+        "openai": "https://api.openai.com/v1",
+        "groq": "https://api.groq.com/openai/v1",
+        "deepseek": "https://api.deepseek.com/v1",
+        "anthropic": "https://api.anthropic.com/v1",
+    }
+
+    url = base_url or standard_urls.get(name.lower())
+    if not url:
+        console.print(
+            f"[red]Error: Standard base URL for '{name}' is not known. Please provide --base-url explicitly.[/red]"
+        )
+        raise typer.Exit(1)
+
+    config = load_config()
+    if "providers" not in config:
+        config["providers"] = {}
+
+    config["providers"][name.lower()] = {"api_key": api_key, "base_url": url}
+
+    try:
+        save_config(config)
+        console.print(
+            f"[bold green]Success![/bold green] Configured provider [bold cyan]{name.lower()}[/bold cyan]:"
+        )
+        console.print(
+            f"  API Key:  [bold magenta]***{api_key[-4:] if len(api_key) > 4 else '***'}[/bold magenta]"
+        )
+        console.print(f"  Base URL: [bold magenta]{url}[/bold magenta]")
+    except Exception as e:
+        console.print(f"[red]Failed to write configuration: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@config_app.command(name="remove-provider")
+def config_remove_provider(
+    name: str = typer.Argument(
+        ..., help="The cloud provider name to remove (e.g. groq, openai)."
+    ),
+):
+    """Deletes a configured cloud provider from settings."""
+    config = load_config()
+    providers = config.get("providers", {})
+    if name.lower() not in providers:
+        console.print(
+            f"[yellow]Provider '{name.lower()}' is not configured.[/yellow]"
+        )
+        return
+
+    del providers[name.lower()]
+    config["providers"] = providers
+    try:
+        save_config(config)
+        console.print(
+            f"[bold green]Success![/bold green] Removed provider [bold cyan]{name.lower()}[/bold cyan] from configurations."
         )
     except Exception as e:
         console.print(f"[red]Failed to write configuration: {e}[/red]")

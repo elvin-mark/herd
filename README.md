@@ -284,7 +284,23 @@ herd config set default_whisper ggerganov/whisper.cpp:ggml-base.en.bin
 
 # Route all local CLI commands directly to a remote Herd gateway
 herd config set remote_gateway http://192.168.1.100:11434
+
+# Configure a remote cloud model provider (e.g. Groq, OpenAI, DeepSeek)
+herd config set-provider groq --api-key gsk_yourAPIkeyHere
+
+# Remove a cloud provider configuration
+herd config remove-provider groq
 ```
+
+Once configured, you can route chat, text completion, and embedding requests directly to remote cloud providers by prefixing the model identifier with `provider:`. If the prefix is not a configured provider, Herd automatically falls back to local GGUF execution:
+```bash
+# Route chat completions to Groq
+herd run groq:llama-3.1-70b-versatile
+
+# Route chat completions to OpenAI
+herd run openai:gpt-4o-mini
+```
+
 
 ### 26. Self-Healing Command Debugger (`herd heal`)
 Runs a shell command in real-time, intercepts process crashes (non-zero exit codes), retrieves the terminal failure traceback, queries the local LLM for diagnosis, and proposes/executes the fix upon confirmation:
