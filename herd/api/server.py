@@ -13,14 +13,6 @@ from herd.services.manager import ProcessManager
 from herd.core.metrics import collector
 from herd.core.utils import get_async_http_client, close_http_clients
 
-from rich.logging import RichHandler
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(name)s: %(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True, show_path=True)],
-)
 logger = logging.getLogger("herd.server")
 
 # Global process manager
@@ -59,6 +51,20 @@ def list_downloaded_models() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Configure logging for the gateway server process dynamically on startup
+    from rich.logging import RichHandler
+
+    root_logger = logging.getLogger()
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+
+    rich_handler = RichHandler(rich_tracebacks=True, show_path=True)
+    root_logger.addHandler(rich_handler)
+    root_logger.setLevel(logging.INFO)
+
+    # Silence httpx info logs to prevent polling request spam
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     # Startup: start process manager idle cleanup background loop
     global cleanup_task
     cleanup_task = asyncio.create_task(manager.cleanup_loop())
