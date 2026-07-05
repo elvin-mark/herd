@@ -92,6 +92,32 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Herd API Gateway", lifespan=lifespan)
 
+
+class HerdError(Exception):
+    """Custom API exception that automatically maps to an HTTP status code."""
+
+    def __init__(self, message: str, status_code: int = 500):
+        self.message = message
+        self.status_code = status_code
+        super().__init__(message)
+
+
+@app.exception_handler(HerdError)
+async def herd_error_handler(request: Request, exc: HerdError):
+    logger.error(f"API Error: {exc.message} (status: {exc.status_code})")
+    return JSONResponse(
+        status_code=exc.status_code, content={"error": exc.message}
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled Exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"error": f"Internal Gateway Error: {str(exc)}"},
+    )
+
 # Mount assets folder to serve the logo image
 assets_dir = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "assets")
@@ -399,7 +425,7 @@ async def load_model(request: Request):
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+        raise HerdError("Invalid JSON body", status_code=400)
 
     model_name = body.get("model")
     is_whisper = body.get("is_whisper", False)
@@ -407,7 +433,7 @@ async def load_model(request: Request):
     idle_timeout = body.get("idle_timeout")
 
     if not model_name:
-        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
+        raise HerdError("Missing 'model' field", status_code=400)
 
     try:
         port = await manager.get_or_start_server(
@@ -418,12 +444,7 @@ async def load_model(request: Request):
         )
         return {"status": "loaded", "port": port}
     except FileNotFoundError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to start model server: {e}"},
-        )
+        raise HerdError(str(e), status_code=404)
 
 
 @app.post("/v1/models/unload")
@@ -432,11 +453,11 @@ async def unload_model(request: Request):
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+        raise HerdError("Invalid JSON body", status_code=400)
 
     model_name = body.get("model")
     if not model_name:
-        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
+        raise HerdError("Missing 'model' field", status_code=400)
 
     await manager.stop_model(model_name)
     return {"status": "unloaded"}
@@ -448,23 +469,18 @@ async def chat_completions(request: Request):
     try:
         body = json.loads(body_bytes)
     except Exception:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+        raise HerdError("Invalid JSON body", status_code=400)
 
     model_name = body.get("model")
     if not model_name:
-        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
+        raise HerdError("Missing 'model' field", status_code=400)
 
     try:
         port = await manager.get_or_start_server(
             model_name, is_whisper=False, is_embedding=False
         )
     except FileNotFoundError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to start model server: {e}"},
-        )
+        raise HerdError(str(e), status_code=404)
 
     return await proxy_to_port(
         port, "/v1/chat/completions", request, body_bytes, model_name
@@ -477,25 +493,22 @@ async def completions(request: Request):
     try:
         body = json.loads(body_bytes)
     except Exception:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+        raise HerdError("Invalid JSON body", status_code=400)
 
     model_name = body.get("model")
     if not model_name:
-        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
+        raise HerdError("Missing 'model' field", status_code=400)
 
     try:
         port = await manager.get_or_start_server(
             model_name, is_whisper=False, is_embedding=False
         )
     except FileNotFoundError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to start model server: {e}"},
-        )
+        raise HerdError(str(e), status_code=404)
 
-    return await proxy_to_port(port, "/v1/completions", request, body_bytes, model_name)
+    return await proxy_to_port(
+        port, "/v1/completions", request, body_bytes, model_name
+    )
 
 
 @app.post("/v1/embeddings")
@@ -504,25 +517,22 @@ async def embeddings(request: Request):
     try:
         body = json.loads(body_bytes)
     except Exception:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+        raise HerdError("Invalid JSON body", status_code=400)
 
     model_name = body.get("model")
     if not model_name:
-        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
+        raise HerdError("Missing 'model' field", status_code=400)
 
     try:
         port = await manager.get_or_start_server(
             model_name, is_whisper=False, is_embedding=True
         )
     except FileNotFoundError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to start model server: {e}"},
-        )
+        raise HerdError(str(e), status_code=404)
 
-    return await proxy_to_port(port, "/v1/embeddings", request, body_bytes, model_name)
+    return await proxy_to_port(
+        port, "/v1/embeddings", request, body_bytes, model_name
+    )
 
 
 @app.post("/v1/audio/transcriptions")
@@ -536,12 +546,7 @@ async def audio_transcriptions(
     try:
         port = await manager.get_or_start_server(model, is_whisper=True)
     except FileNotFoundError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to start whisper server: {e}"},
-        )
+        raise HerdError(str(e), status_code=404)
 
     return await whisper_proxy(
         port,
@@ -565,12 +570,7 @@ async def audio_translations(
     try:
         port = await manager.get_or_start_server(model, is_whisper=True)
     except FileNotFoundError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to start whisper server: {e}"},
-        )
+        raise HerdError(str(e), status_code=404)
 
     return await whisper_proxy(
         port,
@@ -689,12 +689,11 @@ async def db_list():
     """Lists indexed files in the local database."""
     from herd.services.rag import list_indexed_files
 
-    try:
-        rows = list_indexed_files()
-        data = [{"file_path": r[0], "model_name": r[1], "chunks": r[2]} for r in rows]
-        return data
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    rows = list_indexed_files()
+    data = [
+        {"file_path": r[0], "model_name": r[1], "chunks": r[2]} for r in rows
+    ]
+    return data
 
 
 @app.post("/v1/db/remove")
@@ -705,13 +704,10 @@ async def db_remove(request: Request):
     body = await request.json()
     path = body.get("path")
     if not path:
-        return JSONResponse(status_code=400, content={"error": "Missing 'path' field"})
-    try:
-        abs_path = os.path.abspath(path)
-        count = remove_indexed_path(abs_path)
-        return {"status": "removed", "count": count}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        raise HerdError("Missing 'path' field", status_code=400)
+    abs_path = os.path.abspath(path)
+    count = remove_indexed_path(abs_path)
+    return {"status": "removed", "count": count}
 
 
 @app.post("/v1/db/index")
@@ -723,21 +719,16 @@ async def db_index(request: Request, background_tasks: BackgroundTasks):
     directory = body.get("directory")
     model_name = body.get("model")
     if not directory or not model_name:
-        return JSONResponse(
-            status_code=400, content={"error": "Missing 'directory' or 'model' field"}
+        raise HerdError(
+            "Missing 'directory' or 'model' field", status_code=400
         )
 
     if not os.path.exists(directory):
-        return JSONResponse(status_code=404, content={"error": "Directory not found"})
+        raise HerdError("Directory not found", status_code=404)
 
-    try:
-        await manager.get_or_start_server(
-            model_name, is_whisper=False, is_embedding=True
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500, content={"error": f"Failed to start embedding model: {e}"}
-        )
+    await manager.get_or_start_server(
+        model_name, is_whisper=False, is_embedding=True
+    )
 
     async def index_worker(d: str, m: str):
         try:
@@ -760,16 +751,11 @@ async def db_search(request: Request):
     limit = body.get("limit", 5)
 
     if not query or not model_name:
-        return JSONResponse(
-            status_code=400, content={"error": "Missing 'query' or 'model' field"}
-        )
+        raise HerdError("Missing 'query' or 'model' field", status_code=400)
 
-    try:
-        await manager.get_or_start_server(
-            model_name, is_whisper=False, is_embedding=True
-        )
-        query_vector = await get_embedding(query, model_name)
-        matches = search_vectors(query_vector, model_name, top_k=limit)
-        return matches
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    await manager.get_or_start_server(
+        model_name, is_whisper=False, is_embedding=True
+    )
+    query_vector = await get_embedding(query, model_name)
+    matches = search_vectors(query_vector, model_name, top_k=limit)
+    return matches
