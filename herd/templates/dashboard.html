@@ -1039,6 +1039,9 @@
                 <!-- Local Catalog -->
                 <div class="panel-card">
                     <h2>Local Catalog (On Disk)</h2>
+                    <div style="margin: 0.5rem 0 1rem 0; width: 100%;">
+                        <input type="text" id="library-search" placeholder="🔍 Search downloaded models..." class="input-text" style="width: 100%; padding: 0.6rem 1rem; font-size: 0.85rem;" oninput="filterLibraryModels()">
+                    </div>
                     <div class="scrollable-panel">
                         <div class="library-list" id="library-container">
                             <!-- Populated dynamically -->
@@ -1305,6 +1308,9 @@
         }
 
         // Fetch All API Data
+        let globalLibraryData = null;
+        let globalActiveData = null;
+
         async function fetchData() {
             try {
                 const [activeRes, statsRes, libraryRes] = await Promise.all([
@@ -1313,14 +1319,32 @@
                     fetch('/v1/models').then(r => r.json())
                 ]);
 
+                globalLibraryData = libraryRes;
+                globalActiveData = activeRes;
+
                 updateActiveModels(activeRes);
                 updateStats(statsRes);
-                updateLibrary(libraryRes, activeRes);
+                filterLibraryModels();
                 updateSharedDropdowns(libraryRes);
                 pollDownloadProgress();
             } catch (err) {
                 console.error('Error fetching dashboard data:', err);
             }
+        }
+
+        function filterLibraryModels() {
+            if (!globalLibraryData || !globalActiveData) return;
+            
+            const query = document.getElementById('library-search').value.toLowerCase().trim();
+            const filteredData = globalLibraryData.data.filter(m => {
+                return m.id.toLowerCase().includes(query);
+            });
+            
+            const filteredLibrary = {
+                data: filteredData
+            };
+            
+            updateLibrary(filteredLibrary, globalActiveData);
         }
 
         // Update Active Model Cards
