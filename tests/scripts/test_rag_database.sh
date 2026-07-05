@@ -61,7 +61,7 @@ if [ ! -f "$sqlite_db" ]; then
 fi
 
 echo -e "${YELLOW}Reading database files table:${NC}"
-sqlite3 "$sqlite_db" "SELECT file_path, model_name, chunk_count FROM files WHERE file_path LIKE '%herd_rag_test%';"
+sqlite3 "$sqlite_db" "SELECT file_path, model_name, COUNT(*) FROM chunks WHERE file_path LIKE '%herd_rag_test%' GROUP BY file_path, model_name;"
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: SQLite query failed.${NC}"
     rm -rf "$TEMP_DIR"
@@ -92,7 +92,7 @@ herd db remove --path "$TEMP_DIR/doc2.txt" > /dev/null
 rm -rf "$TEMP_DIR"
 
 echo -e "${YELLOW}Verifying SQLite clean status:${NC}"
-rem_check=$(sqlite3 "$sqlite_db" "SELECT COUNT(*) FROM files WHERE file_path LIKE '%herd_rag_test%';")
+rem_check=$(sqlite3 "$sqlite_db" "SELECT COUNT(*) FROM chunks WHERE file_path LIKE '%herd_rag_test%';")
 if [ "$rem_check" -eq 0 ]; then
     echo -e "${GREEN}Success! All RAG entries cleared from database.${NC}\n"
 else
