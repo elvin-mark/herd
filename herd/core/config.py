@@ -102,6 +102,10 @@ PROVIDERS = settings.providers
 LLAMA_COMMIT = settings.llama_commit
 WHISPER_COMMIT = settings.whisper_commit
 
+# Pinned upstream version tags/commits for stable builds
+PINNED_LLAMA_COMMIT = "b3600"
+PINNED_WHISPER_COMMIT = "v1.7.4"
+
 
 def load_config() -> dict:
     settings.reload()
