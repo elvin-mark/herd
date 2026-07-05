@@ -686,6 +686,7 @@
             border-radius: 16px;
             font-size: 0.95rem;
             line-height: 1.6;
+            white-space: pre-wrap;
         }
 
         .bubble-user {
@@ -701,6 +702,34 @@
             color: var(--text-primary);
             border-bottom-left-radius: 4px;
             border: 1px solid var(--card-border);
+        }
+
+        .thinking-block {
+            background-color: rgba(255, 255, 255, 0.03);
+            border-left: 3px solid var(--text-secondary);
+            padding: 0.6rem 0.8rem;
+            margin-bottom: 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .thinking-header {
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .thinking-content {
+            font-family: monospace;
+            white-space: pre-wrap;
+            opacity: 0.8;
+            line-height: 1.5;
         }
 
         .bubble-system {
@@ -1069,6 +1098,13 @@
                                 <input type="range" id="chat-temp" min="0.0" max="1.5" step="0.1" value="0.7" style="width: 80%;">
                                 <span id="chat-temp-val">0.7</span>
                             </div>
+                        </div>
+
+                        <div class="param-group" style="flex-direction: row; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 1rem;">
+                            <label style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary); font-size: 0.85rem; font-weight: 500; user-select: none;">
+                                <input type="checkbox" id="chat-reasoning" checked style="width: 1.1rem; height: 1.1rem; accent-color: var(--accent-cyan); cursor: pointer;">
+                                Enable Reasoning (Thinking)
+                            </label>
                         </div>
 
                         <button class="btn btn-secondary" onclick="clearPlaygroundChat()" style="width: 100%;">
@@ -1623,6 +1659,44 @@
             document.getElementById('chat-image-preview-container').style.display = 'none';
         }
 
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function parseChatResponse(reasoningEnabled, fullText) {
+            if (fullText.includes('<think>')) {
+                const parts = fullText.split('<think>');
+                const beforeThink = parts[0];
+                const rest = parts.slice(1).join('<think>');
+
+                if (rest.includes('</think>')) {
+                    const subparts = rest.split('</think>');
+                    const thinking = subparts[0];
+                    const afterThink = subparts.slice(1).join('</think>');
+
+                    return {
+                        thinking: reasoningEnabled ? thinking : '',
+                        answer: beforeThink + afterThink
+                    };
+                } else {
+                    return {
+                        thinking: reasoningEnabled ? rest : '',
+                        answer: beforeThink
+                    };
+                }
+            }
+            return {
+                thinking: '',
+                answer: fullText
+            };
+        }
+
         async function sendPlaygroundMessage() {
             const select = document.getElementById('chat-model-select');
             const model = select.value;
@@ -1711,6 +1785,7 @@
                 const decoder = new TextDecoder();
                 let buffer = '';
                 let assistantAnswer = '';
+                let assistantReasoning = '';
 
                 while (true) {
                     const { value, done } = await reader.read();
@@ -1727,11 +1802,40 @@
                             if (dataStr === '[DONE]') break;
                             try {
                                 const data = JSON.parse(dataStr);
-                                const token = data.choices[0].delta.content || '';
-                                assistantAnswer += token;
+                                const contentDelta = data.choices[0].delta.content || '';
+                                const reasoningDelta = data.choices[0].delta.reasoning_content || '';
                                 
-                                // Format linebreaks
-                                bubbleElement.textContent = assistantAnswer;
+                                assistantAnswer += contentDelta;
+                                assistantReasoning += reasoningDelta;
+                                
+                                const reasoningEnabled = document.getElementById('chat-reasoning').checked;
+                                
+                                let displayThinking = '';
+                                let displayAnswer = '';
+                                
+                                if (assistantReasoning) {
+                                    if (reasoningEnabled) {
+                                        displayThinking = assistantReasoning;
+                                    }
+                                    displayAnswer = assistantAnswer;
+                                } else {
+                                    const parsed = parseChatResponse(reasoningEnabled, assistantAnswer);
+                                    displayThinking = parsed.thinking;
+                                    displayAnswer = parsed.answer;
+                                }
+                                
+                                let bubbleHtml = '';
+                                if (displayThinking) {
+                                    bubbleHtml += `
+                                        <div class="thinking-block">
+                                            <div class="thinking-header">💭 Thinking Process...</div>
+                                            <div class="thinking-content">${escapeHtml(displayThinking)}</div>
+                                        </div>
+                                    `;
+                                }
+                                bubbleHtml += `<span>${escapeHtml(displayAnswer)}</span>`;
+                                
+                                bubbleElement.innerHTML = bubbleHtml;
                                 container.scrollTop = container.scrollHeight;
                             } catch(e) {}
                         }
