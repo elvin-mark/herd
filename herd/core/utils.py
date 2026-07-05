@@ -225,7 +225,12 @@ def get_local_models_info():
 
 
 def find_running_llm() -> Optional[str]:
-    """Finds an active LLM (non-whisper, non-embedding) running in the gateway, uses default_llm config, or returns the first local model."""
+    """Finds the default configured LLM, an active running LLM on the gateway, or the first local model."""
+    # 1. Check configured default LLM
+    if DEFAULT_LLM:
+        return DEFAULT_LLM
+
+    # 2. Check active running models in the gateway
     if is_gateway_running():
         try:
             res = httpx.get(f"{get_gateway_url()}/v1/models/active", timeout=1.0)
@@ -236,11 +241,7 @@ def find_running_llm() -> Optional[str]:
         except Exception:
             pass
 
-    # Check configured default LLM
-    if DEFAULT_LLM:
-        return DEFAULT_LLM
-
-    # Fallback to first downloaded LLM
+    # 3. Fallback to first downloaded LLM
     models = get_local_models_info()
     llms = [
         m["name"]
