@@ -25,82 +25,45 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-# 1. Define sub-Typer applications
-model_app = typer.Typer(
-    name="model", help="Manage local and active model server instances."
-)
-dev_app = typer.Typer(
-    name="dev", help="Developer productivity and code-healing utilities."
-)
-server_app = typer.Typer(
-    name="server",
-    help="Manage central API gateway processes and exposing links.",
-)
+# 1. Register Core Interfaces commands
+app.command(name="run", rich_help_panel="Core Interfaces")(run)
+app.command(name="transcribe", rich_help_panel="Core Interfaces")(transcribe)
+app.command(name="benchmark", rich_help_panel="Core Interfaces")(benchmark)
 
-# 2. Register visible commands on sub-Typers
-model_app.command(name="list")(list_models)
-model_app.command(name="pull")(pull)
-model_app.command(name="stop")(stop)
-model_app.command(name="ps")(ps)
-model_app.command(name="stats")(show_stats)
-model_app.command(name="clean")(clean)
-model_app.command(name="search")(search)
-model_app.command(name="quantize")(quantize)
-model_app.command(name="top")(top)
+# 2. Register Model Management commands
+app.command(name="list", rich_help_panel="Model Management")(list_models)
+app.command(name="pull", rich_help_panel="Model Management")(pull)
+app.command(name="stop", rich_help_panel="Model Management")(stop)
+app.command(name="ps", rich_help_panel="Model Management")(ps)
+app.command(name="stats", rich_help_panel="Model Management")(show_stats)
+app.command(name="clean", rich_help_panel="Model Management")(clean)
+app.command(name="search", rich_help_panel="Model Management")(search)
+app.command(name="quantize", rich_help_panel="Model Management")(quantize)
+app.command(name="top", rich_help_panel="Model Management")(top)
 
-dev_app.command(name="suggest")(suggest)
-dev_app.command(name="copilot")(copilot)
-dev_app.command(name="commit")(commit)
-dev_app.command(name="review")(review)
-dev_app.command(name="heal")(heal)
-dev_app.command(name="watch")(watch)
-dev_app.command(name="agent")(agent)
+# 3. Register Developer Tools commands
+app.command(name="suggest", rich_help_panel="Developer Tools")(suggest)
+app.command(name="copilot", rich_help_panel="Developer Tools")(copilot)
+app.command(name="commit", rich_help_panel="Developer Tools")(commit)
+app.command(name="review", rich_help_panel="Developer Tools")(review)
+app.command(name="heal", rich_help_panel="Developer Tools")(heal)
+app.command(name="watch", rich_help_panel="Developer Tools")(watch)
+app.command(name="agent", rich_help_panel="Developer Tools")(agent)
 
-server_app.command(name="serve")(serve)
-server_app.command(name="logs")(logs)
-server_app.command(name="setup")(setup)
-server_app.command(name="share")(share)
-server_app.command(name="proxy")(proxy)
+# 4. Register Semantic RAG Database commands
+app.command(name="index", rich_help_panel="Semantic RAG Database")(index)
+app.command(name="ask", rich_help_panel="Semantic RAG Database")(ask)
 
-# 3. Register root-level visible core commands
-app.command(name="run")(run)
-app.command(name="transcribe")(transcribe)
-app.command(name="benchmark")(benchmark)
+# 5. Register Gateway & Configuration commands
+app.command(name="serve", rich_help_panel="Gateway & Configuration")(serve)
+app.command(name="logs", rich_help_panel="Gateway & Configuration")(logs)
+app.command(name="setup", rich_help_panel="Gateway & Configuration")(setup)
+app.command(name="share", rich_help_panel="Gateway & Configuration")(share)
+app.command(name="proxy", rich_help_panel="Gateway & Configuration")(proxy)
 
-# 4. Register root-level HIDDEN alias commands (for backward compatibility & fast typing)
-app.command(name="list", hidden=True)(list_models)
-app.command(name="pull", hidden=True)(pull)
-app.command(name="stop", hidden=True)(stop)
-app.command(name="ps", hidden=True)(ps)
-app.command(name="stats", hidden=True)(show_stats)
-app.command(name="clean", hidden=True)(clean)
-app.command(name="search", hidden=True)(search)
-app.command(name="quantize", hidden=True)(quantize)
-app.command(name="top", hidden=True)(top)
-
-app.command(name="suggest", hidden=True)(suggest)
-app.command(name="copilot", hidden=True)(copilot)
-app.command(name="commit", hidden=True)(commit)
-app.command(name="review", hidden=True)(review)
-app.command(name="heal", hidden=True)(heal)
-app.command(name="watch", hidden=True)(watch)
-app.command(name="agent", hidden=True)(agent)
-
-app.command(name="index", hidden=True)(index)
-app.command(name="ask", hidden=True)(ask)
-
-app.command(name="serve", hidden=True)(serve)
-app.command(name="logs", hidden=True)(logs)
-app.command(name="setup", hidden=True)(setup)
-app.command(name="share", hidden=True)(share)
-app.command(name="proxy", hidden=True)(proxy)
-
-# 5. Register all sub-Typer applications
-app.add_typer(model_app)
-app.add_typer(dev_app)
-app.add_typer(server_app)
-app.add_typer(db_app)
-app.add_typer(config_app)
+# 6. Register Sub-Typer Applications with Rich Help Panels
+app.add_typer(db_app, rich_help_panel="Semantic RAG Database")
+app.add_typer(config_app, rich_help_panel="Gateway & Configuration")
 
 
 def main():
