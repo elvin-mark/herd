@@ -2,66 +2,111 @@ import os
 import shutil
 import json
 
-# Root directory
-HERD_HOME = os.environ.get("HERD_HOME", os.path.expanduser("~/.herd"))
-HERD_MODELS_DIR = os.path.join(HERD_HOME, "models")
-HERD_LOGS_DIR = os.path.join(HERD_HOME, "logs")
 
-# Load local config.json overrides if present
-CONFIG_FILE = os.path.join(HERD_HOME, "config.json")
-config_overrides = {}
-if os.path.exists(CONFIG_FILE):
-    try:
-        with open(CONFIG_FILE, "r") as f:
-            config_overrides = json.load(f)
-    except Exception:
-        pass
+class HerdSettings:
+    def __init__(self):
+        self.home = os.environ.get("HERD_HOME", os.path.expanduser("~/.herd"))
+        self.models_dir = os.path.join(self.home, "models")
+        self.logs_dir = os.path.join(self.home, "logs")
+        self.config_file = os.path.join(self.home, "config.json")
 
-# Host and Port for Herd API gateway
-HERD_HOST = os.environ.get("HERD_HOST", "127.0.0.1")
-HERD_PORT = int(os.environ.get("HERD_PORT", "11434"))
+        # Load local overrides
+        self.overrides = {}
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, "r") as f:
+                    self.overrides = json.load(f)
+            except Exception:
+                pass
 
-# Idle timeout for model servers in seconds
-IDLE_TIMEOUT = int(os.environ.get("HERD_IDLE_TIMEOUT", "300"))
+        # Host and Port
+        self.host = os.environ.get("HERD_HOST", "127.0.0.1")
+        self.port = int(os.environ.get("HERD_PORT", "11434"))
 
-# Binary paths
-LLAMA_SERVER_BIN = (
-    os.environ.get("LLAMA_SERVER_BIN")
-    or config_overrides.get("LLAMA_SERVER_BIN")
-    or shutil.which("llama-server")
-)
-WHISPER_SERVER_BIN = (
-    os.environ.get("WHISPER_SERVER_BIN")
-    or config_overrides.get("WHISPER_SERVER_BIN")
-    or shutil.which("whisper-server")
-)
+        # Idle timeout
+        self.idle_timeout = int(os.environ.get("HERD_IDLE_TIMEOUT", "300"))
 
-# Ensure directories exist
-os.makedirs(HERD_HOME, exist_ok=True)
-os.makedirs(HERD_MODELS_DIR, exist_ok=True)
-os.makedirs(HERD_LOGS_DIR, exist_ok=True)
+        # Binary paths
+        self.llama_server_bin = (
+            os.environ.get("LLAMA_SERVER_BIN")
+            or self.overrides.get("LLAMA_SERVER_BIN")
+            or shutil.which("llama-server")
+        )
+        self.whisper_server_bin = (
+            os.environ.get("WHISPER_SERVER_BIN")
+            or self.overrides.get("WHISPER_SERVER_BIN")
+            or shutil.which("whisper-server")
+        )
+
+        # Default model settings
+        self.default_llm = self.overrides.get("default_llm")
+        self.default_embedding = self.overrides.get("default_embedding")
+        self.default_whisper = self.overrides.get("default_whisper")
+        self.remote_gateway = self.overrides.get("remote_gateway")
+
+        # Make sure directories exist
+        os.makedirs(self.home, exist_ok=True)
+        os.makedirs(self.models_dir, exist_ok=True)
+        os.makedirs(self.logs_dir, exist_ok=True)
+
+    def reload(self):
+        self.__init__()
+
+    def save(self):
+        data = {
+            "default_llm": self.default_llm,
+            "default_embedding": self.default_embedding,
+            "default_whisper": self.default_whisper,
+            "remote_gateway": self.remote_gateway,
+        }
+        if self.llama_server_bin:
+            data["LLAMA_SERVER_BIN"] = self.llama_server_bin
+        if self.whisper_server_bin:
+            data["WHISPER_SERVER_BIN"] = self.whisper_server_bin
+
+        with open(self.config_file, "w") as f:
+            json.dump(data, f, indent=4)
+
+
+settings = HerdSettings()
+
+# Export compatible module-level constants
+HERD_HOME = settings.home
+HERD_MODELS_DIR = settings.models_dir
+HERD_LOGS_DIR = settings.logs_dir
+CONFIG_FILE = settings.config_file
+
+HERD_HOST = settings.host
+HERD_PORT = settings.port
+IDLE_TIMEOUT = settings.idle_timeout
+
+LLAMA_SERVER_BIN = settings.llama_server_bin
+WHISPER_SERVER_BIN = settings.whisper_server_bin
+
+DEFAULT_LLM = settings.default_llm
+DEFAULT_EMBEDDING = settings.default_embedding
+DEFAULT_WHISPER = settings.default_whisper
+REMOTE_GATEWAY = settings.remote_gateway
 
 
 def load_config() -> dict:
-    """Loads current config settings from config.json."""
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+    settings.reload()
+    return settings.overrides
 
 
 def save_config(config: dict):
-    """Saves config settings back to config.json."""
-    os.makedirs(HERD_HOME, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=4)
-
-
-# Default model configurations
-DEFAULT_LLM = config_overrides.get("default_llm")
-DEFAULT_EMBEDDING = config_overrides.get("default_embedding")
-DEFAULT_WHISPER = config_overrides.get("default_whisper")
-REMOTE_GATEWAY = config_overrides.get("remote_gateway")
+    settings.default_llm = config.get("default_llm", settings.default_llm)
+    settings.default_embedding = config.get(
+        "default_embedding", settings.default_embedding
+    )
+    settings.default_whisper = config.get(
+        "default_whisper", settings.default_whisper
+    )
+    settings.remote_gateway = config.get(
+        "remote_gateway", settings.remote_gateway
+    )
+    if "LLAMA_SERVER_BIN" in config:
+        settings.llama_server_bin = config["LLAMA_SERVER_BIN"]
+    if "WHISPER_SERVER_BIN" in config:
+        settings.whisper_server_bin = config["WHISPER_SERVER_BIN"]
+    settings.save()

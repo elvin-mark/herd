@@ -23,6 +23,50 @@ from herd.services.downloader import (
 
 console = Console()
 
+# Shared HTTP clients for connection pooling
+_shared_client = None
+_shared_async_client = None
+
+
+def get_http_client() -> httpx.Client:
+    """Returns a shared, pooled synchronous HTTP client."""
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = httpx.Client(timeout=10.0)
+    return _shared_client
+
+
+def get_async_http_client() -> httpx.AsyncClient:
+    """Returns a shared, pooled asynchronous HTTP client."""
+    global _shared_async_client
+    if _shared_async_client is None:
+        _shared_async_client = httpx.AsyncClient(timeout=None)
+    return _shared_async_client
+
+
+def close_http_clients():
+    """Closes and cleans up shared HTTP clients."""
+    global _shared_client, _shared_async_client
+    if _shared_client is not None:
+        try:
+            _shared_client.close()
+        except Exception:
+            pass
+        _shared_client = None
+    if _shared_async_client is not None:
+        import asyncio
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_shared_async_client.aclose())
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                loop.run_until_complete(_shared_async_client.aclose())
+        except Exception:
+            pass
+        _shared_async_client = None
+
 
 def get_gateway_url() -> str:
     """Returns the API Gateway base URL, pointing to remote_gateway if configured, otherwise localhost."""
@@ -33,9 +77,10 @@ def get_gateway_url() -> str:
 
 def is_gateway_running() -> bool:
     """Checks if the Herd gateway server is currently running."""
+    client = get_http_client()
     if REMOTE_GATEWAY:
         try:
-            response = httpx.get(f"{get_gateway_url()}/health", timeout=2.0)
+            response = client.get(f"{get_gateway_url()}/health", timeout=2.0)
             return response.status_code == 200
         except Exception:
             return False
@@ -44,7 +89,7 @@ def is_gateway_running() -> bool:
     if host == "0.0.0.0":
         host = "127.0.0.1"
     try:
-        response = httpx.get(f"http://{host}:{HERD_PORT}/health", timeout=1.0)
+        response = client.get(f"http://{host}:{HERD_PORT}/health", timeout=1.0)
         return response.status_code == 200
     except Exception:
         return False

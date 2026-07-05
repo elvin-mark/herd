@@ -7,14 +7,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, Form, UploadFile, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-import httpx
 
 from herd.core.config import HERD_MODELS_DIR
 from herd.services.manager import ProcessManager
 from herd.core.metrics import collector
+from herd.core.utils import get_async_http_client, close_http_clients
+
+from rich.logging import RichHandler
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    level=logging.INFO,
+    format="%(name)s: %(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True, show_path=True)],
 )
 logger = logging.getLogger("herd.server")
 
@@ -75,6 +80,7 @@ async def lifespan(app: FastAPI):
             tasks.append(manager.stop_model(info["model_name"]))
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
+    close_http_clients()
     logger.info("Herd Gateway Server stopped. All child processes terminated.")
 
 
@@ -141,7 +147,7 @@ async def proxy_to_port(
     port: int, path: str, request: Request, body_bytes: bytes, model_name: str
 ) -> Response:
     """Proxies an HTTP request to the target port, supporting streaming response and recording metrics."""
-    client = httpx.AsyncClient(timeout=None)
+    client = get_async_http_client()
     url = f"http://127.0.0.1:{port}{path}"
 
     headers = dict(request.headers)
@@ -161,7 +167,6 @@ async def proxy_to_port(
     try:
         response = await client.send(req, stream=True)
     except Exception as e:
-        await client.aclose()
         logger.error(f"Failed to connect to backend server on port {port}: {e}")
         collector.record_request(
             model_name=model_name,
@@ -182,7 +187,6 @@ async def proxy_to_port(
                 yield chunk
         finally:
             await response.aclose()
-            await client.aclose()
 
             # Record request metrics at the end of streaming/non-streaming transmission
             duration = time.time() - start_time
@@ -260,42 +264,42 @@ async def whisper_proxy(
         "/v1/audio/translations" if translate else "/v1/audio/transcriptions"
     )
 
-    async with httpx.AsyncClient(timeout=None) as client:
-        try:
-            response = await client.post(
-                f"http://127.0.0.1:{port}/inference", files=files, data=data
-            )
-        except Exception as e:
-            logger.error(f"Failed to connect to whisper server on port {port}: {e}")
-            collector.record_request(
-                model_name=model,
-                endpoint=endpoint_path,
-                duration_sec=time.time() - start_time,
-                is_error=True,
-            )
-            return JSONResponse(
-                status_code=502,
-                content={"error": f"Failed to connect to whisper server: {e}"},
-            )
+    client = get_async_http_client()
+    try:
+        response = await client.post(
+            f"http://127.0.0.1:{port}/inference", files=files, data=data
+        )
+    except Exception as e:
+        logger.error(f"Failed to connect to whisper server on port {port}: {e}")
+        collector.record_request(
+            model_name=model,
+            endpoint=endpoint_path,
+            duration_sec=time.time() - start_time,
+            is_error=True,
+        )
+        return JSONResponse(
+            status_code=502,
+            content={"error": f"Failed to connect to whisper server: {e}"},
+        )
 
-        duration = time.time() - start_time
-        if response.status_code != 200:
-            logger.error(
-                f"Whisper server returned status {response.status_code}: {response.text}"
-            )
-            collector.record_request(
-                model_name=model,
-                endpoint=endpoint_path,
-                duration_sec=duration,
-                is_error=True,
-            )
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                media_type="application/json",
-            )
+    duration = time.time() - start_time
+    if response.status_code != 200:
+        logger.error(
+            f"Whisper server returned status {response.status_code}: {response.text}"
+        )
+        collector.record_request(
+            model_name=model,
+            endpoint=endpoint_path,
+            duration_sec=duration,
+            is_error=True,
+        )
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            media_type="application/json",
+        )
 
-        result = response.json()
+    result = response.json()
 
     text = result.get("text", "").strip()
 
@@ -581,16 +585,16 @@ pull_tasks = {}
 async def hf_search(query: str, limit: int = 10):
     """Searches Hugging Face Hub for GGUF models."""
     url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit={limit}"
-    async with httpx.AsyncClient() as client:
-        try:
-            res = await client.get(url, timeout=10.0)
-            if res.status_code != 200:
-                return JSONResponse(
-                    status_code=res.status_code, content={"error": res.text}
-                )
-            return res.json()
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"error": str(e)})
+    client = get_async_http_client()
+    try:
+        res = await client.get(url, timeout=10.0)
+        if res.status_code != 200:
+            return JSONResponse(
+                status_code=res.status_code, content={"error": res.text}
+            )
+        return res.json()
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.post("/v1/models/pull")
@@ -645,19 +649,19 @@ async def pull_model(request: Request, background_tasks: BackgroundTasks):
             pull_tasks[name]["status"] = "downloading"
 
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("GET", download_url) as r:
-                    r.raise_for_status()
-                    total = int(r.headers.get("content-length", 0))
-                    downloaded = 0
-                    with open(dest_path, "wb") as f:
-                        async for chunk in r.aiter_bytes(chunk_size=1024 * 1024):
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if total > 0:
-                                pull_tasks[name]["progress"] = int(
-                                    (downloaded / total) * 100
-                                )
+            client = get_async_http_client()
+            async with client.stream("GET", download_url) as r:
+                r.raise_for_status()
+                total = int(r.headers.get("content-length", 0))
+                downloaded = 0
+                with open(dest_path, "wb") as f:
+                    async for chunk in r.aiter_bytes(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total > 0:
+                            pull_tasks[name]["progress"] = int(
+                                (downloaded / total) * 100
+                            )
 
             pull_tasks[name]["status"] = "completed"
             pull_tasks[name]["progress"] = 100

@@ -34,6 +34,24 @@ class ProcessManager:
     def __init__(self):
         self.running_models: Dict[str, Dict[str, Any]] = {}
         self.lock = asyncio.Lock()
+        import atexit
+        atexit.register(self.shutdown_all_sync)
+
+    def shutdown_all_sync(self):
+        """Synchronously terminates all running processes on process exit (fallback)."""
+        for model_path, info in list(self.running_models.items()):
+            process = info.get("process")
+            log_file = info.get("log_file")
+            if process:
+                try:
+                    process.terminate()
+                except Exception:
+                    pass
+            if log_file:
+                try:
+                    log_file.close()
+                except Exception:
+                    pass
 
     async def get_or_start_server(
         self,
@@ -268,27 +286,28 @@ class ProcessManager:
         start_time = time.time()
         url = f"http://127.0.0.1:{port}/health"
 
-        async with httpx.AsyncClient() as client:
-            while time.time() - start_time < timeout:
-                try:
-                    response = await client.get(url, timeout=1.0)
-                    if response.status_code == 200:
-                        # Fully loaded and ready!
-                        return True
-                    elif response.status_code == 503:
-                        # Still loading model
-                        logger.info(
-                            f"Model on port {port} is still loading. Retrying..."
-                        )
-                    elif response.status_code == 404:
-                        # If /health doesn't exist on this server version, fall back to assuming ready
-                        logger.warning(
-                            f"Health endpoint not found (404) on port {port}. Assuming ready."
-                        )
-                        return True
-                except httpx.RequestError:
-                    # Connection error or timeout
-                    pass
+        from herd.core.utils import get_async_http_client
+        client = get_async_http_client()
+        while time.time() - start_time < timeout:
+            try:
+                response = await client.get(url, timeout=1.0)
+                if response.status_code == 200:
+                    # Fully loaded and ready!
+                    return True
+                elif response.status_code == 503:
+                    # Still loading model
+                    logger.info(
+                        f"Model on port {port} is still loading. Retrying..."
+                    )
+                elif response.status_code == 404:
+                    # If /health doesn't exist on this server version, fall back to assuming ready
+                    logger.warning(
+                        f"Health endpoint not found (404) on port {port}. Assuming ready."
+                    )
+                    return True
+            except httpx.RequestError:
+                # Connection error or timeout
+                pass
 
                 await asyncio.sleep(1.0)
 
