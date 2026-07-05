@@ -201,7 +201,13 @@ async def proxy_to_cloud(
 
     # Rewrite model field to match the remote provider target model name
     body["model"] = target_model
-    url = f"{base_url}{path}"
+
+    # Prevent duplicate '/v1/v1' path prefix nesting if the provider base URL already ends with '/v1'
+    path_suffix = path
+    if base_url.endswith("/v1") and path.startswith("/v1"):
+        path_suffix = path[3:]  # Strip '/v1' (e.g. '/v1/chat/completions' -> '/chat/completions')
+
+    url = f"{base_url}{path_suffix}"
 
     headers = {
         "Authorization": f"Bearer {api_key}",
