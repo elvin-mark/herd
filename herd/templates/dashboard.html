@@ -1785,6 +1785,7 @@
             container.scrollTop = container.scrollHeight;
 
             const bubbleElement = document.getElementById(assistantBubbleId);
+            const reasoningEnabled = document.getElementById('chat-reasoning').checked;
             
             try {
                 const res = await fetch('/v1/chat/completions', {
@@ -1794,7 +1795,10 @@
                         model: model,
                         messages: messages,
                         temperature: temp,
-                        stream: true
+                        stream: true,
+                        chat_template_kwargs: {
+                            enable_thinking: reasoningEnabled
+                        }
                     })
                 });
 
