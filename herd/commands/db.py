@@ -49,21 +49,31 @@ def index(
     chosen_model = model_name if model_name else DEFAULT_EMBEDDING
     if not chosen_model:
         models = get_local_models_info()
-        emb_models = [m["name"] for m in models if "embedding" in m["name"].lower() or "bert" in m["name"].lower()]
+        emb_models = [
+            m["name"]
+            for m in models
+            if "embedding" in m["name"].lower() or "bert" in m["name"].lower()
+        ]
         if emb_models:
             chosen_model = emb_models[0]
 
     if not chosen_model:
-        console.print("[red]Error: No embedding model specified and no default embedding model configured.[/red]")
+        console.print(
+            "[red]Error: No embedding model specified and no default embedding model configured.[/red]"
+        )
         raise typer.Exit(1)
 
     model_name = chosen_model
 
     # 2. Pre-load the embedding model
-    console.print(f"Ensuring embedding model [bold magenta]{model_name}[/bold magenta] is loaded...")
+    console.print(
+        f"Ensuring embedding model [bold magenta]{model_name}[/bold magenta] is loaded..."
+    )
     url_load = f"{get_gateway_url()}/v1/models/load"
     try:
-        httpx.post(url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0)
+        httpx.post(
+            url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0
+        )
     except Exception as e:
         console.print(f"[red]Failed to load embedding model: {e}[/red]")
         raise typer.Exit(1)
@@ -72,14 +82,18 @@ def index(
     console.print(f"Indexing directory [bold cyan]{directory}[/bold cyan]...")
     try:
         count = asyncio.run(index_directory(directory, model_name))
-        console.print(f"[bold green]Success![/bold green] Indexed {count} text chunks in the database.")
+        console.print(
+            f"[bold green]Success![/bold green] Indexed {count} text chunks in the database."
+        )
     except Exception as e:
         console.print(f"[red]Failed to index directory: {e}[/red]")
         raise typer.Exit(1)
 
 
 def ask(
-    query: str = typer.Argument(..., help="The question to ask the model using indexed context."),
+    query: str = typer.Argument(
+        ..., help="The question to ask the model using indexed context."
+    ),
     model_name: Optional[str] = typer.Argument(
         None,
         help="LLM model identifier to ask. If omitted, uses active or default LLM.",
@@ -99,25 +113,35 @@ def ask(
     # Resolve LLM model
     chosen_llm = model_name if model_name else find_running_llm()
     if not chosen_llm:
-        console.print("[red]Error: No LLM model specified and no default LLM configured.[/red]")
+        console.print(
+            "[red]Error: No LLM model specified and no default LLM configured.[/red]"
+        )
         raise typer.Exit(1)
 
     # Resolve embedding model
     chosen_emb = embedding_model if embedding_model else DEFAULT_EMBEDDING
     if not chosen_emb:
         models = get_local_models_info()
-        emb_models = [m["name"] for m in models if "embedding" in m["name"].lower() or "bert" in m["name"].lower()]
+        emb_models = [
+            m["name"]
+            for m in models
+            if "embedding" in m["name"].lower() or "bert" in m["name"].lower()
+        ]
         if emb_models:
             chosen_emb = emb_models[0]
 
     if not chosen_emb:
-        console.print("[red]Error: No embedding model specified and no default embedding model configured.[/red]")
+        console.print(
+            "[red]Error: No embedding model specified and no default embedding model configured.[/red]"
+        )
         raise typer.Exit(1)
 
     # 2. Pre-load the models
     url_load = f"{get_gateway_url()}/v1/models/load"
     try:
-        httpx.post(url_load, json={"model": chosen_emb, "is_embedding": True}, timeout=45.0)
+        httpx.post(
+            url_load, json={"model": chosen_emb, "is_embedding": True}, timeout=45.0
+        )
         httpx.post(url_load, json={"model": chosen_llm}, timeout=45.0)
     except Exception as e:
         console.print(f"[red]Failed to load models: {e}[/red]")
@@ -133,17 +157,23 @@ def ask(
         raise typer.Exit(1)
 
     if not matches:
-        console.print("[yellow]Warning: No context found in index for this embedding model. Answering without custom context.[/yellow]")
+        console.print(
+            "[yellow]Warning: No context found in index for this embedding model. Answering without custom context.[/yellow]"
+        )
         context = ""
     else:
         console.print("\n[bold white]Retrieved Context Sources:[/bold white]")
         for idx, m in enumerate(matches):
             basename = os.path.basename(m["file_path"])
-            console.print(f"  [{idx + 1}] {basename} (similarity: {m['similarity']:.3f})")
-        context = "\n\n".join([
-            f"Source: {os.path.basename(m['file_path'])}\nContent:\n{m['text']}"
-            for m in matches
-        ])
+            console.print(
+                f"  [{idx + 1}] {basename} (similarity: {m['similarity']:.3f})"
+            )
+        context = "\n\n".join(
+            [
+                f"Source: {os.path.basename(m['file_path'])}\nContent:\n{m['text']}"
+                for m in matches
+            ]
+        )
 
     # 4. Prompt construction
     system_prompt = (
@@ -159,9 +189,9 @@ def ask(
             "model": chosen_llm,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query}
+                {"role": "user", "content": query},
             ],
-            "stream": True
+            "stream": True,
         }
         console.print("\n[bold green]Answer:[/bold green]")
         async with httpx.AsyncClient(timeout=None) as client:
@@ -236,12 +266,18 @@ def db_search(
     chosen_model = model_name if model_name else DEFAULT_EMBEDDING
     if not chosen_model:
         models = get_local_models_info()
-        emb_models = [m["name"] for m in models if "embedding" in m["name"].lower() or "bert" in m["name"].lower()]
+        emb_models = [
+            m["name"]
+            for m in models
+            if "embedding" in m["name"].lower() or "bert" in m["name"].lower()
+        ]
         if emb_models:
             chosen_model = emb_models[0]
 
     if not chosen_model:
-        console.print("[red]Error: No embedding model specified and no default embedding model configured.[/red]")
+        console.print(
+            "[red]Error: No embedding model specified and no default embedding model configured.[/red]"
+        )
         raise typer.Exit(1)
 
     model_name = chosen_model
@@ -249,7 +285,9 @@ def db_search(
     # Pre-load the embedding model
     url_load = f"{get_gateway_url()}/v1/models/load"
     try:
-        httpx.post(url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0)
+        httpx.post(
+            url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0
+        )
     except Exception as e:
         console.print(f"[red]Failed to load embedding model: {e}[/red]")
         raise typer.Exit(1)
@@ -283,17 +321,23 @@ def db_search(
 
 @db_app.command(name="remove")
 def db_remove(
-    path: str = typer.Argument(..., help="The file or directory path to remove from the index."),
+    path: str = typer.Argument(
+        ..., help="The file or directory path to remove from the index."
+    ),
 ):
     """Removes indexed chunks and files from the vector database."""
     # Resolve absolute path to match DB entries
     abs_path = os.path.abspath(path)
 
-    console.print(f"Removing indexed path [bold red]{abs_path}[/bold red] from database...")
+    console.print(
+        f"Removing indexed path [bold red]{abs_path}[/bold red] from database..."
+    )
     try:
         count = remove_indexed_path(abs_path)
         if count > 0:
-            console.print(f"[bold green]Success![/bold green] Removed {count} chunks from the vector database.")
+            console.print(
+                f"[bold green]Success![/bold green] Removed {count} chunks from the vector database."
+            )
         else:
             console.print("[yellow]No indexed files found matching this path.[/yellow]")
     except Exception as e:

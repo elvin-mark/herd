@@ -130,7 +130,9 @@ class ProcessManager:
                     mmproj_file = None
                     if os.path.isdir(model_dir):
                         for f in os.listdir(model_dir):
-                            if f.startswith("mmproj") and (f.endswith(".gguf") or f.endswith(".bin")):
+                            if f.startswith("mmproj") and (
+                                f.endswith(".gguf") or f.endswith(".bin")
+                            ):
                                 mmproj_file = os.path.join(model_dir, f)
                                 break
                     if mmproj_file:
@@ -233,9 +235,7 @@ class ProcessManager:
                     process.kill()
                     await process.wait()
             except ProcessLookupError:
-                logger.info(
-                    f"Model server '{model_name}' process already stopped."
-                )
+                logger.info(f"Model server '{model_name}' process already stopped.")
             except Exception as e:
                 logger.error(f"Error terminating model server for '{model_name}': {e}")
             finally:
@@ -257,7 +257,9 @@ class ProcessManager:
                 await asyncio.sleep(0.5)
         return False
 
-    async def _wait_for_model_ready(self, port: int, is_whisper: bool, timeout: float = 120.0) -> bool:
+    async def _wait_for_model_ready(
+        self, port: int, is_whisper: bool, timeout: float = 120.0
+    ) -> bool:
         """Waits for the model server to finish loading and be fully ready to serve."""
         if is_whisper:
             # Whisper loads fast, port binding is sufficient
@@ -265,7 +267,7 @@ class ProcessManager:
 
         start_time = time.time()
         url = f"http://127.0.0.1:{port}/health"
-        
+
         async with httpx.AsyncClient() as client:
             while time.time() - start_time < timeout:
                 try:
@@ -275,17 +277,21 @@ class ProcessManager:
                         return True
                     elif response.status_code == 503:
                         # Still loading model
-                        logger.info(f"Model on port {port} is still loading. Retrying...")
+                        logger.info(
+                            f"Model on port {port} is still loading. Retrying..."
+                        )
                     elif response.status_code == 404:
                         # If /health doesn't exist on this server version, fall back to assuming ready
-                        logger.warning(f"Health endpoint not found (404) on port {port}. Assuming ready.")
+                        logger.warning(
+                            f"Health endpoint not found (404) on port {port}. Assuming ready."
+                        )
                         return True
                 except httpx.RequestError:
                     # Connection error or timeout
                     pass
-                
+
                 await asyncio.sleep(1.0)
-                
+
         logger.warning(f"Timeout waiting for model on port {port} to become ready.")
         return False
 

@@ -31,7 +31,9 @@ def ms_to_vtt_time(ms: int) -> str:
 
 
 def transcribe(
-    audio_file: str = typer.Argument(..., help="Path to the local audio file to transcribe."),
+    audio_file: str = typer.Argument(
+        ..., help="Path to the local audio file to transcribe."
+    ),
     model_name: Optional[str] = typer.Option(
         None,
         "--model",
@@ -80,17 +82,25 @@ def transcribe(
             ]
             if whisper_models:
                 chosen_model = whisper_models[0]
-                console.print(f"[yellow]No model specified. Auto-selected local Whisper model: [bold]{chosen_model}[/bold][/yellow]")
+                console.print(
+                    f"[yellow]No model specified. Auto-selected local Whisper model: [bold]{chosen_model}[/bold][/yellow]"
+                )
 
     if not chosen_model:
-        console.print("[red]Error: No Whisper models found locally and no default Whisper model configured.[/red]")
-        console.print("Please download a Whisper model first: [bold cyan]herd pull ggerganov/whisper.cpp:ggml-base.en.bin[/bold cyan]")
+        console.print(
+            "[red]Error: No Whisper models found locally and no default Whisper model configured.[/red]"
+        )
+        console.print(
+            "Please download a Whisper model first: [bold cyan]herd pull ggerganov/whisper.cpp:ggml-base.en.bin[/bold cyan]"
+        )
         raise typer.Exit(1)
 
     # 4. Resolve output path
     fmt = output_format.lower()
     if fmt not in ["txt", "srt", "vtt"]:
-        console.print(f"[red]Error: Unsupported output format '{output_format}'. Choose from: txt, srt, vtt.[/red]")
+        console.print(
+            f"[red]Error: Unsupported output format '{output_format}'. Choose from: txt, srt, vtt.[/red]"
+        )
         raise typer.Exit(1)
 
     if not output_file:
@@ -99,7 +109,9 @@ def transcribe(
     else:
         dest_path = output_file
 
-    console.print(f"Loading Whisper model [bold cyan]{chosen_model}[/bold cyan] in Gateway...")
+    console.print(
+        f"Loading Whisper model [bold cyan]{chosen_model}[/bold cyan] in Gateway..."
+    )
 
     # 5. Send transcription request to the Gateway
     url = f"{get_gateway_url()}/v1/audio/transcriptions"
@@ -108,14 +120,13 @@ def transcribe(
     try:
         with open(audio_file, "rb") as f_bin:
             files = {"file": (os.path.basename(audio_file), f_bin, "audio/wav")}
-            data = {
-                "model": chosen_model,
-                "response_format": "json"
-            }
+            data = {"model": chosen_model, "response_format": "json"}
             if language:
                 data["language"] = language
 
-            console.print("[bold green]Transcribing audio file...[/bold green] (this may take a few moments)")
+            console.print(
+                "[bold green]Transcribing audio file...[/bold green] (this may take a few moments)"
+            )
             response = httpx.post(url, files=files, data=data, timeout=None)
     except Exception as e:
         console.print(f"[red]Error contacting Gateway transcription server: {e}[/red]")
@@ -152,7 +163,9 @@ def transcribe(
                     text = seg.get("text", "").strip()
                     f.write(f"{start_str} --> {end_str}\n{text}\n\n")
 
-        console.print(f"\n[bold green]Success![/bold green] Transcription saved to: [bold cyan]{dest_path}[/bold cyan]")
+        console.print(
+            f"\n[bold green]Success![/bold green] Transcription saved to: [bold cyan]{dest_path}[/bold cyan]"
+        )
     except Exception as e:
         console.print(f"[red]Error writing transcription file: {e}[/red]")
         raise typer.Exit(1)

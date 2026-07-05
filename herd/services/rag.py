@@ -32,7 +32,7 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 200) -> List[str
     chunks = []
     if not text:
         return chunks
-    
+
     start = 0
     while start < len(text):
         end = min(start + chunk_size, len(text))
@@ -48,13 +48,11 @@ async def get_embedding(text: str, model_name: str) -> List[float]:
     url = f"http://127.0.0.1:{HERD_PORT}/v1/embeddings"
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            url,
-            json={"model": model_name, "input": text},
-            timeout=30.0
+            url, json={"model": model_name, "input": text}, timeout=30.0
         )
         if response.status_code != 200:
             raise RuntimeError(f"Embedding request failed: {response.text}")
-        
+
         result = response.json()
         return result["data"][0]["embedding"]
 
@@ -78,10 +76,22 @@ def cosine_similarity(v1: List[float], v2: List[float]) -> float:
 async def index_directory(directory_path: str, embedding_model: str) -> int:
     """Recursively parses text-based files in a directory, chunks them, embeds them, and indexes in DB."""
     init_db()
-    
+
     supported_extensions = {
-        ".txt", ".md", ".py", ".js", ".ts", ".html", ".css",
-        ".json", ".yaml", ".yml", ".sh", ".ini", ".cfg", ".sql"
+        ".txt",
+        ".md",
+        ".py",
+        ".js",
+        ".ts",
+        ".html",
+        ".css",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".sh",
+        ".ini",
+        ".cfg",
+        ".sql",
     }
 
     chunks_added = 0
@@ -104,11 +114,11 @@ async def index_directory(directory_path: str, embedding_model: str) -> int:
                     # Call embedding API
                     vector = await get_embedding(text_chunk, embedding_model)
                     # Convert float list to binary blob
-                    vector_blob = array.array('f', vector).tobytes()
+                    vector_blob = array.array("f", vector).tobytes()
 
                     cursor.execute(
                         "INSERT INTO chunks (file_path, chunk_index, text, embedding, model_name) VALUES (?, ?, ?, ?, ?)",
-                        (file_path, idx, text_chunk, vector_blob, embedding_model)
+                        (file_path, idx, text_chunk, vector_blob, embedding_model),
                     )
                     chunks_added += 1
 
@@ -121,15 +131,17 @@ async def index_directory(directory_path: str, embedding_model: str) -> int:
     return chunks_added
 
 
-def search_vectors(query_vector: List[float], embedding_model: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def search_vectors(
+    query_vector: List[float], embedding_model: str, top_k: int = 5
+) -> List[Dict[str, Any]]:
     """Performs a semantic search by calculating cosine similarity over stored DB vectors."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     # Query all indexed vectors for the given model
     cursor.execute(
         "SELECT file_path, text, embedding FROM chunks WHERE model_name = ?",
-        (embedding_model,)
+        (embedding_model,),
     )
     rows = cursor.fetchall()
     conn.close()
@@ -137,14 +149,10 @@ def search_vectors(query_vector: List[float], embedding_model: str, top_k: int =
     results = []
     for file_path, text, blob in rows:
         # Convert binary blob back to float list
-        vector = list(array.array('f', blob))
-        
+        vector = list(array.array("f", blob))
+
         sim = cosine_similarity(query_vector, vector)
-        results.append({
-            "file_path": file_path,
-            "text": text,
-            "similarity": sim
-        })
+        results.append({"file_path": file_path, "text": text, "similarity": sim})
 
     # Sort results by similarity descending
     results.sort(key=lambda x: x["similarity"], reverse=True)
@@ -173,7 +181,7 @@ def remove_indexed_path(target_path: str) -> int:
     # Match the exact file path or anything under it as a sub-path
     cursor.execute(
         "DELETE FROM chunks WHERE file_path = ? OR file_path LIKE ?",
-        (abs_target, abs_target + os.sep + "%")
+        (abs_target, abs_target + os.sep + "%"),
     )
     deleted = cursor.rowcount
     conn.commit()

@@ -16,7 +16,9 @@ from herd.core.config import (
 )
 from herd.core.utils import console
 
-config_app = typer.Typer(name="config", help="Manage default models and environment configurations.")
+config_app = typer.Typer(
+    name="config", help="Manage default models and environment configurations."
+)
 
 
 @config_app.command(name="show")
@@ -39,7 +41,9 @@ def config_show():
         table.add_row(key, str(active_val) if active_val is not None else "-", source)
 
     add_row("default_llm", DEFAULT_LLM, "Default LLM model identifier")
-    add_row("default_embedding", DEFAULT_EMBEDDING, "Default embedding model identifier")
+    add_row(
+        "default_embedding", DEFAULT_EMBEDDING, "Default embedding model identifier"
+    )
     add_row("default_whisper", DEFAULT_WHISPER, "Default Whisper model identifier")
     add_row("HERD_HOST", HERD_HOST, "Gateway listen host")
     add_row("HERD_PORT", HERD_PORT, "Gateway listen port")
@@ -50,12 +54,17 @@ def config_show():
 
     console.print("\n")
     console.print(table)
-    console.print("\nTo update defaults, run: [bold cyan]herd config set <key> <value>[/bold cyan]\n")
+    console.print(
+        "\nTo update defaults, run: [bold cyan]herd config set <key> <value>[/bold cyan]\n"
+    )
 
 
 @config_app.command(name="set")
 def config_set(
-    key: str = typer.Argument(..., help="The setting key to modify (e.g. default_llm, default_embedding, default_whisper)."),
+    key: str = typer.Argument(
+        ...,
+        help="The setting key to modify (e.g. default_llm, default_embedding, default_whisper).",
+    ),
     value: str = typer.Argument(..., help="The value to assign to the key."),
 ):
     """Sets a configuration value in config.json."""
@@ -67,7 +76,7 @@ def config_set(
         "HERD_HOST",
         "HERD_IDLE_TIMEOUT",
         "LLAMA_SERVER_BIN",
-        "WHISPER_SERVER_BIN"
+        "WHISPER_SERVER_BIN",
     }
 
     # Normalize key to lower or match
@@ -90,14 +99,20 @@ def config_set(
         try:
             val_to_save = int(value)
         except ValueError:
-            console.print(f"[red]Error: Value for '{matched_key}' must be an integer.[/red]")
+            console.print(
+                f"[red]Error: Value for '{matched_key}' must be an integer.[/red]"
+            )
             raise typer.Exit(1)
 
     config[matched_key] = val_to_save
     try:
         save_config(config)
-        console.print(f"[bold green]Success![/bold green] Configured [bold cyan]{matched_key}[/bold cyan] = [bold magenta]{val_to_save}[/bold magenta] in config.json.")
-        console.print("[yellow]Please note: Restart running gateways or processes to apply port or timeout changes.[/yellow]")
+        console.print(
+            f"[bold green]Success![/bold green] Configured [bold cyan]{matched_key}[/bold cyan] = [bold magenta]{val_to_save}[/bold magenta] in config.json."
+        )
+        console.print(
+            "[yellow]Please note: Restart running gateways or processes to apply port or timeout changes.[/yellow]"
+        )
     except Exception as e:
         console.print(f"[red]Failed to write configuration: {e}[/red]")
         raise typer.Exit(1)

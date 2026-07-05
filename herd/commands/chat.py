@@ -38,7 +38,9 @@ async def stream_chat_completions(model_name: str, messages: list) -> str:
         async with client.stream("POST", url, json=payload) as response:
             if response.status_code != 200:
                 err_body = await response.aread()
-                console.print(f"\n[red]API request failed ({response.status_code}): {err_body.decode()}[/red]")
+                console.print(
+                    f"\n[red]API request failed ({response.status_code}): {err_body.decode()}[/red]"
+                )
                 raise typer.Exit(1)
 
             async for chunk in response.aiter_bytes():
@@ -71,16 +73,26 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
     console.print(
         f"\n[bold green]Chatting with {model_name} (Herd Gateway)[/bold green]"
     )
-    console.print("Type [bold cyan]/help[/bold cyan] to see available commands. Press Ctrl+C to stop generation.\n")
+    console.print(
+        "Type [bold cyan]/help[/bold cyan] to see available commands. Press Ctrl+C to stop generation.\n"
+    )
 
     # Load embedding model if RAG context is active
     if context_model:
         url_load = f"{get_gateway_url()}/v1/models/load"
         try:
-            httpx.post(url_load, json={"model": context_model, "is_embedding": True}, timeout=45.0)
-            console.print(f"[dim]RAG Active: Retrieving context from embedding model '{context_model}'[/dim]\n")
+            httpx.post(
+                url_load,
+                json={"model": context_model, "is_embedding": True},
+                timeout=45.0,
+            )
+            console.print(
+                f"[dim]RAG Active: Retrieving context from embedding model '{context_model}'[/dim]\n"
+            )
         except Exception as e:
-            console.print(f"[red]Warning: Failed to load RAG embedding model: {e}[/red]")
+            console.print(
+                f"[red]Warning: Failed to load RAG embedding model: {e}[/red]"
+            )
             context_model = None
 
     messages = []
@@ -100,11 +112,21 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                     break
                 elif cmd == "/help":
                     console.print("\n[bold cyan]Available Chat Commands:[/bold cyan]")
-                    console.print("  [bold white]/help[/bold white]               - Show this help menu.")
-                    console.print("  [bold white]/clear[/bold white] or [bold white]/reset[/bold white]   - Clear the chat history.")
-                    console.print("  [bold white]/system <prompt>[/bold white]     - Set or update the system prompt.")
-                    console.print("  [bold white]/export [filename][/bold white]   - Export the chat history to a Markdown file.")
-                    console.print("  [bold white]/exit[/bold white] or [bold white]/quit[/bold white]     - Exit the chat session.\n")
+                    console.print(
+                        "  [bold white]/help[/bold white]               - Show this help menu."
+                    )
+                    console.print(
+                        "  [bold white]/clear[/bold white] or [bold white]/reset[/bold white]   - Clear the chat history."
+                    )
+                    console.print(
+                        "  [bold white]/system <prompt>[/bold white]     - Set or update the system prompt."
+                    )
+                    console.print(
+                        "  [bold white]/export [filename][/bold white]   - Export the chat history to a Markdown file."
+                    )
+                    console.print(
+                        "  [bold white]/exit[/bold white] or [bold white]/quit[/bold white]     - Exit the chat session.\n"
+                    )
                     continue
                 elif cmd in ["/clear", "/reset"]:
                     messages = []
@@ -123,7 +145,9 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                             break
                     if not has_system:
                         messages.insert(0, {"role": "system", "content": arg})
-                    console.print(f"[yellow]System prompt updated to:[/yellow] [italic]{arg}[/italic]")
+                    console.print(
+                        f"[yellow]System prompt updated to:[/yellow] [italic]{arg}[/italic]"
+                    )
                     continue
                 elif cmd == "/export":
                     filename = arg if arg else "chat_export.md"
@@ -133,12 +157,16 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                             for msg in messages:
                                 role = msg["role"].capitalize()
                                 f.write(f"### {role}\n{msg['content']}\n\n")
-                        console.print(f"[green]Chat session exported to {filename}[/green]")
+                        console.print(
+                            f"[green]Chat session exported to {filename}[/green]"
+                        )
                     except Exception as e:
                         console.print(f"[red]Failed to export chat: {e}[/red]")
                     continue
                 else:
-                    console.print(f"[red]Unknown command: {cmd}. Type /help for assistance.[/red]")
+                    console.print(
+                        f"[red]Unknown command: {cmd}. Type /help for assistance.[/red]"
+                    )
                     continue
 
             # Retrieve context if RAG is active
@@ -148,10 +176,12 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                     query_vector = await get_embedding(user_input, context_model)
                     matches = search_vectors(query_vector, context_model, top_k=3)
                     if matches:
-                        retrieved_context = "\n\n".join([
-                            f"Source: {os.path.basename(m['file_path'])}\n{m['text']}"
-                            for m in matches
-                        ])
+                        retrieved_context = "\n\n".join(
+                            [
+                                f"Source: {os.path.basename(m['file_path'])}\n{m['text']}"
+                                for m in matches
+                            ]
+                        )
                 except Exception:
                     pass
 
@@ -167,9 +197,11 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                             "Use the following context to answer the question.\n\n"
                             f"Context:\n{retrieved_context}\n\n"
                             f"Question: {user_input}"
-                        )
+                        ),
                     }
-                assistant_response = await stream_chat_completions(model_name, payload_messages)
+                assistant_response = await stream_chat_completions(
+                    model_name, payload_messages
+                )
                 messages.append({"role": "assistant", "content": assistant_response})
             except KeyboardInterrupt:
                 print("\n[yellow]Generation interrupted.[/yellow]")
@@ -219,14 +251,19 @@ def run(
         chosen_model = find_running_llm()
 
     if not chosen_model:
-        console.print("[red]Error: No model name specified and no suitable default model configured.[/red]")
-        console.print("Please pull a model first or configure defaults using [bold cyan]herd config set[/bold cyan].")
+        console.print(
+            "[red]Error: No model name specified and no suitable default model configured.[/red]"
+        )
+        console.print(
+            "Please pull a model first or configure defaults using [bold cyan]herd config set[/bold cyan]."
+        )
         raise typer.Exit(1)
 
     model_name = chosen_model
 
     # 2. Check if model exists locally. If not, prompt to download (only for local gateway)
     from herd.core.config import REMOTE_GATEWAY
+
     if not REMOTE_GATEWAY:
         try:
             resolve_model_path(model_name)
@@ -289,9 +326,12 @@ def run(
         asyncio.run(chat_interactive(model_name, context_model))
 
 
-async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str]], rounds: int):
+async def run_benchmark_async(
+    model_name: str, custom_prompts: Optional[list[str]], rounds: int
+):
     """Runs the benchmark suite async."""
     from herd.core.config import REMOTE_GATEWAY
+
     # 1. Prerequisite checks
     if not auto_start_gateway():
         raise typer.Exit(1)
@@ -301,11 +341,15 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
         try:
             resolve_model_path(model_name)
         except FileNotFoundError:
-            console.print(f"[red]Error: Model '{model_name}' not found locally. Please pull it first.[/red]")
+            console.print(
+                f"[red]Error: Model '{model_name}' not found locally. Please pull it first.[/red]"
+            )
             raise typer.Exit(1)
 
     # 3. Load model in gateway
-    console.print(f"Loading [bold cyan]{model_name}[/bold cyan] and running benchmark suite ({rounds} rounds per prompt)...")
+    console.print(
+        f"Loading [bold cyan]{model_name}[/bold cyan] and running benchmark suite ({rounds} rounds per prompt)..."
+    )
     url_load = f"{get_gateway_url()}/v1/models/load"
     try:
         httpx.post(url_load, json={"model": model_name}, timeout=45.0)
@@ -317,7 +361,9 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
     results = []
 
     for idx, prompt in enumerate(prompts):
-        console.print(f"\n[bold magenta]Prompt {idx + 1}/{len(prompts)}:[/bold magenta] [italic]\"{prompt[:60]}...\"[/italic]")
+        console.print(
+            f'\n[bold magenta]Prompt {idx + 1}/{len(prompts)}:[/bold magenta] [italic]"{prompt[:60]}..."[/italic]'
+        )
 
         ttfts = []
         speeds = []
@@ -331,7 +377,7 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
             payload = {
                 "model": model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "stream": True
+                "stream": True,
             }
 
             start_time = time.time()
@@ -345,7 +391,9 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
                 if host == "0.0.0.0":
                     host = "127.0.0.1"
                 try:
-                    res = httpx.get(f"http://{host}:{HERD_PORT}/v1/models/active", timeout=1.0)
+                    res = httpx.get(
+                        f"http://{host}:{HERD_PORT}/v1/models/active", timeout=1.0
+                    )
                     active = res.json()
                     for m in active:
                         if m["model"] == model_name:
@@ -355,7 +403,9 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
                             if "GB" in mem_str:
                                 mems.append(float(mem_str.replace("GB", "").strip()))
                             elif "MB" in mem_str:
-                                mems.append(float(mem_str.replace("MB", "").strip()) / 1024.0)
+                                mems.append(
+                                    float(mem_str.replace("MB", "").strip()) / 1024.0
+                                )
                 except Exception:
                     pass
 
@@ -363,7 +413,9 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
 
             try:
                 async with httpx.AsyncClient(timeout=None) as client:
-                    async with client.stream("POST", url_chat, json=payload) as response:
+                    async with client.stream(
+                        "POST", url_chat, json=payload
+                    ) as response:
                         if response.status_code != 200:
                             print("[red]failed[/red]")
                             continue
@@ -388,7 +440,9 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
             ttfts.append(ttft)
 
             # Speed (Tokens per second)
-            generation_time = end_time - first_token_time if first_token_time else total_duration
+            generation_time = (
+                end_time - first_token_time if first_token_time else total_duration
+            )
             speed = token_count / generation_time if generation_time > 0 else 0.0
             speeds.append(speed)
 
@@ -400,13 +454,15 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
         avg_cpu = sum(cpus) / len(cpus) if cpus else 0.0
         avg_mem = sum(mems) / len(mems) if mems else 0.0
 
-        results.append({
-            "prompt": prompt,
-            "ttft": f"{avg_ttft:.1f} ms",
-            "speed": f"{avg_speed:.1f} t/s",
-            "memory": f"{avg_mem:.2f} GB" if avg_mem > 0 else "-",
-            "cpu": f"{avg_cpu:.1f}%" if avg_cpu > 0 else "-"
-        })
+        results.append(
+            {
+                "prompt": prompt,
+                "ttft": f"{avg_ttft:.1f} ms",
+                "speed": f"{avg_speed:.1f} t/s",
+                "memory": f"{avg_mem:.2f} GB" if avg_mem > 0 else "-",
+                "cpu": f"{avg_cpu:.1f}%" if avg_cpu > 0 else "-",
+            }
+        )
 
     # Render summary table
     table = Table(title=f"Benchmark Summary: {model_name}")
@@ -418,11 +474,7 @@ async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str
 
     for r in results:
         table.add_row(
-            r["prompt"][:50] + "...",
-            r["ttft"],
-            r["speed"],
-            r["memory"],
-            r["cpu"]
+            r["prompt"][:50] + "...", r["ttft"], r["speed"], r["memory"], r["cpu"]
         )
 
     console.print("\n")

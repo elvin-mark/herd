@@ -1,7 +1,17 @@
 import typer
 
 # Import sub-commands from modular command files
-from herd.commands.models import list_models, pull, stop, ps, show_stats, clean, search, quantize, top
+from herd.commands.models import (
+    list_models,
+    pull,
+    stop,
+    ps,
+    show_stats,
+    clean,
+    search,
+    quantize,
+    top,
+)
 from herd.commands.chat import run, benchmark
 from herd.commands.audio import transcribe
 from herd.commands.developer import suggest, copilot, commit, review, heal, watch, agent

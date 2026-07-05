@@ -86,8 +86,12 @@ def pull(
 
 
 def stop(
-    model_name: Optional[str] = typer.Argument(None, help="Model identifier to stop. Required unless --all is specified."),
-    stop_all: bool = typer.Option(False, "--all", "-a", help="Stop all running model processes."),
+    model_name: Optional[str] = typer.Argument(
+        None, help="Model identifier to stop. Required unless --all is specified."
+    ),
+    stop_all: bool = typer.Option(
+        False, "--all", "-a", help="Stop all running model processes."
+    ),
 ):
     """Stops a running model process."""
     if not is_gateway_running():
@@ -102,7 +106,9 @@ def stop(
         try:
             active_res = httpx.get(active_url, timeout=5.0)
             if active_res.status_code != 200:
-                console.print(f"[red]Failed to query active models: {active_res.text}[/red]")
+                console.print(
+                    f"[red]Failed to query active models: {active_res.text}[/red]"
+                )
                 raise typer.Exit(1)
             active_models = active_res.json()
         except Exception as e:
@@ -118,20 +124,28 @@ def stop(
             try:
                 response = httpx.post(url, json={"model": m_name})
                 if response.status_code == 200:
-                    console.print(f"[green]Successfully stopped model '{m_name}'.[/green]")
+                    console.print(
+                        f"[green]Successfully stopped model '{m_name}'.[/green]"
+                    )
                 else:
-                    console.print(f"[red]Failed to stop model '{m_name}': {response.text}[/red]")
+                    console.print(
+                        f"[red]Failed to stop model '{m_name}': {response.text}[/red]"
+                    )
             except Exception as e:
                 console.print(f"[red]Error stopping model '{m_name}': {e}[/red]")
     else:
         if not model_name:
-            console.print("[red]Error: Please specify a model name, or use --all (-a) to stop all running models.[/red]")
+            console.print(
+                "[red]Error: Please specify a model name, or use --all (-a) to stop all running models.[/red]"
+            )
             raise typer.Exit(1)
 
         try:
             response = httpx.post(url, json={"model": model_name})
             if response.status_code == 200:
-                console.print(f"[green]Successfully stopped model '{model_name}'.[/green]")
+                console.print(
+                    f"[green]Successfully stopped model '{model_name}'.[/green]"
+                )
             else:
                 console.print(f"[red]Failed to stop model: {response.text}[/red]")
         except Exception as e:
@@ -166,7 +180,11 @@ def ps():
     table.add_column("Idle Time", style="white")
 
     for a in active:
-        m_type = "Speech" if a.get("is_whisper") else ("Embedding" if a.get("is_embedding") else "LLM")
+        m_type = (
+            "Speech"
+            if a.get("is_whisper")
+            else ("Embedding" if a.get("is_embedding") else "LLM")
+        )
         idle_str = f"{a['idle_seconds']}s"
         cpu_str = f"{a.get('cpu_percent', 0.0)}%"
         mem_str = a.get("memory_str", "0 MB")
@@ -210,7 +228,7 @@ def show_stats():
             req_str += f" ({data['error_count']} err)"
 
         lat = data.get("avg_latency_ms", 0.0)
-        lat_str = f"{lat/1000.0:.2f}s" if lat > 0 else "-"
+        lat_str = f"{lat / 1000.0:.2f}s" if lat > 0 else "-"
 
         speed = data.get("avg_speed_tps", 0.0)
         speed_str = f"{speed:.1f} t/s" if speed > 0 else "-"
@@ -237,7 +255,9 @@ def clean(
 ):
     """Cleans up inactive model logs in the log directory to free up disk space."""
     if not os.path.exists(HERD_LOGS_DIR):
-        console.print("[yellow]Log directory does not exist. Nothing to clean.[/yellow]")
+        console.print(
+            "[yellow]Log directory does not exist. Nothing to clean.[/yellow]"
+        )
         return
 
     # Find active logs to preserve
@@ -259,7 +279,9 @@ def clean(
     to_delete = [f for f in log_files if f not in active_log_names]
 
     if not to_delete:
-        console.print("[green]No inactive logs found. Your log directory is clean![/green]")
+        console.print(
+            "[green]No inactive logs found. Your log directory is clean![/green]"
+        )
         return
 
     # Calculate total size
@@ -289,11 +311,15 @@ def clean(
         except Exception as e:
             console.print(f"[red]Failed to delete {f_name}: {e}[/red]")
 
-    console.print(f"[green]Successfully deleted {deleted_count} inactive log file(s).[/green]")
+    console.print(
+        f"[green]Successfully deleted {deleted_count} inactive log file(s).[/green]"
+    )
 
 
 def search(
-    query: str = typer.Argument(..., help="Search term for GGUF models on Hugging Face Hub."),
+    query: str = typer.Argument(
+        ..., help="Search term for GGUF models on Hugging Face Hub."
+    ),
     limit: int = typer.Option(
         10,
         "--limit",
@@ -303,7 +329,9 @@ def search(
 ):
     """Searches Hugging Face Hub for GGUF model repositories matching the query."""
     url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit={limit}"
-    console.print(f"Searching Hugging Face Hub for GGUF models matching '[bold cyan]{query}[/bold cyan]'...")
+    console.print(
+        f"Searching Hugging Face Hub for GGUF models matching '[bold cyan]{query}[/bold cyan]'..."
+    )
     try:
         response = httpx.get(url, timeout=15.0)
         if response.status_code != 200:
@@ -342,7 +370,9 @@ def search(
 
     console.print("\n")
     console.print(table)
-    console.print("\nTo pull a model, use: [bold cyan]herd pull <repository_id>:<tag>[/bold cyan]\n")
+    console.print(
+        "\nTo pull a model, use: [bold cyan]herd pull <repository_id>:<tag>[/bold cyan]\n"
+    )
 
 
 def find_llama_quantize():
@@ -356,9 +386,15 @@ def find_llama_quantize():
 
 
 def quantize(
-    input_file: str = typer.Argument(..., help="Path to the source GGUF file (e.g. FP16/FP32)."),
-    output_file: str = typer.Argument(..., help="Path to save the output quantized GGUF file."),
-    method: str = typer.Argument(..., help="Quantization method (e.g. Q4_K_M, Q8_0, Q5_K_M)."),
+    input_file: str = typer.Argument(
+        ..., help="Path to the source GGUF file (e.g. FP16/FP32)."
+    ),
+    output_file: str = typer.Argument(
+        ..., help="Path to save the output quantized GGUF file."
+    ),
+    method: str = typer.Argument(
+        ..., help="Quantization method (e.g. Q4_K_M, Q8_0, Q5_K_M)."
+    ),
 ):
     """Quantizes (compresses) a GGUF model file locally using the compiled llama-quantize binary."""
     if not os.path.exists(input_file):
@@ -368,27 +404,31 @@ def quantize(
     quant_bin = find_llama_quantize()
     if not quant_bin:
         console.print("[red]Error: 'llama-quantize' binary not found.[/red]")
-        console.print("Please make sure you have run [bold cyan]herd setup[/bold cyan] to build the compilation tools locally.")
+        console.print(
+            "Please make sure you have run [bold cyan]herd setup[/bold cyan] to build the compilation tools locally."
+        )
         raise typer.Exit(1)
 
-    console.print(f"Quantizing [bold cyan]{input_file}[/bold cyan] to [bold green]{output_file}[/bold green] using method [bold yellow]{method}[/bold yellow]...")
+    console.print(
+        f"Quantizing [bold cyan]{input_file}[/bold cyan] to [bold green]{output_file}[/bold green] using method [bold yellow]{method}[/bold yellow]..."
+    )
     try:
         cmd = [quant_bin, input_file, output_file, method]
         process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
         )
         for line in process.stdout:
             print(line, end="")
         process.wait()
 
         if process.returncode == 0:
-            console.print(f"\n[bold green]Success![/bold green] Quantized model saved to {output_file}")
+            console.print(
+                f"\n[bold green]Success![/bold green] Quantized model saved to {output_file}"
+            )
         else:
-            console.print(f"\n[red]Quantization failed with exit code: {process.returncode}[/red]")
+            console.print(
+                f"\n[red]Quantization failed with exit code: {process.returncode}[/red]"
+            )
             raise typer.Exit(1)
 
     except KeyboardInterrupt:
@@ -410,10 +450,15 @@ def top():
         try:
             res = httpx.get(url, timeout=1.0)
             if res.status_code != 200:
-                return Panel("[red]Error: Gateway returned unsuccessful status.[/red]", title="Herd Top")
+                return Panel(
+                    "[red]Error: Gateway returned unsuccessful status.[/red]",
+                    title="Herd Top",
+                )
             active = res.json()
         except Exception:
-            return Panel("[yellow]Herd Gateway is not running.[/yellow]", title="Herd Top")
+            return Panel(
+                "[yellow]Herd Gateway is not running.[/yellow]", title="Herd Top"
+            )
 
         if not active:
             return Panel("No models currently running.", title="Herd Top — Idle")
@@ -461,7 +506,11 @@ def top():
             table.add_row(model_name, str(port), cpu_display, mem_str, idle_str, mode)
 
         total_mem_gb = total_mem / (1024 * 1024 * 1024)
-        total_mem_str = f"{total_mem_gb:.2f} GB" if total_mem_gb >= 0.1 else f"{total_mem / (1024 * 1024):.1f} MB"
+        total_mem_str = (
+            f"{total_mem_gb:.2f} GB"
+            if total_mem_gb >= 0.1
+            else f"{total_mem / (1024 * 1024):.1f} MB"
+        )
 
         summary = (
             f"Active Models: [bold white]{len(active)}[/bold white] | "
@@ -473,7 +522,7 @@ def top():
             Group(summary, "", table),
             title="[bold green]Herd Top — Real-Time Model Monitor[/bold green]",
             border_style="green",
-            subtitle="[dim]Press Ctrl+C to exit[/dim]"
+            subtitle="[dim]Press Ctrl+C to exit[/dim]",
         )
 
     try:

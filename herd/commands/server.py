@@ -19,7 +19,9 @@ from herd.core.utils import console
 def start_public_tunnel(port: int):
     cloudflared_bin = shutil.which("cloudflared")
     if not cloudflared_bin:
-        console.print("[red]Error: 'cloudflared' is not installed or not in PATH.[/red]")
+        console.print(
+            "[red]Error: 'cloudflared' is not installed or not in PATH.[/red]"
+        )
         console.print("Please install Cloudflare Tunnel first. Examples:")
         console.print("  [bold white]macOS:[/bold white] brew install cloudflared")
         console.print("  [bold white]Linux:[/bold white] sudo apt install cloudflared")
@@ -33,7 +35,7 @@ def start_public_tunnel(port: int):
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            start_new_session=True
+            start_new_session=True,
         )
         return process
     except Exception as e:
@@ -50,13 +52,16 @@ def run_tunnel_monitor(process, port):
         if not line:
             break
         import re
-        match = re.search(r'(https://[a-zA-Z0-9-]+\.trycloudflare\.com)', line)
+
+        match = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", line)
         if match:
             public_url = match.group(1)
             break
 
     if not public_url:
-        console.print("[red]Error: Failed to retrieve Cloudflare Tunnel URL. Check if cloudflared is working correctly.[/red]")
+        console.print(
+            "[red]Error: Failed to retrieve Cloudflare Tunnel URL. Check if cloudflared is working correctly.[/red]"
+        )
         process.terminate()
         process.wait()
         return
@@ -65,7 +70,9 @@ def run_tunnel_monitor(process, port):
     console.print(f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]")
     console.print(f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]")
     console.print("")
-    console.print("[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]\n")
+    console.print(
+        "[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]\n"
+    )
 
 
 def serve(
@@ -97,9 +104,11 @@ def serve(
         tunnel_proc = start_public_tunnel(port)
         if tunnel_proc:
             import threading
+
             def monitor():
                 time.sleep(2.0)
                 run_tunnel_monitor(tunnel_proc, port)
+
             t = threading.Thread(target=monitor, daemon=True)
             t.start()
 
@@ -111,6 +120,7 @@ def serve(
             console.print("\n[yellow]Stopping Cloudflare Tunnel...[/yellow]")
             try:
                 import signal
+
                 os.killpg(os.getpgid(tunnel_proc.pid), signal.SIGTERM)
                 tunnel_proc.wait()
             except Exception:
@@ -196,10 +206,14 @@ def setup(
     git_bin = shutil.which("git")
     cmake_bin = shutil.which("cmake")
     if not git_bin:
-        console.print("[red]Error: 'git' is not installed or not in PATH. Please install git first.[/red]")
+        console.print(
+            "[red]Error: 'git' is not installed or not in PATH. Please install git first.[/red]"
+        )
         raise typer.Exit(1)
     if not cmake_bin:
-        console.print("[red]Error: 'cmake' is not installed or not in PATH. Please install cmake first.[/red]")
+        console.print(
+            "[red]Error: 'cmake' is not installed or not in PATH. Please install cmake first.[/red]"
+        )
         raise typer.Exit(1)
 
     llama_dir = os.path.join(dir_path, "llama.cpp")
@@ -209,11 +223,20 @@ def setup(
     if not os.path.exists(llama_dir):
         console.print("[bold cyan]Cloning llama.cpp...[/bold cyan]")
         subprocess.run(
-            [git_bin, "clone", "--depth", "1", "https://github.com/ggerganov/llama.cpp.git", llama_dir],
-            check=True
+            [
+                git_bin,
+                "clone",
+                "--depth",
+                "1",
+                "https://github.com/ggerganov/llama.cpp.git",
+                llama_dir,
+            ],
+            check=True,
         )
     else:
-        console.print("[yellow]llama.cpp directory already exists. Skipping clone.[/yellow]")
+        console.print(
+            "[yellow]llama.cpp directory already exists. Skipping clone.[/yellow]"
+        )
 
     console.print("[bold cyan]Compiling llama-server...[/bold cyan]")
     cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
@@ -223,20 +246,39 @@ def setup(
     cores = os.cpu_count() or 1
     subprocess.run(cmake_args, cwd=llama_dir, check=True)
     subprocess.run(
-        [cmake_bin, "--build", "build", "--config", "Release", "--target", "llama-server", "--parallel", str(cores)],
+        [
+            cmake_bin,
+            "--build",
+            "build",
+            "--config",
+            "Release",
+            "--target",
+            "llama-server",
+            "--parallel",
+            str(cores),
+        ],
         cwd=llama_dir,
-        check=True
+        check=True,
     )
 
     # 2. Setup whisper.cpp
     if not os.path.exists(whisper_dir):
         console.print("[bold cyan]Cloning whisper.cpp...[/bold cyan]")
         subprocess.run(
-            [git_bin, "clone", "--depth", "1", "https://github.com/ggerganov/whisper.cpp.git", whisper_dir],
-            check=True
+            [
+                git_bin,
+                "clone",
+                "--depth",
+                "1",
+                "https://github.com/ggerganov/whisper.cpp.git",
+                whisper_dir,
+            ],
+            check=True,
         )
     else:
-        console.print("[yellow]whisper.cpp directory already exists. Skipping clone.[/yellow]")
+        console.print(
+            "[yellow]whisper.cpp directory already exists. Skipping clone.[/yellow]"
+        )
 
     console.print("[bold cyan]Compiling whisper-server...[/bold cyan]")
     whisper_cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
@@ -245,30 +287,48 @@ def setup(
 
     subprocess.run(whisper_cmake_args, cwd=whisper_dir, check=True)
     subprocess.run(
-        [cmake_bin, "--build", "build", "--config", "Release", "--target", "whisper-server", "--parallel", str(cores)],
+        [
+            cmake_bin,
+            "--build",
+            "build",
+            "--config",
+            "Release",
+            "--target",
+            "whisper-server",
+            "--parallel",
+            str(cores),
+        ],
         cwd=whisper_dir,
-        check=True
+        check=True,
     )
 
     # 3. Configure binary paths
-    llama_bin_path = os.path.abspath(os.path.join(llama_dir, "build", "bin", "llama-server"))
-    whisper_bin_path = os.path.abspath(os.path.join(whisper_dir, "build", "bin", "whisper-server"))
+    llama_bin_path = os.path.abspath(
+        os.path.join(llama_dir, "build", "bin", "llama-server")
+    )
+    whisper_bin_path = os.path.abspath(
+        os.path.join(whisper_dir, "build", "bin", "whisper-server")
+    )
     if not os.path.exists(whisper_bin_path):
-        fallback_path = os.path.abspath(os.path.join(whisper_dir, "build", "whisper-server"))
+        fallback_path = os.path.abspath(
+            os.path.join(whisper_dir, "build", "whisper-server")
+        )
         if os.path.exists(fallback_path):
             whisper_bin_path = fallback_path
 
     config_path = os.path.join(HERD_HOME, "config.json")
     config_data = {
         "LLAMA_SERVER_BIN": llama_bin_path,
-        "WHISPER_SERVER_BIN": whisper_bin_path
+        "WHISPER_SERVER_BIN": whisper_bin_path,
     }
 
     with open(config_path, "w") as f:
         json.dump(config_data, f, indent=4)
 
     console.print("\n[bold green]Herd setup completed successfully![/bold green]")
-    console.print(f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:")
+    console.print(
+        f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:"
+    )
     console.print(f"  llama-server: [bold white]{llama_bin_path}[/bold white]")
     console.print(f"  whisper-server: [bold white]{whisper_bin_path}[/bold white]")
 
@@ -276,12 +336,13 @@ def setup(
 def get_local_ip() -> str:
     """Finds the primary local IP address of this machine."""
     import socket
+
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        s.connect(('10.254.254.254', 1))
+        s.connect(("10.254.254.254", 1))
         ip = s.getsockname()[0]
     except Exception:
-        ip = '127.0.0.1'
+        ip = "127.0.0.1"
     finally:
         s.close()
     return ip
@@ -307,10 +368,14 @@ def share(
     if public:
         cloudflared_bin = shutil.which("cloudflared")
         if not cloudflared_bin:
-            console.print("[red]Error: 'cloudflared' is not installed or not in PATH.[/red]")
+            console.print(
+                "[red]Error: 'cloudflared' is not installed or not in PATH.[/red]"
+            )
             console.print("Please install Cloudflare Tunnel first. Examples:")
             console.print("  [bold white]macOS:[/bold white] brew install cloudflared")
-            console.print("  [bold white]Linux:[/bold white] sudo apt install cloudflared")
+            console.print(
+                "  [bold white]Linux:[/bold white] sudo apt install cloudflared"
+            )
             raise typer.Exit(1)
 
         console.print("[bold cyan]Starting public Cloudflare Tunnel...[/bold cyan]")
@@ -321,7 +386,7 @@ def share(
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                start_new_session=True
+                start_new_session=True,
             )
 
             # Read lines to find the trycloudflare URL
@@ -332,27 +397,39 @@ def share(
                 if not line:
                     break
                 import re
-                match = re.search(r'(https://[a-zA-Z0-9-]+\.trycloudflare\.com)', line)
+
+                match = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", line)
                 if match:
                     public_url = match.group(1)
                     break
 
             if not public_url:
-                console.print("[red]Error: Failed to retrieve Cloudflare Tunnel URL. Check if cloudflared is working correctly.[/red]")
+                console.print(
+                    "[red]Error: Failed to retrieve Cloudflare Tunnel URL. Check if cloudflared is working correctly.[/red]"
+                )
                 process.terminate()
                 process.wait()
                 raise typer.Exit(1)
 
             console.print("\n🌎 [bold green]Public Exposure Active![/bold green]\n")
-            console.print(f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]")
-            console.print(f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]")
+            console.print(
+                f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]"
+            )
+            console.print(
+                f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]"
+            )
             console.print("")
-            console.print("[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]")
+            console.print(
+                "[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]"
+            )
 
             if qr:
                 try:
                     import qrcode
-                    console.print("\n[bold yellow]Scan this QR Code to copy the Public API URL on your mobile device:[/bold yellow]\n")
+
+                    console.print(
+                        "\n[bold yellow]Scan this QR Code to copy the Public API URL on your mobile device:[/bold yellow]\n"
+                    )
                     qr_obj = qrcode.QRCode()
                     qr_obj.add_data(f"{public_url}/v1")
                     qr_obj.make()
@@ -361,7 +438,9 @@ def share(
                 except ImportError:
                     pass
 
-            console.print("[bold yellow]--- Press Ctrl+C to stop the tunnel and revoke the public URL ---[/bold yellow]\n")
+            console.print(
+                "[bold yellow]--- Press Ctrl+C to stop the tunnel and revoke the public URL ---[/bold yellow]\n"
+            )
 
             # Block and keep reading to keep process alive, print errors if any
             while True:
@@ -376,6 +455,7 @@ def share(
         finally:
             try:
                 import signal
+
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 process.wait()
             except Exception:
@@ -396,28 +476,45 @@ def share(
     console.print(f"  API Base URL:  [bold cyan]{url}[/bold cyan]")
     console.print(f"  Web Dashboard: [bold cyan]http://{ip}:{port}[/bold cyan]")
     console.print("")
-    console.print("Configure your mobile client (e.g. Chatbox, LibreChat) with this API Base URL.")
+    console.print(
+        "Configure your mobile client (e.g. Chatbox, LibreChat) with this API Base URL."
+    )
     console.print("")
 
     if qr:
         try:
             import qrcode
-            console.print("[bold yellow]Scan this QR Code to copy the API Base URL on your mobile device:[/bold yellow]\n")
+
+            console.print(
+                "[bold yellow]Scan this QR Code to copy the API Base URL on your mobile device:[/bold yellow]\n"
+            )
             qr_obj = qrcode.QRCode()
             qr_obj.add_data(url)
             qr_obj.make()
             qr_obj.print_ascii(tty=True)
             console.print("")
         except ImportError:
-            console.print("[yellow]Notice: 'qrcode' package is not installed. To display QR codes, install it via:[/yellow]")
+            console.print(
+                "[yellow]Notice: 'qrcode' package is not installed. To display QR codes, install it via:[/yellow]"
+            )
             console.print("  [bold cyan]pip install qrcode[/bold cyan]")
             console.print("")
 
 
 def proxy(
-    remote_url: str = typer.Argument(..., help="The remote Herd gateway URL to proxy requests to (e.g. http://192.168.1.100:11434)."),
-    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host interface to bind the local proxy gateway to."),
-    port: int = typer.Option(HERD_PORT, "--port", "-p", help="Port to run the local proxy gateway on."),
+    remote_url: str = typer.Argument(
+        ...,
+        help="The remote Herd gateway URL to proxy requests to (e.g. http://192.168.1.100:11434).",
+    ),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        "-h",
+        help="Host interface to bind the local proxy gateway to.",
+    ),
+    port: int = typer.Option(
+        HERD_PORT, "--port", "-p", help="Port to run the local proxy gateway on."
+    ),
 ):
     """Starts a local reverse proxy that forwards all API requests transparently to a remote Herd instance."""
     from fastapi import FastAPI, Request
@@ -427,9 +524,14 @@ def proxy(
     proxy_app = FastAPI(title="Herd Gateway Proxy")
     target_base = remote_url.rstrip("/")
 
-    console.print(f"Starting Herd Proxy Gateway on [bold cyan]{host}:{port}[/bold cyan] -> [bold magenta]{target_base}[/bold magenta]...")
+    console.print(
+        f"Starting Herd Proxy Gateway on [bold cyan]{host}:{port}[/bold cyan] -> [bold magenta]{target_base}[/bold magenta]..."
+    )
 
-    @proxy_app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+    @proxy_app.api_route(
+        "/{path:path}",
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    )
     async def reverse_proxy_route(request: Request, path: str):
         remote_url_str = f"{target_base}/{path}"
         query = request.url.query
@@ -437,7 +539,11 @@ def proxy(
             remote_url_str = f"{remote_url_str}?{query}"
 
         body = await request.body()
-        headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length"]}
+        headers = {
+            k: v
+            for k, v in request.headers.items()
+            if k.lower() not in ["host", "content-length"]
+        }
 
         async def stream_generator():
             async with httpx.AsyncClient(timeout=None) as client:
@@ -446,17 +552,14 @@ def proxy(
                         method=request.method,
                         url=remote_url_str,
                         headers=headers,
-                        content=body
+                        content=body,
                     ) as response:
                         async for chunk in response.aiter_bytes():
                             yield chunk
                 except Exception as e:
                     yield json.dumps({"error": f"Proxy request failed: {e}"}).encode()
 
-        return StreamingResponse(
-            stream_generator(),
-            media_type="application/json"
-        )
+        return StreamingResponse(stream_generator(), media_type="application/json")
 
     try:
         uvicorn.run(proxy_app, host=host, port=port, log_level="warning")

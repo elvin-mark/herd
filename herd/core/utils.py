@@ -55,7 +55,9 @@ def auto_start_gateway() -> bool:
     if REMOTE_GATEWAY:
         if is_gateway_running():
             return True
-        console.print(f"[red]Error: Remote Herd gateway at '{REMOTE_GATEWAY}' is unreachable.[/red]")
+        console.print(
+            f"[red]Error: Remote Herd gateway at '{REMOTE_GATEWAY}' is unreachable.[/red]"
+        )
         return False
 
     if is_gateway_running():
@@ -195,7 +197,11 @@ def find_running_llm() -> Optional[str]:
 
     # Fallback to first downloaded LLM
     models = get_local_models_info()
-    llms = [m["name"] for m in models if "whisper" not in m["name"].lower() and "mmproj" not in m["name"].lower()]
+    llms = [
+        m["name"]
+        for m in models
+        if "whisper" not in m["name"].lower() and "mmproj" not in m["name"].lower()
+    ]
     if llms:
         return llms[0]
     return None
