@@ -312,6 +312,12 @@ async def pull_model_async(model_name: str):
     download_url = f"https://huggingface.co/{author}/{repo}/resolve/main/{chosen_file}"
     dest_path = os.path.join(HERD_MODELS_DIR, "huggingface", author, repo, chosen_file)
 
+    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
+        console.print(
+            f"[yellow]Model file already exists locally at: {dest_path}. Skipping download.[/yellow]"
+        )
+        return
+
     console.print(f"Downloading file: [bold cyan]{chosen_file}[/bold cyan]")
     try:
         await download_file(download_url, dest_path, chosen_file)
