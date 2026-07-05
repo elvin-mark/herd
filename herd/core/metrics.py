@@ -56,13 +56,13 @@ class MetricsCollector:
             )
 
             result[model] = {
-                "requests": reqs,
-                "errors": data["errors_total"],
+                "request_count": reqs,
+                "error_count": data["errors_total"],
                 "prompt_tokens": data["prompt_tokens_total"],
                 "completion_tokens": data["completion_tokens_total"],
                 "total_tokens": total_tokens,
-                "avg_latency_sec": avg_latency,
-                "avg_speed_tok_sec": avg_speed,
+                "avg_latency_ms": avg_latency * 1000.0,
+                "avg_speed_tps": avg_speed,
                 "endpoints": data["endpoints"],
             }
         return result
