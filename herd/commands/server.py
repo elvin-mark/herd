@@ -12,8 +12,6 @@ from herd.core.config import (
     HERD_PORT,
     HERD_HOME,
     HERD_LOGS_DIR,
-    PINNED_LLAMA_COMMIT,
-    PINNED_WHISPER_COMMIT,
 )
 from herd.core.utils import console
 
@@ -246,15 +244,17 @@ def setup(
             [
                 git_bin,
                 "clone",
+                "--depth",
+                "1",
                 "https://github.com/ggerganov/llama.cpp.git",
                 llama_dir,
             ],
             check=True,
         )
-    
-    console.print(f"Checking out pinned version {PINNED_LLAMA_COMMIT}...")
-    subprocess.run([git_bin, "fetch", "origin"], cwd=llama_dir, check=True)
-    subprocess.run([git_bin, "checkout", PINNED_LLAMA_COMMIT], cwd=llama_dir, check=True)
+    else:
+        console.print(
+            "[yellow]llama.cpp directory already exists. Skipping clone.[/yellow]"
+        )
 
     console.print("[bold cyan]Compiling llama-server...[/bold cyan]")
     cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
@@ -286,15 +286,17 @@ def setup(
             [
                 git_bin,
                 "clone",
+                "--depth",
+                "1",
                 "https://github.com/ggerganov/whisper.cpp.git",
                 whisper_dir,
             ],
             check=True,
         )
-    
-    console.print(f"Checking out pinned version {PINNED_WHISPER_COMMIT}...")
-    subprocess.run([git_bin, "fetch", "origin"], cwd=whisper_dir, check=True)
-    subprocess.run([git_bin, "checkout", PINNED_WHISPER_COMMIT], cwd=whisper_dir, check=True)
+    else:
+        console.print(
+            "[yellow]whisper.cpp directory already exists. Skipping clone.[/yellow]"
+        )
 
     console.print("[bold cyan]Compiling whisper-server...[/bold cyan]")
     whisper_cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
