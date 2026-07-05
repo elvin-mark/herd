@@ -186,6 +186,24 @@ def logs(
         console.print(f"[red]Error reading logs: {e}[/red]")
 
 
+def get_git_commit(repo_dir: str) -> Optional[str]:
+    """Retrieves the current git commit hash of the specified repository directory."""
+    try:
+        git_bin = shutil.which("git")
+        if not git_bin:
+            return None
+        res = subprocess.run(
+            [git_bin, "rev-parse", "HEAD"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return res.stdout.strip()
+    except Exception:
+        return None
+
+
 def setup(
     dir_path: Optional[str] = typer.Option(
         None,
@@ -316,21 +334,32 @@ def setup(
         if os.path.exists(fallback_path):
             whisper_bin_path = fallback_path
 
-    config_path = os.path.join(HERD_HOME, "config.json")
-    config_data = {
-        "LLAMA_SERVER_BIN": llama_bin_path,
-        "WHISPER_SERVER_BIN": whisper_bin_path,
-    }
+    llama_commit = get_git_commit(llama_dir)
+    whisper_commit = get_git_commit(whisper_dir)
 
-    with open(config_path, "w") as f:
-        json.dump(config_data, f, indent=4)
+    config_path = os.path.join(HERD_HOME, "config.json")
+    from herd.core.config import load_config, save_config
+
+    config_data = load_config()
+    config_data["LLAMA_SERVER_BIN"] = llama_bin_path
+    config_data["WHISPER_SERVER_BIN"] = whisper_bin_path
+    if llama_commit:
+        config_data["LLAMA_COMMIT"] = llama_commit
+    if whisper_commit:
+        config_data["WHISPER_COMMIT"] = whisper_commit
+
+    save_config(config_data)
 
     console.print("\n[bold green]Herd setup completed successfully![/bold green]")
     console.print(
         f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:"
     )
-    console.print(f"  llama-server: [bold white]{llama_bin_path}[/bold white]")
+    console.print(f"  llama-server:   [bold white]{llama_bin_path}[/bold white]")
+    if llama_commit:
+        console.print(f"    (Commit: [bold white]{llama_commit}[/bold white])")
     console.print(f"  whisper-server: [bold white]{whisper_bin_path}[/bold white]")
+    if whisper_commit:
+        console.print(f"    (Commit: [bold white]{whisper_commit}[/bold white])")
 
 
 def get_local_ip() -> str:
@@ -640,12 +669,16 @@ def doctor():
     config_path = os.path.join(HERD_HOME, "config.json")
     llama_bin = None
     whisper_bin = None
+    llama_commit = None
+    whisper_commit = None
     if os.path.exists(config_path):
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
                 llama_bin = cfg.get("LLAMA_SERVER_BIN")
                 whisper_bin = cfg.get("WHISPER_SERVER_BIN")
+                llama_commit = cfg.get("LLAMA_COMMIT")
+                whisper_commit = cfg.get("WHISPER_COMMIT")
         except Exception:
             pass
 
@@ -653,7 +686,8 @@ def doctor():
     if not llama_bin or not os.path.exists(llama_bin):
         llama_bin = shutil.which("llama-server")
     if llama_bin and os.path.exists(llama_bin):
-        console.print(f"  llama-server:   [bold green]Found[/bold green] ({llama_bin})")
+        commit_str = f" | Commit: {llama_commit}" if llama_commit else ""
+        console.print(f"  llama-server:   [bold green]Found[/bold green] ({llama_bin}){commit_str}")
     else:
         console.print("  llama-server:   [bold red]Missing[/bold red] (Run 'herd setup' to compile)")
 
@@ -661,7 +695,8 @@ def doctor():
     if not whisper_bin or not os.path.exists(whisper_bin):
         whisper_bin = shutil.which("whisper-server")
     if whisper_bin and os.path.exists(whisper_bin):
-        console.print(f"  whisper-server: [bold green]Found[/bold green] ({whisper_bin})")
+        commit_str = f" | Commit: {whisper_commit}" if whisper_commit else ""
+        console.print(f"  whisper-server: [bold green]Found[/bold green] ({whisper_bin}){commit_str}")
     else:
         console.print("  whisper-server: [bold red]Missing[/bold red] (Run 'herd setup' to compile)")
 

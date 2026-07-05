@@ -45,6 +45,10 @@ class HerdSettings:
         self.remote_gateway = self.overrides.get("remote_gateway")
         self.providers = self.overrides.get("providers", {})
 
+        # Compiled commits
+        self.llama_commit = self.overrides.get("LLAMA_COMMIT")
+        self.whisper_commit = self.overrides.get("WHISPER_COMMIT")
+
         # Make sure directories exist
         os.makedirs(self.home, exist_ok=True)
         os.makedirs(self.models_dir, exist_ok=True)
@@ -65,6 +69,10 @@ class HerdSettings:
             data["LLAMA_SERVER_BIN"] = self.llama_server_bin
         if self.whisper_server_bin:
             data["WHISPER_SERVER_BIN"] = self.whisper_server_bin
+        if self.llama_commit:
+            data["LLAMA_COMMIT"] = self.llama_commit
+        if self.whisper_commit:
+            data["WHISPER_COMMIT"] = self.whisper_commit
 
         with open(self.config_file, "w") as f:
             json.dump(data, f, indent=4)
@@ -91,6 +99,9 @@ DEFAULT_WHISPER = settings.default_whisper
 REMOTE_GATEWAY = settings.remote_gateway
 PROVIDERS = settings.providers
 
+LLAMA_COMMIT = settings.llama_commit
+WHISPER_COMMIT = settings.whisper_commit
+
 
 def load_config() -> dict:
     settings.reload()
@@ -112,6 +123,10 @@ def save_config(config: dict):
         settings.llama_server_bin = config["LLAMA_SERVER_BIN"]
     if "WHISPER_SERVER_BIN" in config:
         settings.whisper_server_bin = config["WHISPER_SERVER_BIN"]
+    if "LLAMA_COMMIT" in config:
+        settings.llama_commit = config["LLAMA_COMMIT"]
+    if "WHISPER_COMMIT" in config:
+        settings.whisper_commit = config["WHISPER_COMMIT"]
     if "providers" in config:
         settings.providers = config["providers"]
     settings.save()

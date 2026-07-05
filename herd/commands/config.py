@@ -8,6 +8,8 @@ from herd.core.config import (
     IDLE_TIMEOUT,
     LLAMA_SERVER_BIN,
     WHISPER_SERVER_BIN,
+    LLAMA_COMMIT,
+    WHISPER_COMMIT,
     DEFAULT_LLM,
     DEFAULT_EMBEDDING,
     DEFAULT_WHISPER,
@@ -49,7 +51,9 @@ def config_show():
     add_row("HERD_PORT", HERD_PORT, "Gateway listen port")
     add_row("HERD_IDLE_TIMEOUT", IDLE_TIMEOUT, "Gateway idle timeout in seconds")
     add_row("LLAMA_SERVER_BIN", LLAMA_SERVER_BIN, "Resolved llama-server path")
+    add_row("LLAMA_COMMIT", LLAMA_COMMIT, "Compiled llama.cpp git commit")
     add_row("WHISPER_SERVER_BIN", WHISPER_SERVER_BIN, "Resolved whisper-server path")
+    add_row("WHISPER_COMMIT", WHISPER_COMMIT, "Compiled whisper.cpp git commit")
     add_row("Config File Path", CONFIG_FILE, "Location of config override JSON")
 
     console.print("\n")
