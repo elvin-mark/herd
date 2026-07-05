@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: herd-gateway-gpu
+  labels:
+    app: herd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: herd
+  template:
+    metadata:
+      labels:
+        app: herd
+    spec:
+      containers:
+        - name: herd
+          image: herd-cli-cuda:latest # Replace with your CUDA-enabled registry image path, e.g. username/herd-cli-cuda:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HERD_HOST
+              value: "0.0.0.0"
+            - name: HERD_PORT
+              value: "11434"
+            - name: HERD_HOME
+              value: "/root/.herd"
+          ports:
+            - containerPort: 11434
+              name: api
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.herd
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              cpu: "8"
+              memory: 16Gi
+              nvidia.com/gpu: "1" # Request access to one NVIDIA GPU
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 11434
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 11434
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: herd-model-cache-pvc

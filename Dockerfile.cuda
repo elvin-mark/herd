@@ -1,0 +1,68 @@
+# --- Stage 1: Build llama-server with CUDA support ---
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04 AS builder
+
+# Install build dependencies, git, cmake, libcurl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    libcurl4-openssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Clone and compile llama.cpp with CUDA support
+RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git && \
+    cd llama.cpp && \
+    mkdir build && \
+    cd build && \
+    cmake .. -DGGML_CUDA=ON -DLLAMA_CUDA=ON -DLLAMA_CURL=ON && \
+    cmake --build . --config Release --target llama-server
+
+# Clone and compile whisper.cpp (Whisper uses CPU or Vulkan, standard build is fine)
+RUN git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
+    cd whisper.cpp && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    cmake --build . --config Release --target whisper-server
+
+
+# --- Stage 2: Final runtime container with CUDA libraries and Python ---
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+
+# Install Python, libcurl, and other runtime libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    libcurl4 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Symlink python3 to python
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+WORKDIR /app
+
+# Copy compiled binaries into execution path
+COPY --from=builder /build/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
+COPY --from=builder /build/whisper.cpp/build/bin/whisper-server /usr/local/bin/whisper-server
+
+# Copy project files and install Herd CLI package
+COPY pyproject.toml README.md ./
+COPY herd/ ./herd/
+COPY assets/ ./assets/
+
+RUN pip install --no-cache-dir .
+
+# Default configuration settings
+ENV HERD_HOST=0.0.0.0
+ENV HERD_PORT=11434
+ENV HERD_HOME=/root/.herd
+
+# Expose Herd API Gateway port
+EXPOSE 11434
+
+# Start the gateway
+ENTRYPOINT ["herd", "serve"]
