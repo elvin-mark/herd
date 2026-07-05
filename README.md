@@ -359,6 +359,45 @@ Exposes standard Prometheus plain-text metrics (e.g. CPU, memory, requests total
 curl http://127.0.0.1:11434/metrics
 ```
 
+### Hugging Face Model Search (`GET /v1/hf/search`)
+Query the Hugging Face Hub directly for GGUF model files matching a keyword search query:
+```bash
+curl "http://127.0.0.1:11434/v1/hf/search?query=Qwen2.5-0.5B"
+```
+
+### Background Model Download (`POST /v1/models/pull`)
+Initiate a model download in the background. Tracks current download progress dynamically:
+```bash
+# Pull model files
+curl -X POST http://127.0.0.1:11434/v1/models/pull \
+  -H "Content-Type: application/json" \
+  -d '{"model": "unsloth/Qwen3.5-0.8B-GGUF"}'
+
+# Query download progress
+curl http://127.0.0.1:11434/v1/models/pull/status
+```
+
+### RAG Vector Indexing & Search (`POST /v1/db/index` & `POST /v1/db/search`)
+Index a local folder recursively into the vector database, or query it semantically using the local embedding model:
+```bash
+# Index directory chunks
+curl -X POST http://127.0.0.1:11434/v1/db/index \
+  -H "Content-Type: application/json" \
+  -d '{
+    "directory": "/path/to/docs",
+    "model": "sentence-transformers/all-MiniLM-L6-v2:Q8_0"
+  }'
+
+# Semantic RAG search
+curl -X POST http://127.0.0.1:11434/v1/db/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How do we initialize the database?",
+    "model": "sentence-transformers/all-MiniLM-L6-v2:Q8_0",
+    "limit": 3
+  }'
+```
+
 ---
 
 ## Configuration
