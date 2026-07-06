@@ -56,19 +56,26 @@ async def list_models():
 @router.get("/v1/models/active")
 async def list_active_models():
     """Lists currently running model servers."""
+    import time
     active = []
     async with manager.lock:
         for path, info in manager.running_models.items():
+            pid = info["process"].pid
+            resources = manager.get_process_resources(pid)
+            mem_bytes = resources["memory_bytes"]
+            mem_mb = mem_bytes / (1024 * 1024)
+            idle_seconds = int(time.time() - info.get("last_accessed", time.time()))
             active.append(
                 {
                     "model": info["model_name"],
                     "port": info["port"],
                     "is_whisper": info.get("is_whisper", False),
                     "is_embedding": info.get("is_embedding", False),
-                    "pid": info["process"].pid,
-                    "memory_bytes": manager.get_process_resources(
-                        info["process"].pid
-                    )["memory_bytes"],
+                    "pid": pid,
+                    "cpu_percent": resources["cpu_percent"],
+                    "memory_bytes": mem_bytes,
+                    "memory_str": f"{mem_mb:.1f} MB",
+                    "idle_seconds": idle_seconds,
                 }
             )
     return active
