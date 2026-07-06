@@ -54,7 +54,7 @@ fi
 
 # 3. Test "herd clean" (clean inactive logs)
 echo -e "${CYAN}[Step 3/6] Testing 'herd clean' logs optimizer...${NC}"
-clean_res=$(herd clean)
+clean_res=$(herd clean --force)
 echo "$clean_res"
 echo -e "\n"
 
