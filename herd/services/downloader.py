@@ -63,8 +63,15 @@ def resolve_model_path(model_name: str) -> str:
         )
 
     if tag:
-        # Search for files matching the tag (case insensitive)
-        tagged_files = [f for f in model_files if tag.lower() in f.lower()]
+        # Search for files matching the tag (case insensitive) but excluding mmproj first
+        tagged_files = [
+            f for f in model_files
+            if tag.lower() in f.lower() and "mmproj" not in f.lower()
+        ]
+        if not tagged_files:
+            # Fallback to any file matching the tag (including mmproj if that is specifically what's requested)
+            tagged_files = [f for f in model_files if tag.lower() in f.lower()]
+
         if not tagged_files:
             raise FileNotFoundError(
                 f"No files matching tag '{tag}' found in {repo_dir}. Available files: {model_files}"
@@ -72,7 +79,7 @@ def resolve_model_path(model_name: str) -> str:
         return os.path.join(repo_dir, tagged_files[0])
     else:
         # No tag specified: try to find preferred standard quantizations first (avoid mmproj if possible)
-        preferred = ["q4_k_m", "q4_0", "q8_0", "f16"]
+        preferred = ["q4_k_m", "q4_0", "q8_0", "f16", "bf16"]
         for p in preferred:
             for f in model_files:
                 if p in f.lower() and "mmproj" not in f.lower():
