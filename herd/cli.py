@@ -28,41 +28,43 @@ app = typer.Typer(
 # 1. Register Core Interfaces commands
 app.command(name="run", rich_help_panel="Core Interfaces")(run)
 app.command(name="transcribe", rich_help_panel="Core Interfaces")(transcribe)
-app.command(name="benchmark", rich_help_panel="Core Interfaces")(benchmark)
+app.command(name="watch", rich_help_panel="Core Interfaces")(watch)
 
 # 2. Register Model Management commands
 app.command(name="list", rich_help_panel="Model Management")(list_models)
 app.command(name="pull", rich_help_panel="Model Management")(pull)
-app.command(name="stop", rich_help_panel="Model Management")(stop)
-app.command(name="ps", rich_help_panel="Model Management")(ps)
-app.command(name="stats", rich_help_panel="Model Management")(show_stats)
-app.command(name="clean", rich_help_panel="Model Management")(clean)
 app.command(name="search", rich_help_panel="Model Management")(search)
 app.command(name="quantize", rich_help_panel="Model Management")(quantize)
-app.command(name="top", rich_help_panel="Model Management")(top)
+app.command(name="suggest", rich_help_panel="Model Management")(suggest)
 
-# 3. Register Developer Tools commands
-app.command(name="suggest", rich_help_panel="Developer Tools")(suggest)
-app.command(name="copilot", rich_help_panel="Developer Tools")(copilot)
-app.command(name="commit", rich_help_panel="Developer Tools")(commit)
-app.command(name="review", rich_help_panel="Developer Tools")(review)
-app.command(name="heal", rich_help_panel="Developer Tools")(heal)
-app.command(name="watch", rich_help_panel="Developer Tools")(watch)
-app.command(name="agent", rich_help_panel="Developer Tools")(agent)
+# 3. Register Runtime Operations commands
+app.command(name="ps", rich_help_panel="Runtime Operations")(ps)
+app.command(name="stop", rich_help_panel="Runtime Operations")(stop)
+app.command(name="top", rich_help_panel="Runtime Operations")(top)
+app.command(name="stats", rich_help_panel="Runtime Operations")(show_stats)
+app.command(name="logs", rich_help_panel="Runtime Operations")(logs)
 
-# 4. Register Semantic RAG Database commands
+# 4. Register Developer Workflows commands
+app.command(name="copilot", rich_help_panel="Developer Workflows")(copilot)
+app.command(name="commit", rich_help_panel="Developer Workflows")(commit)
+app.command(name="review", rich_help_panel="Developer Workflows")(review)
+app.command(name="heal", rich_help_panel="Developer Workflows")(heal)
+app.command(name="agent", rich_help_panel="Developer Workflows")(agent)
+app.command(name="benchmark", rich_help_panel="Developer Workflows")(benchmark)
+
+# 5. Register Semantic RAG Database commands
 app.command(name="index", rich_help_panel="Semantic RAG Database")(index)
 app.command(name="ask", rich_help_panel="Semantic RAG Database")(ask)
 
-# 5. Register Gateway & Configuration commands
+# 6. Register Gateway & Configuration commands
 app.command(name="serve", rich_help_panel="Gateway & Configuration")(serve)
-app.command(name="logs", rich_help_panel="Gateway & Configuration")(logs)
 app.command(name="setup", rich_help_panel="Gateway & Configuration")(setup)
 app.command(name="share", rich_help_panel="Gateway & Configuration")(share)
 app.command(name="proxy", rich_help_panel="Gateway & Configuration")(proxy)
 app.command(name="doctor", rich_help_panel="Gateway & Configuration")(doctor)
+app.command(name="clean", rich_help_panel="Gateway & Configuration")(clean)
 
-# 6. Register Sub-Typer Applications with Rich Help Panels
+# 7. Register Sub-Typer Applications with Rich Help Panels
 app.add_typer(db_app, rich_help_panel="Semantic RAG Database")
 app.add_typer(config_app, rich_help_panel="Gateway & Configuration")
 

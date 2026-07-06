@@ -204,9 +204,7 @@ def config_remove_provider(
     config = load_config()
     providers = config.get("providers", {})
     if name.lower() not in providers:
-        console.print(
-            f"[yellow]Provider '{name.lower()}' is not configured.[/yellow]"
-        )
+        console.print(f"[yellow]Provider '{name.lower()}' is not configured.[/yellow]")
         return
 
     del providers[name.lower()]

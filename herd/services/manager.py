@@ -10,8 +10,27 @@ from herd.core.config import (
     LLAMA_SERVER_BIN,
     WHISPER_SERVER_BIN,
     IDLE_TIMEOUT,
+    HERD_HOME,
 )
 from herd.services.downloader import resolve_model_path
+import json
+
+
+def _set_pdeathsig():
+    import sys
+
+    if sys.platform.startswith("linux"):
+        import ctypes
+        import signal
+
+        try:
+            # PR_SET_PDEATHSIG is 1 on Linux
+            # We pass signal.SIGTERM so child dies if parent dies
+            libc = ctypes.CDLL("libc.so.6")
+            libc.prctl(1, signal.SIGTERM)
+        except Exception:
+            pass
+
 
 try:
     import psutil
@@ -34,8 +53,87 @@ class ProcessManager:
     def __init__(self):
         self.running_models: Dict[str, Dict[str, Any]] = {}
         self.lock = asyncio.Lock()
+        self._cleanup_orphan_processes()
         import atexit
+
         atexit.register(self.shutdown_all_sync)
+
+    def _save_active_processes_sync(self):
+        """Writes the PIDs of currently running processes to a persistent file."""
+        state_file = os.path.join(HERD_HOME, "active_processes.json")
+        try:
+            data = {}
+            for path, info in self.running_models.items():
+                data[path] = {
+                    "pid": info["process"].pid,
+                    "port": info["port"],
+                    "model_name": info["model_name"],
+                    "is_whisper": info["is_whisper"],
+                    "is_embedding": info["is_embedding"],
+                }
+            with open(state_file, "w") as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            logger.error(f"Failed to save active processes state: {e}")
+
+    def _cleanup_orphan_processes(self):
+        """Reads the active processes file and terminates any orphaned processes from prior sessions."""
+        state_file = os.path.join(HERD_HOME, "active_processes.json")
+        if not os.path.exists(state_file):
+            return
+        try:
+            with open(state_file, "r") as f:
+                data = json.load(f)
+        except Exception:
+            return
+
+        cleaned_any = False
+        for path, info in data.items():
+            pid = info.get("pid")
+            port = info.get("port")
+            model_name = info.get("model_name")
+            if not pid:
+                continue
+
+            # Check if process is still running
+            if psutil is not None:
+                exists = psutil.pid_exists(pid)
+            else:
+                try:
+                    os.kill(pid, 0)
+                    exists = True
+                except OSError:
+                    exists = False
+
+            if exists:
+                logger.info(
+                    f"Cleaning up orphaned model server '{model_name}' (PID: {pid}, port: {port})..."
+                )
+                if psutil is not None:
+                    try:
+                        proc = psutil.Process(pid)
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=3.0)
+                        except psutil.TimeoutExpired:
+                            proc.kill()
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        os.kill(pid, 15)  # SIGTERM
+                        time.sleep(1.0)
+                        os.kill(pid, 9)  # SIGKILL
+                    except OSError:
+                        pass
+                cleaned_any = True
+
+        if cleaned_any:
+            # Wipe state file if we cleaned up
+            try:
+                os.remove(state_file)
+            except Exception:
+                pass
 
     def shutdown_all_sync(self):
         """Synchronously terminates all running processes on process exit (fallback)."""
@@ -52,6 +150,13 @@ class ProcessManager:
                     log_file.close()
                 except Exception:
                     pass
+        # Wipe active processes file
+        state_file = os.path.join(HERD_HOME, "active_processes.json")
+        try:
+            if os.path.exists(state_file):
+                os.remove(state_file)
+        except Exception:
+            pass
 
     async def get_or_start_server(
         self,
@@ -168,7 +273,7 @@ class ProcessManager:
 
             try:
                 process = await asyncio.create_subprocess_exec(
-                    *cmd, stdout=log_file, stderr=log_file
+                    *cmd, stdout=log_file, stderr=log_file, preexec_fn=_set_pdeathsig
                 )
             except Exception as e:
                 log_file.close()
@@ -221,6 +326,7 @@ class ProcessManager:
                 else IDLE_TIMEOUT,
             }
 
+            self._save_active_processes_sync()
             return port
 
     async def stop_model(self, model_name: str):
@@ -236,6 +342,7 @@ class ProcessManager:
 
         if model_path and model_path in self.running_models:
             info = self.running_models.pop(model_path)
+            self._save_active_processes_sync()
             process = info["process"]
             log_file = info["log_file"]
 
@@ -287,6 +394,7 @@ class ProcessManager:
         url = f"http://127.0.0.1:{port}/health"
 
         from herd.core.utils import get_async_http_client
+
         client = get_async_http_client()
         while time.time() - start_time < timeout:
             try:
@@ -296,9 +404,7 @@ class ProcessManager:
                     return True
                 elif response.status_code == 503:
                     # Still loading model
-                    logger.debug(
-                        f"Model on port {port} is still loading. Retrying..."
-                    )
+                    logger.debug(f"Model on port {port} is still loading. Retrying...")
                 elif response.status_code == 404:
                     # If /health doesn't exist on this server version, fall back to assuming ready
                     logger.warning(
@@ -330,6 +436,7 @@ class ProcessManager:
                             f"Model '{model_name}' server process terminated unexpectedly."
                         )
                         self.running_models.pop(model_path)
+                        self._save_active_processes_sync()
                         try:
                             info["log_file"].close()
                         except Exception:
