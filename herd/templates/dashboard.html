@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Herd Control Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
     <style>
         :root {
             --bg-color: #0b0b0f;
@@ -958,6 +965,59 @@
         input:checked + .slider:before {
             transform: translateX(20px);
         }
+
+        /* Markdown Styles for Chat bubbles */
+        .bubble-assistant p {
+            margin-bottom: 0.8rem;
+        }
+        .bubble-assistant p:last-child {
+            margin-bottom: 0;
+        }
+        .bubble-assistant code {
+            font-family: var(--font-mono);
+            background-color: rgba(255, 255, 255, 0.08);
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .bubble-assistant pre {
+            background-color: #0b0b0f;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        .bubble-assistant pre code {
+            background-color: transparent;
+            padding: 0;
+            font-size: 0.85rem;
+            color: #f8fafc;
+        }
+        .bubble-assistant ul, .bubble-assistant ol {
+            margin-left: 1.5rem;
+            margin-bottom: 0.8rem;
+        }
+        .bubble-assistant li {
+            margin-bottom: 0.3rem;
+        }
+        .bubble-assistant h1, .bubble-assistant h2, .bubble-assistant h3 {
+            margin-top: 1.2rem;
+            margin-bottom: 0.6rem;
+            font-weight: 600;
+        }
+        .bubble-assistant table {
+            margin: 1rem 0;
+            width: 100%;
+        }
+        .chat-stats {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.8rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed var(--card-border);
+        }
     </style>
 </head>
 <body>
@@ -1084,15 +1144,32 @@
                         <h3>Playground Setup</h3>
                         
                         <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
-                            <label>Active Model</label>
+                            <label>Model selection</label>
                             <select id="chat-model-select" style="width: 100%; padding: 0.6rem 1rem;">
-                                <option value="">No Active LLM Running</option>
+                                <option value="">No Models Available</option>
+                            </select>
+                        </div>
+
+                        <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
+                            <label>System Prompt Preset</label>
+                            <select id="chat-system-preset" style="width: 100%; padding: 0.6rem 1rem;" onchange="applySystemPreset()">
+                                <option value="default">Concise Assistant</option>
+                                <option value="developer">Coding Copilot</option>
+                                <option value="academic">Academic Tutor</option>
+                                <option value="creative">Creative Writer</option>
                             </select>
                         </div>
 
                         <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
                             <label>System Prompt</label>
-                            <textarea id="chat-system-prompt" class="input-text" style="width: 100%; height: 100px; resize: none; font-size: 0.85rem;" placeholder="You are a helpful coding assistant. Answer concisely."></textarea>
+                            <textarea id="chat-system-prompt" class="input-text" style="width: 100%; height: 80px; resize: none; font-size: 0.85rem;" placeholder="You are a helpful coding assistant. Answer concisely."></textarea>
+                        </div>
+
+                        <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
+                            <label>Voice Input Model (Whisper)</label>
+                            <select id="chat-whisper-select" style="width: 100%; padding: 0.6rem 1rem;">
+                                <option value="">No Whisper Models</option>
+                            </select>
                         </div>
 
                         <div class="param-group" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%;">
@@ -1103,7 +1180,7 @@
                             </div>
                         </div>
 
-                        <div class="param-group" style="flex-direction: row; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 1rem;">
+                        <div class="param-group" style="flex-direction: row; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 0.5rem;">
                             <label style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary); font-size: 0.85rem; font-weight: 500; user-select: none;">
                                 <input type="checkbox" id="chat-reasoning" checked style="width: 1.1rem; height: 1.1rem; accent-color: var(--accent-cyan); cursor: pointer;">
                                 Enable Reasoning (Thinking)
@@ -1120,7 +1197,7 @@
                 <div class="chat-area">
                     <div class="chat-header">
                         <div class="chat-header-info">
-                            <h3 id="chat-model-indicator">Select an active LLM on the left</h3>
+                            <h3 id="chat-model-indicator">Select an LLM on the left</h3>
                             <p id="chat-status-indicator">Playground Sandbox</p>
                         </div>
                     </div>
@@ -1137,7 +1214,8 @@
                     <div class="chat-input-wrapper">
                         <input type="file" id="chat-file-input" style="display: none;" accept="image/*" onchange="handleChatImageUpload(event)">
                         <button class="btn btn-secondary" onclick="document.getElementById('chat-file-input').click()" style="padding: 0.8rem 1.2rem; font-size: 1rem;" title="Attach Image">📎</button>
-                        <input type="text" id="chat-user-input" class="input-text" placeholder="Type a message to chat with the model..." onkeydown="handleChatSubmit(event)">
+                        <button class="btn btn-secondary" id="chat-mic-btn" onclick="toggleVoiceRecording()" style="padding: 0.8rem 1.2rem; font-size: 1rem;" title="Voice Input (Whisper)">🎙️</button>
+                        <input type="text" id="chat-user-input" class="input-text" placeholder="Type a message or use voice input..." onkeydown="handleChatSubmit(event)">
                         <button class="btn btn-load" id="chat-send-btn" onclick="sendPlaygroundMessage()">Send ➔</button>
                     </div>
                 </div>
@@ -1327,6 +1405,7 @@
                 filterLibraryModels();
                 updateSharedDropdowns(libraryRes);
                 pollDownloadProgress();
+                populatePlaygroundModelList();
             } catch (err) {
                 console.error('Error fetching dashboard data:', err);
             }
@@ -1605,27 +1684,83 @@
         }
 
         /* Playground JavaScript */
+        /* Playground JavaScript */
+        const SYSTEM_PRESETS = {
+            default: "You are a helpful coding assistant. Answer concisely.",
+            developer: "You are an expert software engineer. Provide high-quality, clean, well-commented code. Focus on edge cases and optimal performance.",
+            academic: "You are an academic researcher and tutor. Explain complex concepts in an educational, structured, and detailed manner with references and logical breakdowns.",
+            creative: "You are a creative writer. Help the user brainstorm ideas, write stories, draft poetry, and express ideas in an engaging and expressive style."
+        };
+
+        function applySystemPreset() {
+            const select = document.getElementById('chat-system-preset');
+            const textarea = document.getElementById('chat-system-prompt');
+            if (select.value && SYSTEM_PRESETS[select.value]) {
+                textarea.value = SYSTEM_PRESETS[select.value];
+            }
+        }
+
         async function populatePlaygroundModelList() {
             const select = document.getElementById('chat-model-select');
+            const whisperSelect = document.getElementById('chat-whisper-select');
             try {
-                const active = await fetch('/v1/models/active').then(r => r.json());
+                const [allModelsData, active] = await Promise.all([
+                    fetch('/v1/models').then(r => r.json()),
+                    fetch('/v1/models/active').then(r => r.json())
+                ]);
+                
+                const downloaded = allModelsData.data || [];
+                const activeSet = new Set(active.map(a => a.model));
                 const prevVal = select.value;
+                const prevWhisperVal = whisperSelect.value;
 
-                // Filter active LLMs (not whisper, not embedding)
-                const llms = active.filter(a => !a.is_whisper && !a.is_embedding);
+                // Separate LLMs and Whisper models based on id names
+                const llms = [];
+                const whispers = [];
+
+                downloaded.forEach(m => {
+                    const id = m.id;
+                    const isWhisper = id.toLowerCase().includes('whisper') || id.endsWith('.bin');
+                    if (isWhisper) {
+                        whispers.push(m);
+                    } else {
+                        llms.push(m);
+                    }
+                });
                 
                 if (llms.length === 0) {
-                    select.innerHTML = `<option value="">No Active LLM Running</option>`;
-                    document.getElementById('chat-model-indicator').textContent = 'Select an active LLM on the left';
+                    select.innerHTML = `<option value="">No Downloaded LLMs Available</option>`;
+                    document.getElementById('chat-model-indicator').textContent = 'Select an LLM on the left';
                     document.getElementById('chat-status-indicator').textContent = 'Playground Sandbox';
                 } else {
-                    select.innerHTML = llms.map(l => `<option value="${l.model}">${l.model}</option>`).join('');
-                    if (prevVal && llms.some(l => l.model === prevVal)) {
+                    select.innerHTML = llms.map(l => {
+                        const isActive = activeSet.has(l.id);
+                        const label = isActive ? `🟢 ${l.id} (Active)` : `⚪ ${l.id}`;
+                        return `<option value="${l.id}">${label}</option>`;
+                    }).join('');
+                    
+                    if (prevVal && llms.some(l => l.id === prevVal)) {
                         select.value = prevVal;
                     } else {
-                        select.value = llms[0].model;
+                        select.value = llms[0].id;
                     }
                     updatePlaygroundHeader();
+                }
+
+                if (whispers.length === 0) {
+                    whisperSelect.innerHTML = `<option value="">No Downloaded Whisper Models</option>`;
+                } else {
+                    whisperSelect.innerHTML = whispers.map(w => {
+                        const isActive = activeSet.has(w.id);
+                        const label = isActive ? `🟢 ${w.id} (Active)` : `⚪ ${w.id}`;
+                        return `<option value="${w.id}">${label}</option>`;
+                    }).join('');
+                    
+                    if (prevWhisperVal && whispers.some(w => w.id === prevWhisperVal)) {
+                        whisperSelect.value = prevWhisperVal;
+                    } else {
+                        whisperSelect.value = whispers[0].id;
+                    }
                 }
             } catch(e) {
                 console.error(e);
@@ -1636,10 +1771,12 @@
             const select = document.getElementById('chat-model-select');
             const header = document.getElementById('chat-model-indicator');
             if (select.value) {
+                const optionText = select.options[select.selectedIndex]?.text || '';
+                const isActive = optionText.includes('🟢');
                 header.textContent = select.value;
-                document.getElementById('chat-status-indicator').textContent = 'Online & Ready';
+                document.getElementById('chat-status-indicator').textContent = isActive ? 'Online & Ready' : 'Inactive (Will auto-load on send)';
             } else {
-                header.textContent = 'Select an active LLM on the left';
+                header.textContent = 'Select an LLM on the left';
                 document.getElementById('chat-status-indicator').textContent = 'Playground Sandbox';
             }
         }
@@ -1721,11 +1858,100 @@
             };
         }
 
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        async function toggleVoiceRecording() {
+            const micBtn = document.getElementById('chat-mic-btn');
+            const whisperSelect = document.getElementById('chat-whisper-select');
+            const whisperModel = whisperSelect.value;
+
+            if (!whisperModel) {
+                alert("Please select/download a Whisper model first for voice input.");
+                return;
+            }
+
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream);
+                    
+                    mediaRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) {
+                            audioChunks.push(e.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        stream.getTracks().forEach(track => track.stop());
+                        await transcribeAudioBlob(audioBlob, whisperModel);
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    micBtn.textContent = '🛑';
+                    micBtn.style.background = 'rgba(244, 63, 94, 0.2)';
+                    micBtn.style.color = 'var(--accent-rose)';
+                    micBtn.style.borderColor = 'var(--accent-rose)';
+                    micBtn.title = 'Stop Recording';
+                } catch (err) {
+                    alert(`Microphone access failed: ${err}`);
+                }
+            } else {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+                isRecording = false;
+                micBtn.textContent = '🎙️';
+                micBtn.style.background = '';
+                micBtn.style.color = '';
+                micBtn.style.borderColor = '';
+                micBtn.title = 'Voice Input (Whisper)';
+            }
+        }
+
+        async function transcribeAudioBlob(blob, whisperModel) {
+            const statusIndicator = document.getElementById('chat-status-indicator');
+            const originalStatus = statusIndicator.textContent;
+            statusIndicator.textContent = 'Transcribing voice input...';
+            
+            const formData = new FormData();
+            formData.append('file', blob, 'recording.wav');
+            formData.append('model', whisperModel);
+            
+            try {
+                const res = await fetch('/v1/audio/transcriptions', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(`Transcription failed: ${data.error || res.statusText}`);
+                    return;
+                }
+                
+                const data = await res.json();
+                const text = data.text || '';
+                if (text.trim()) {
+                    const input = document.getElementById('chat-user-input');
+                    input.value = (input.value ? input.value + ' ' : '') + text.trim();
+                }
+            } catch (err) {
+                alert(`Error transcribing audio: ${err}`);
+            } finally {
+                statusIndicator.textContent = originalStatus;
+            }
+        }
+
         async function sendPlaygroundMessage() {
             const select = document.getElementById('chat-model-select');
             const model = select.value;
             if (!model) {
-                alert("Please start/select an LLM from the Control Center first.");
+                alert("Please download or select an LLM model first.");
                 return;
             }
 
@@ -1737,13 +1963,13 @@
 
             const container = document.getElementById('chat-history-container');
             
-            // Append User message (include image thumbnail if attached)
+            // Append User message
             let userBubbleContent = '';
             if (currentImageBase64) {
                 userBubbleContent += `<img src="${currentImageBase64}" style="max-width: 100%; max-height: 200px; display: block; border-radius: 8px; margin-bottom: 0.5rem; border: 1px solid var(--card-border);">`;
             }
             if (message) {
-                userBubbleContent += `<span>${message}</span>`;
+                userBubbleContent += `<span>${escapeHtml(message)}</span>`;
             } else {
                 userBubbleContent += `<span style="font-style: italic; color: rgba(255,255,255,0.7);">[Attached Image]</span>`;
             }
@@ -1760,7 +1986,6 @@
                 messages.push({ role: 'system', content: systemPrompt });
             }
             
-            // Format content structure for VLM
             let userMsgContent;
             if (currentImageBase64) {
                 userMsgContent = [
@@ -1773,20 +1998,21 @@
 
             playgroundChatMessages.push({ role: 'user', content: userMsgContent });
             
-            // Clear attachment after queueing
             clearChatImageAttachment();
 
-            // Format message list for OpenAI compatibility
             playgroundChatMessages.forEach(m => messages.push(m));
 
-            // Create placeholder assistant bubble
             const assistantBubbleId = 'assistant-bubble-' + Date.now();
-            container.innerHTML += `<div class="chat-bubble bubble-assistant" id="${assistantBubbleId}">⏳ ...</div>`;
+            const isModelRunning = select.options[select.selectedIndex]?.text.includes('🟢');
+            const loadingText = isModelRunning ? '⏳ ...' : '⏳ Model is inactive. Loading weights into memory (this may take up to 30 seconds)...';
+            
+            container.innerHTML += `<div class="chat-bubble bubble-assistant" id="${assistantBubbleId}">${loadingText}</div>`;
             container.scrollTop = container.scrollHeight;
 
             const bubbleElement = document.getElementById(assistantBubbleId);
             const reasoningEnabled = document.getElementById('chat-reasoning').checked;
             
+            const startTime = Date.now();
             try {
                 const res = await fetch('/v1/chat/completions', {
                     method: 'POST',
@@ -1806,6 +2032,10 @@
                     const data = await res.json();
                     bubbleElement.innerHTML = `<span style="color: var(--accent-rose);">Error: ${data.error || res.statusText}</span>`;
                     return;
+                }
+
+                if (!isModelRunning) {
+                    populatePlaygroundModelList();
                 }
 
                 bubbleElement.innerHTML = '';
@@ -1861,14 +2091,39 @@
                                         </div>
                                     `;
                                 }
-                                bubbleHtml += `<span>${escapeHtml(displayAnswer)}</span>`;
+                                
+                                if (typeof marked !== 'undefined') {
+                                    bubbleHtml += `<div class="markdown-body">${marked.parse(displayAnswer)}</div>`;
+                                } else {
+                                    bubbleHtml += `<span>${escapeHtml(displayAnswer)}</span>`;
+                                }
                                 
                                 bubbleElement.innerHTML = bubbleHtml;
+                                if (typeof Prism !== 'undefined') {
+                                    Prism.highlightAllUnder(bubbleElement);
+                                }
                                 container.scrollTop = container.scrollHeight;
                             } catch(e) {}
                         }
                     }
                 }
+                
+                const endTime = Date.now();
+                const durationSec = (endTime - startTime) / 1000;
+                const completionWords = assistantAnswer.split(/\s+/).length;
+                const estTokens = Math.round(completionWords * 1.3);
+                const tokensPerSec = (estTokens / durationSec).toFixed(1);
+                
+                const statsHtml = `
+                    <span class="chat-stats">
+                        ⏱️ ${durationSec.toFixed(2)}s | ⚡ ${tokensPerSec} tok/sec (est. ${estTokens} tokens)
+                    </span>
+                `;
+                const statsSpan = document.createElement('div');
+                statsSpan.innerHTML = statsHtml;
+                bubbleElement.appendChild(statsSpan);
+                container.scrollTop = container.scrollHeight;
+
                 playgroundChatMessages.push({ role: 'assistant', content: assistantAnswer });
             } catch (err) {
                 bubbleElement.innerHTML = `<span style="color: var(--accent-rose);">Connection error: ${err}</span>`;
