@@ -17,11 +17,13 @@ API_PORT=11434
 BASE_URL="http://127.0.0.1:${API_PORT}"
 
 # Models definition
-VLM_MODEL="LiquidAI/LFM2.5-VL-450M-GGUF:LFM2.5-VL-450M-BF16.gguf"
-WHISPER_MODEL="OpenAI/Whisper:ggml-base.en.Q8_0.bin"
+VLM_MODEL="LiquidAI/LFM2.5-VL-450M-GGUF:LFM2.5-VL-450M-F16.gguf"
+WHISPER_MODEL="ggerganov/whisper.cpp:ggml-base-q8_0.bin"
 
 IMAGE_PATH="assets/logo.jpg"
 AUDIO_PATH="tests/resources/jfk.mp3"
+
+TRANSCRIPTION_PATH="/tmp/transcription.txt"
 
 echo -e "${CYAN}=== Starting Herd Core Interfaces Tests ===${NC}"
 
@@ -110,20 +112,20 @@ if [ ! -f "$AUDIO_PATH" ]; then
 fi
 
 # Clean up any leftover txt files
-rm -f "jfk.txt"
+rm -f "$TRANSCRIPTION_PATH"
 
-trans_res=$(herd transcribe "$AUDIO_PATH" --model "$WHISPER_MODEL")
+trans_res=$(herd transcribe "$AUDIO_PATH" --model "$WHISPER_MODEL" --output "$TRANSCRIPTION_PATH")
 echo -e "${YELLOW}Response output:${NC}"
 echo "$trans_res"
 echo -e "\n"
 
 # Read output file if generated, otherwise stdout
-if [ -f "jfk.txt" ]; then
-    file_content=$(cat jfk.txt)
-    echo -e "${YELLOW}File Content (jfk.txt):${NC}"
+if [ -f "$TRANSCRIPTION_PATH" ]; then
+    file_content=$(cat $TRANSCRIPTION_PATH)
+    echo -e "${YELLOW}File Content ($TRANSCRIPTION_PATH):${NC}"
     echo "$file_content"
     trans_res="$file_content"
-    rm -f "jfk.txt"
+    rm -f "$TRANSCRIPTION_PATH"
 fi
 
 if [[ ${trans_res,,} == *"country"* || ${trans_res,,} == *"people"* || ${trans_res,,} == *"ask"* ]]; then
