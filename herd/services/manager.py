@@ -18,9 +18,11 @@ import json
 
 def _set_pdeathsig():
     import sys
+
     if sys.platform.startswith("linux"):
         import ctypes
         import signal
+
         try:
             # PR_SET_PDEATHSIG is 1 on Linux
             # We pass signal.SIGTERM so child dies if parent dies
@@ -28,6 +30,7 @@ def _set_pdeathsig():
             libc.prctl(1, signal.SIGTERM)
         except Exception:
             pass
+
 
 try:
     import psutil
@@ -52,6 +55,7 @@ class ProcessManager:
         self.lock = asyncio.Lock()
         self._cleanup_orphan_processes()
         import atexit
+
         atexit.register(self.shutdown_all_sync)
 
     def _save_active_processes_sync(self):
@@ -102,7 +106,9 @@ class ProcessManager:
                     exists = False
 
             if exists:
-                logger.info(f"Cleaning up orphaned model server '{model_name}' (PID: {pid}, port: {port})...")
+                logger.info(
+                    f"Cleaning up orphaned model server '{model_name}' (PID: {pid}, port: {port})..."
+                )
                 if psutil is not None:
                     try:
                         proc = psutil.Process(pid)
@@ -117,7 +123,7 @@ class ProcessManager:
                     try:
                         os.kill(pid, 15)  # SIGTERM
                         time.sleep(1.0)
-                        os.kill(pid, 9)   # SIGKILL
+                        os.kill(pid, 9)  # SIGKILL
                     except OSError:
                         pass
                 cleaned_any = True
@@ -388,6 +394,7 @@ class ProcessManager:
         url = f"http://127.0.0.1:{port}/health"
 
         from herd.core.utils import get_async_http_client
+
         client = get_async_http_client()
         while time.time() - start_time < timeout:
             try:
@@ -397,9 +404,7 @@ class ProcessManager:
                     return True
                 elif response.status_code == 503:
                     # Still loading model
-                    logger.debug(
-                        f"Model on port {port} is still loading. Retrying..."
-                    )
+                    logger.debug(f"Model on port {port} is still loading. Retrying...")
                 elif response.status_code == 404:
                     # If /health doesn't exist on this server version, fall back to assuming ready
                     logger.warning(

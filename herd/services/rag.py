@@ -91,9 +91,7 @@ def init_db():
     db.init_db()
 
 
-def chunk_text(
-    text: str, chunk_size: int = 800, overlap: int = 200
-) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 800, overlap: int = 200) -> List[str]:
     """Splits a document text into overlapping sliding-window chunks."""
     chunks = []
     if not text:
@@ -187,9 +185,7 @@ async def index_directory(directory_path: str, embedding_model: str) -> int:
                     # Call embedding API
                     vector = await get_embedding(text_chunk, embedding_model)
                     # Insert using DB repository
-                    db.insert_chunk(
-                        file_path, idx, text_chunk, vector, embedding_model
-                    )
+                    db.insert_chunk(file_path, idx, text_chunk, vector, embedding_model)
                     chunks_added += 1
 
             except Exception:
@@ -210,9 +206,7 @@ def search_vectors(
         vector = list(array.array("f", blob))
 
         sim = cosine_similarity(query_vector, vector)
-        results.append(
-            {"file_path": file_path, "text": text, "similarity": sim}
-        )
+        results.append({"file_path": file_path, "text": text, "similarity": sim})
 
     # Sort results by similarity descending
     results.sort(key=lambda x: x["similarity"], reverse=True)

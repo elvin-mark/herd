@@ -43,7 +43,9 @@ async def proxy_to_cloud(
     # Prevent duplicate '/v1/v1' path prefix nesting if the provider base URL already ends with '/v1'
     path_suffix = path
     if base_url.endswith("/v1") and path.startswith("/v1"):
-        path_suffix = path[3:]  # Strip '/v1' (e.g. '/v1/chat/completions' -> '/chat/completions')
+        path_suffix = path[
+            3:
+        ]  # Strip '/v1' (e.g. '/v1/chat/completions' -> '/chat/completions')
 
     url = f"{base_url}{path_suffix}"
 
@@ -65,9 +67,7 @@ async def proxy_to_cloud(
     try:
         response = await client.send(req, stream=True)
     except Exception as e:
-        logger.error(
-            f"Failed to connect to cloud provider '{provider}' at {url}: {e}"
-        )
+        logger.error(f"Failed to connect to cloud provider '{provider}' at {url}: {e}")
         raise HerdError(f"Cloud provider connection failed: {e}", status_code=502)
 
     if response.status_code >= 400:
@@ -387,9 +387,7 @@ async def completions(request: Request):
     except FileNotFoundError as e:
         raise HerdError(str(e), status_code=404)
 
-    return await proxy_to_port(
-        port, "/v1/completions", request, body_bytes, model_name
-    )
+    return await proxy_to_port(port, "/v1/completions", request, body_bytes, model_name)
 
 
 @router.post("/v1/embeddings")
@@ -424,9 +422,7 @@ async def embeddings(request: Request):
     except FileNotFoundError as e:
         raise HerdError(str(e), status_code=404)
 
-    return await proxy_to_port(
-        port, "/v1/embeddings", request, body_bytes, model_name
-    )
+    return await proxy_to_port(port, "/v1/embeddings", request, body_bytes, model_name)
 
 
 @router.post("/v1/audio/transcriptions")

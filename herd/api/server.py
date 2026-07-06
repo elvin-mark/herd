@@ -66,9 +66,7 @@ app = FastAPI(title="Herd API Gateway", lifespan=lifespan)
 @app.exception_handler(HerdError)
 async def herd_error_handler(request: Request, exc: HerdError):
     logger.error(f"API Error: {exc.message} (status: {exc.status_code})")
-    return JSONResponse(
-        status_code=exc.status_code, content={"error": exc.message}
-    )
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.message})
 
 
 @app.exception_handler(Exception)

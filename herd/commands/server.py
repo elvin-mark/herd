@@ -615,7 +615,9 @@ def doctor():
     console.print("\n[bold yellow]2. Processor Capabilities:[/bold yellow]")
     cores_physical = psutil.cpu_count(logical=False)
     cores_logical = psutil.cpu_count(logical=True)
-    console.print(f"  Cores:        [bold white]{cores_physical} physical, {cores_logical} logical[/bold white]")
+    console.print(
+        f"  Cores:        [bold white]{cores_physical} physical, {cores_logical} logical[/bold white]"
+    )
 
     # Try to scan for AVX flags on Linux/MacOS
     cpu_flags = []
@@ -638,16 +640,28 @@ def doctor():
         pass
 
     if cpu_flags:
-        console.print(f"  CPU Flags:    [bold green]{', '.join(cpu_flags)}[/bold green] (Inference-capable)")
+        console.print(
+            f"  CPU Flags:    [bold green]{', '.join(cpu_flags)}[/bold green] (Inference-capable)"
+        )
     else:
-        console.print("  CPU Flags:    [bold white]Standard instruction set[/bold white]")
+        console.print(
+            "  CPU Flags:    [bold white]Standard instruction set[/bold white]"
+        )
 
     # 3. GPU/CUDA Capabilities
     console.print("\n[bold yellow]3. GPU / Hardware Acceleration:[/bold yellow]")
     nvidia_smi = shutil.which("nvidia-smi")
     if nvidia_smi:
         try:
-            res = subprocess.run([nvidia_smi, "--query-gpu=name,memory.total,memory.free", "--format=csv,noheader,nounits"], capture_output=True, text=True)
+            res = subprocess.run(
+                [
+                    nvidia_smi,
+                    "--query-gpu=name,memory.total,memory.free",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+            )
             if res.returncode == 0:
                 gpu_lines = res.stdout.strip().split("\n")
                 for line in gpu_lines:
@@ -656,13 +670,21 @@ def doctor():
                     total = parts[1].strip()
                     free = parts[2].strip()
                     console.print(f"  GPU Device:   [bold green]{name}[/bold green]")
-                    console.print(f"  VRAM:         [bold green]{free} MB free / {total} MB total[/bold green]")
+                    console.print(
+                        f"  VRAM:         [bold green]{free} MB free / {total} MB total[/bold green]"
+                    )
             else:
-                console.print("  GPU Device:   [bold yellow]NVIDIA Driver present but query failed[/bold yellow]")
+                console.print(
+                    "  GPU Device:   [bold yellow]NVIDIA Driver present but query failed[/bold yellow]"
+                )
         except Exception:
-            console.print("  GPU Device:   [bold yellow]Error querying nvidia-smi[/bold yellow]")
+            console.print(
+                "  GPU Device:   [bold yellow]Error querying nvidia-smi[/bold yellow]"
+            )
     else:
-        console.print("  GPU Device:   [bold white]No NVIDIA GPU detected (CPU mode active)[/bold white]")
+        console.print(
+            "  GPU Device:   [bold white]No NVIDIA GPU detected (CPU mode active)[/bold white]"
+        )
 
     # 4. Binary Dependencies
     console.print("\n[bold yellow]4. Compiled Server Binaries:[/bold yellow]")
@@ -687,18 +709,26 @@ def doctor():
         llama_bin = shutil.which("llama-server")
     if llama_bin and os.path.exists(llama_bin):
         commit_str = f" | Commit: {llama_commit}" if llama_commit else ""
-        console.print(f"  llama-server:   [bold green]Found[/bold green] ({llama_bin}){commit_str}")
+        console.print(
+            f"  llama-server:   [bold green]Found[/bold green] ({llama_bin}){commit_str}"
+        )
     else:
-        console.print("  llama-server:   [bold red]Missing[/bold red] (Run 'herd setup' to compile)")
+        console.print(
+            "  llama-server:   [bold red]Missing[/bold red] (Run 'herd setup' to compile)"
+        )
 
     # Check whisper-server
     if not whisper_bin or not os.path.exists(whisper_bin):
         whisper_bin = shutil.which("whisper-server")
     if whisper_bin and os.path.exists(whisper_bin):
         commit_str = f" | Commit: {whisper_commit}" if whisper_commit else ""
-        console.print(f"  whisper-server: [bold green]Found[/bold green] ({whisper_bin}){commit_str}")
+        console.print(
+            f"  whisper-server: [bold green]Found[/bold green] ({whisper_bin}){commit_str}"
+        )
     else:
-        console.print("  whisper-server: [bold red]Missing[/bold red] (Run 'herd setup' to compile)")
+        console.print(
+            "  whisper-server: [bold red]Missing[/bold red] (Run 'herd setup' to compile)"
+        )
 
     # 5. Gateway Server Status
     console.print("\n[bold yellow]5. Herd Gateway Server Link:[/bold yellow]")
@@ -706,9 +736,15 @@ def doctor():
     try:
         res = httpx.get(f"{gateway_url}/health", timeout=1.0)
         if res.status_code == 200:
-            console.print(f"  Connection:   [bold green]Online[/bold green] ({gateway_url})")
+            console.print(
+                f"  Connection:   [bold green]Online[/bold green] ({gateway_url})"
+            )
         else:
-            console.print(f"  Connection:   [bold red]Offline[/bold red] (Status code {res.status_code})")
+            console.print(
+                f"  Connection:   [bold red]Offline[/bold red] (Status code {res.status_code})"
+            )
     except Exception:
-        console.print(f"  Connection:   [bold red]Offline[/bold red] (Gateway not running on port {HERD_PORT})")
+        console.print(
+            f"  Connection:   [bold red]Offline[/bold red] (Gateway not running on port {HERD_PORT})"
+        )
     console.print("")

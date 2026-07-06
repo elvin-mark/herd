@@ -65,7 +65,8 @@ def resolve_model_path(model_name: str) -> str:
     if tag:
         # Search for files matching the tag (case insensitive) but excluding mmproj first
         tagged_files = [
-            f for f in model_files
+            f
+            for f in model_files
             if tag.lower() in f.lower() and "mmproj" not in f.lower()
         ]
         if not tagged_files:

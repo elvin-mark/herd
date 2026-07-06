@@ -57,6 +57,7 @@ async def list_models():
 async def list_active_models():
     """Lists currently running model servers."""
     import time
+
     active = []
     async with manager.lock:
         for path, info in manager.running_models.items():
@@ -171,9 +172,7 @@ async def pull_model(request: Request, background_tasks: BackgroundTasks):
     body = await request.json()
     model_name = body.get("model")
     if not model_name:
-        return JSONResponse(
-            status_code=400, content={"error": "Missing 'model' field"}
-        )
+        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
 
     if model_name in pull_tasks and pull_tasks[model_name]["status"] in [
         "downloading",

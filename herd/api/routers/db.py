@@ -15,9 +15,7 @@ async def db_list():
     from herd.services.rag import list_indexed_files
 
     rows = list_indexed_files()
-    data = [
-        {"file_path": r[0], "model_name": r[1], "chunks": r[2]} for r in rows
-    ]
+    data = [{"file_path": r[0], "model_name": r[1], "chunks": r[2]} for r in rows]
     return data
 
 
@@ -44,16 +42,12 @@ async def db_index(request: Request, background_tasks: BackgroundTasks):
     directory = body.get("directory")
     model_name = body.get("model")
     if not directory or not model_name:
-        raise HerdError(
-            "Missing 'directory' or 'model' field", status_code=400
-        )
+        raise HerdError("Missing 'directory' or 'model' field", status_code=400)
 
     if not os.path.exists(directory):
         raise HerdError("Directory not found", status_code=404)
 
-    await manager.get_or_start_server(
-        model_name, is_whisper=False, is_embedding=True
-    )
+    await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
 
     async def index_worker(d: str, m: str):
         try:
@@ -78,9 +72,7 @@ async def db_search(request: Request):
     if not query or not model_name:
         raise HerdError("Missing 'query' or 'model' field", status_code=400)
 
-    await manager.get_or_start_server(
-        model_name, is_whisper=False, is_embedding=True
-    )
+    await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
     query_vector = await get_embedding(query, model_name)
     matches = search_vectors(query_vector, model_name, top_k=limit)
     return matches
