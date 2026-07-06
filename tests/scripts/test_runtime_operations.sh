@@ -119,6 +119,9 @@ echo -e "${CYAN}[Cleanup] Unloading running model using 'herd stop'...${NC}"
 stop_res=$(herd stop "$TEST_MODEL")
 echo "$stop_res"
 
+# Wait a moment for process cleanup and registry update
+sleep 2
+
 # Verify that the model is no longer active
 ps_check=$(herd ps)
 if [[ "$ps_check" == *"No models are currently running"* ]]; then
