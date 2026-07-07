@@ -134,6 +134,7 @@ def ask(
     chosen_emb = embedding_model
     if not chosen_emb:
         from herd.services.rag import detect_db_embedding_model
+
         chosen_emb = detect_db_embedding_model(directory)
     if not chosen_emb:
         chosen_emb = DEFAULT_EMBEDDING
@@ -169,7 +170,9 @@ def ask(
     console.print("Searching semantic index for context...")
     try:
         query_vector = asyncio.run(get_embedding(query, chosen_emb))
-        matches = search_vectors(query_vector, chosen_emb, top_k=5, target_path=directory)
+        matches = search_vectors(
+            query_vector, chosen_emb, top_k=5, target_path=directory
+        )
     except Exception as e:
         console.print(f"[red]Failed to query embeddings: {e}[/red]")
         raise typer.Exit(1)
@@ -297,6 +300,7 @@ def db_search(
     chosen_model = model_name
     if not chosen_model:
         from herd.services.rag import detect_db_embedding_model
+
         chosen_model = detect_db_embedding_model(directory)
     if not chosen_model:
         chosen_model = DEFAULT_EMBEDDING
@@ -332,7 +336,9 @@ def db_search(
     console.print(f"Searching semantic index for '{query}'...")
     try:
         query_vector = asyncio.run(get_embedding(query, model_name))
-        matches = search_vectors(query_vector, model_name, top_k=limit, target_path=directory)
+        matches = search_vectors(
+            query_vector, model_name, top_k=limit, target_path=directory
+        )
     except Exception as e:
         console.print(f"[red]Failed to perform semantic search: {e}[/red]")
         raise typer.Exit(1)

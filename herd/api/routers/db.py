@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Optional
 from fastapi import APIRouter, Request, BackgroundTasks
 
 from herd.api.state import manager
@@ -17,9 +18,9 @@ router = APIRouter()
 
 
 @router.get("/v1/db/list")
-async def db_list():
-    """Lists indexed files in the local database."""
-    rows = list_indexed_files()
+async def db_list(directory: Optional[str] = None):
+    """Lists indexed files in the local database (optionally targeting a specific directory)."""
+    rows = list_indexed_files(directory)
     data = [{"file_path": r[0], "model_name": r[1], "chunks": r[2]} for r in rows]
     return data
 
@@ -67,11 +68,29 @@ async def db_search(request: Request):
     query = body.get("query")
     model_name = body.get("model")
     limit = body.get("limit", 5)
+    directory = body.get("directory")
 
-    if not query or not model_name:
-        raise HerdError("Missing 'query' or 'model' field", status_code=400)
+    if not query:
+        raise HerdError("Missing 'query' field", status_code=400)
+
+    if not model_name:
+        from herd.services.rag import detect_db_embedding_model
+
+        model_name = detect_db_embedding_model(directory)
+        if not model_name:
+            from herd.core.config import settings
+
+            model_name = settings.default_embedding
+
+    if not model_name:
+        raise HerdError(
+            "No embedding model specified and none could be auto-detected",
+            status_code=400,
+        )
 
     await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
     query_vector = await get_embedding(query, model_name)
-    matches = search_vectors(query_vector, model_name, top_k=limit)
+    matches = search_vectors(
+        query_vector, model_name, top_k=limit, target_path=directory
+    )
     return matches
