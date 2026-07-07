@@ -2,7 +2,7 @@ import os
 import sqlite3
 import array
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from herd.core.config import HERD_HOME, HERD_PORT
 
 DB_PATH = os.path.join(HERD_HOME, "embeddings.db")
@@ -51,12 +51,45 @@ class VectorDatabase:
             conn.commit()
 
     def get_all_vectors(self, model_name: str) -> List[tuple]:
-        """Retrieves all indexed vectors matching the specified model name."""
+        """Retrieves all indexed vectors matching the specified model name (robust against tag omissions)."""
+        # Find all unique model names stored in chunks table
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT model_name FROM chunks")
+            distinct_names = [row[0] for row in cursor.fetchall()]
+
+        # Determine which stored names are equivalent to requested model_name
+        matching_names = []
+        for name in distinct_names:
+            if name == model_name:
+                matching_names.append(name)
+                continue
+
+            # Try parsing both to compare author and repo
+            try:
+                from herd.services.downloader import parse_model_identifier
+
+                a1, r1, _ = parse_model_identifier(name)
+                a2, r2, _ = parse_model_identifier(model_name)
+                if a1.lower() == a2.lower() and r1.lower() == r2.lower():
+                    matching_names.append(name)
+            except Exception:
+                # Fallback to case-insensitive prefix/suffix matching
+                if name.lower().startswith(
+                    model_name.lower()
+                ) or model_name.lower().startswith(name.lower()):
+                    matching_names.append(name)
+
+        if not matching_names:
+            matching_names = [model_name]
+
+        # Retrieve chunks matching any of the matching model names
+        placeholders = ",".join(["?"] * len(matching_names))
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT file_path, text, embedding FROM chunks WHERE model_name = ?",
-                (model_name,),
+                f"SELECT file_path, text, embedding FROM chunks WHERE model_name IN ({placeholders})",
+                tuple(matching_names),
             )
             return cursor.fetchall()
 
@@ -149,24 +182,31 @@ async def _read_file_content_async(file_path: str) -> str:
     return await asyncio.to_thread(_read)
 
 
-async def index_directory(directory_path: str, embedding_model: str) -> int:
+async def index_directory(
+    directory_path: str, embedding_model: str, types: Optional[str] = None
+) -> int:
     """Recursively parses text-based files in a directory, chunks them, embeds them, and indexes in DB."""
-    supported_extensions = {
-        ".txt",
-        ".md",
-        ".py",
-        ".js",
-        ".ts",
-        ".html",
-        ".css",
-        ".json",
-        ".yaml",
-        ".yml",
-        ".sh",
-        ".ini",
-        ".cfg",
-        ".sql",
-    }
+    if types:
+        supported_extensions = {
+            ext.strip().lower() for ext in types.split(",") if ext.strip()
+        }
+    else:
+        supported_extensions = {
+            ".txt",
+            ".md",
+            ".py",
+            ".js",
+            ".ts",
+            ".html",
+            ".css",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".sh",
+            ".ini",
+            ".cfg",
+            ".sql",
+        }
 
     chunks_added = 0
     for root, _, files in os.walk(directory_path):
