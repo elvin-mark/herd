@@ -125,11 +125,12 @@ def ask(
         raise typer.Exit(1)
 
     # Resolve embedding model
-    chosen_emb = embedding_model if embedding_model else DEFAULT_EMBEDDING
+    chosen_emb = embedding_model
     if not chosen_emb:
         from herd.services.rag import detect_db_embedding_model
-
         chosen_emb = detect_db_embedding_model()
+    if not chosen_emb:
+        chosen_emb = DEFAULT_EMBEDDING
 
     if not chosen_emb:
         models = get_local_models_info()
@@ -274,11 +275,12 @@ def db_search(
     if not auto_start_gateway():
         raise typer.Exit(1)
 
-    chosen_model = model_name if model_name else DEFAULT_EMBEDDING
+    chosen_model = model_name
     if not chosen_model:
         from herd.services.rag import detect_db_embedding_model
-
         chosen_model = detect_db_embedding_model()
+    if not chosen_model:
+        chosen_model = DEFAULT_EMBEDDING
 
     if not chosen_model:
         models = get_local_models_info()
