@@ -57,38 +57,34 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}Indexing completed successfully.${NC}\n"
 
-# 4. Test "herd db list" (list indexed files on local DB)
-echo -e "${CYAN}[Step 4/8] Testing 'herd db list' command inside directory...${NC}"
-cd "$TEMP_DIR" || exit 1
-db_list_res=$(herd db list)
-cd - &>/dev/null
+# 4. Test "herd db list" (list indexed files on local DB using directory targeting)
+echo -e "${CYAN}[Step 4/8] Testing 'herd db list' command with --directory flag...${NC}"
+db_list_res=$(herd db list --directory "$TEMP_DIR")
 
 echo -e "${YELLOW}Database list output:${NC}"
 echo "$db_list_res"
 echo -e "\n"
 
 if [[ "$db_list_res" == *"doc1.txt"* && "$db_list_res" == *"doc2.txt"* ]]; then
-    echo -e "${GREEN}Success! 'herd db list' resolved local index and listed files.${NC}\n"
+    echo -e "${GREEN}Success! 'herd db list' resolved local index using --directory.${NC}\n"
 else
-    echo -e "${RED}Failure! 'herd db list' failed to find local index database.${NC}"
+    echo -e "${RED}Failure! 'herd db list' failed to resolve database with --directory.${NC}"
     rm -rf "$TEMP_DIR"
     exit 1
 fi
 
-# 5. Test "herd db search" (should auto-detect model name from local index)
-echo -e "${CYAN}[Step 5/8] Testing 'herd db search' with auto-model detection...${NC}"
-cd "$TEMP_DIR" || exit 1
-db_search_res=$(herd db search "secret vault code" --limit 2)
-cd - &>/dev/null
+# 5. Test "herd db search" (should auto-detect model name and target local index via directory option)
+echo -e "${CYAN}[Step 5/8] Testing 'herd db search' with --directory flag and auto-model detection...${NC}"
+db_search_res=$(herd db search --directory "$TEMP_DIR" "secret vault code" --limit 2)
 
 echo -e "${YELLOW}Database search output:${NC}"
 echo "$db_search_res"
 echo -e "\n"
 
 if [[ "$db_search_res" == *"AlphaOmega42"* && "$db_search_res" == *"doc1.txt"* ]]; then
-    echo -e "${GREEN}Success! 'herd db search' auto-detected model and found vector matches.${NC}\n"
+    echo -e "${GREEN}Success! 'herd db search' resolved matches using --directory.${NC}\n"
 else
-    echo -e "${RED}Failure! 'herd db search' failed to auto-detect model or locate search matches.${NC}"
+    echo -e "${RED}Failure! 'herd db search' failed to resolve matches with --directory.${NC}"
     rm -rf "$TEMP_DIR"
     exit 1
 fi
@@ -111,11 +107,9 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "\n"
 
-# 7. Run Semantic Ask Query from directory (should auto-detect local index)
-echo -e "${CYAN}[Step 7/8] Querying semantic ask with local DB auto-detection...${NC}"
-cd "$TEMP_DIR" || exit 1
-ask_res=$(herd ask "What is the secret code phrase for accessing the research vault?" "$MODEL_NAME")
-cd - &>/dev/null
+# 7. Run Semantic Ask Query using target directory flag (should auto-detect local index)
+echo -e "${CYAN}[Step 7/8] Querying semantic ask with --directory flag and local DB auto-detection...${NC}"
+ask_res=$(herd ask --directory "$TEMP_DIR" "What is the secret code phrase for accessing the research vault?" "$MODEL_NAME")
 
 echo -e "${YELLOW}Response output:${NC}"
 echo "$ask_res"
@@ -123,32 +117,29 @@ echo -e "\n"
 
 # Assert keyword presence
 if [[ "$ask_res" == *"AlphaOmega42"* ]]; then
-    echo -e "${GREEN}Success! LLM retrieved context from local DB and correctly answered 'AlphaOmega42'.${NC}\n"
+    echo -e "${GREEN}Success! LLM retrieved context from local DB via --directory and answered 'AlphaOmega42'.${NC}\n"
 else
-    echo -e "${RED}Failure! LLM failed to retrieve context from local DB.${NC}"
+    echo -e "${RED}Failure! LLM failed to retrieve context using --directory.${NC}"
     rm -rf "$TEMP_DIR"
     exit 1
 fi
 
 # 8. Database cleanups and verification of partial removal
 echo -e "${CYAN}[Step 8/8] Cleaning up local RAG database and verifying 'herd db remove'...${NC}"
-cd "$TEMP_DIR" || exit 1
 herd db remove "$TEMP_DIR/doc1.txt" > /dev/null
 echo -e "${YELLOW}List after removing doc1.txt:${NC}"
-herd db list
+herd db list --directory "$TEMP_DIR"
 
-list_res_1=$(herd db list)
+list_res_1=$(herd db list --directory "$TEMP_DIR")
 if [[ "$list_res_1" == *"doc2.txt"* && "$list_res_1" != *"doc1.txt"* ]]; then
     echo -e "${GREEN}Success! Partial removal of doc1.txt verified.${NC}\n"
 else
     echo -e "${RED}Failure! Partial removal of doc1.txt failed.${NC}"
-    cd - &>/dev/null
     rm -rf "$TEMP_DIR"
     exit 1
 fi
 
 herd db remove "$TEMP_DIR/doc2.txt" > /dev/null
-cd - &>/dev/null
 rm -rf "$TEMP_DIR"
 
 echo -e "${YELLOW}Verifying SQLite clean status:${NC}"

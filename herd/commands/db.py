@@ -110,6 +110,12 @@ def ask(
         "-m",
         help="The embedding model identifier to query context from. If omitted, uses default_embedding config.",
     ),
+    directory: Optional[str] = typer.Option(
+        None,
+        "--directory",
+        "-d",
+        help="The target directory containing the local index database. If omitted, uses current directory.",
+    ),
 ):
     """Semantic query: retrieves relevant indexed chunks and answers your question using the LLM."""
     # 1. Ensure gateway is running
@@ -128,7 +134,7 @@ def ask(
     chosen_emb = embedding_model
     if not chosen_emb:
         from herd.services.rag import detect_db_embedding_model
-        chosen_emb = detect_db_embedding_model()
+        chosen_emb = detect_db_embedding_model(directory)
     if not chosen_emb:
         chosen_emb = DEFAULT_EMBEDDING
 
@@ -163,7 +169,7 @@ def ask(
     console.print("Searching semantic index for context...")
     try:
         query_vector = asyncio.run(get_embedding(query, chosen_emb))
-        matches = search_vectors(query_vector, chosen_emb, top_k=5)
+        matches = search_vectors(query_vector, chosen_emb, top_k=5, target_path=directory)
     except Exception as e:
         console.print(f"[red]Failed to query embeddings: {e}[/red]")
         raise typer.Exit(1)
@@ -230,10 +236,17 @@ def ask(
 
 
 @db_app.command(name="list")
-def db_list():
+def db_list(
+    directory: Optional[str] = typer.Option(
+        None,
+        "--directory",
+        "-d",
+        help="The target directory containing the local index database. If omitted, uses current directory.",
+    ),
+):
     """Lists all files and paths currently indexed in the vector database."""
     try:
-        rows = list_indexed_files()
+        rows = list_indexed_files(directory)
     except Exception as e:
         console.print(f"[red]Error reading database: {e}[/red]")
         raise typer.Exit(1)
@@ -270,6 +283,12 @@ def db_search(
         "-l",
         help="Maximum matches to return.",
     ),
+    directory: Optional[str] = typer.Option(
+        None,
+        "--directory",
+        "-d",
+        help="The target directory containing the local index database. If omitted, uses current directory.",
+    ),
 ):
     """Semantic search: queries the vector database for text segments matching the query."""
     if not auto_start_gateway():
@@ -278,7 +297,7 @@ def db_search(
     chosen_model = model_name
     if not chosen_model:
         from herd.services.rag import detect_db_embedding_model
-        chosen_model = detect_db_embedding_model()
+        chosen_model = detect_db_embedding_model(directory)
     if not chosen_model:
         chosen_model = DEFAULT_EMBEDDING
 
@@ -313,7 +332,7 @@ def db_search(
     console.print(f"Searching semantic index for '{query}'...")
     try:
         query_vector = asyncio.run(get_embedding(query, model_name))
-        matches = search_vectors(query_vector, model_name, top_k=limit)
+        matches = search_vectors(query_vector, model_name, top_k=limit, target_path=directory)
     except Exception as e:
         console.print(f"[red]Failed to perform semantic search: {e}[/red]")
         raise typer.Exit(1)
