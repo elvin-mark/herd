@@ -709,6 +709,10 @@
             color: var(--text-primary);
             border-bottom-left-radius: 4px;
             border: 1px solid var(--card-border);
+            white-space: normal;
+        }
+        .bubble-assistant > span {
+            white-space: pre-wrap;
         }
 
         .thinking-block {
@@ -1260,6 +1264,18 @@
 
         <!-- Tab: RAG & Indexer -->
         <div id="tab-rag" class="tab-content">
+            <!-- Project Selector Header -->
+            <div class="panel-card" style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 300px;">
+                    <h2 style="margin: 0; font-size: 1.3rem;">📁 Project Context Directory</h2>
+                    <p style="margin: 0.2rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">Specify a target path to isolate database listings and semantic search queries to that folder's local index.</p>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: center; min-width: 450px; flex-wrap: nowrap;">
+                    <input type="text" id="rag-project-dir" class="input-text" style="flex: 1; padding: 0.6rem 1rem;" placeholder="Enter folder path (e.g. /home/user/project) or leave blank for global db..." onchange="handleProjectDirChange()">
+                    <button class="btn btn-load" onclick="fetchRagIndexCatalog()" style="padding: 0.6rem 1.2rem; white-space: nowrap;">Load Index</button>
+                </div>
+            </div>
+
             <div class="rag-grid">
                 <!-- Local Indexed Folders -->
                 <div class="panel-card">
@@ -1616,7 +1632,7 @@
             } else {
                 const options = embModels.map(m => `<option value="${m.id}">${m.id}</option>`).join('');
                 indexModelSelect.innerHTML = options;
-                searchModelSelect.innerHTML = options;
+                searchModelSelect.innerHTML = `<option value="">(Auto-detect from database)</option>` + options;
 
                 if (prevIndexVal) indexModelSelect.value = prevIndexVal;
                 if (prevSearchVal) searchModelSelect.value = prevSearchVal;
@@ -2252,15 +2268,29 @@
         }
 
         /* RAG & Indexer JavaScript */
+        function handleProjectDirChange() {
+            const projectDir = document.getElementById('rag-project-dir').value.trim();
+            const indexDirInput = document.getElementById('index-dir-path');
+            if (indexDirInput && projectDir) {
+                indexDirInput.value = projectDir;
+            }
+            fetchRagIndexCatalog();
+        }
+
         async function fetchRagIndexCatalog() {
             const container = document.getElementById('rag-indexed-list');
+            const projectDir = document.getElementById('rag-project-dir').value.trim();
             try {
-                const list = await fetch('/v1/db/list').then(r => r.json());
+                let url = '/v1/db/list';
+                if (projectDir) {
+                    url += `?directory=${encodeURIComponent(projectDir)}`;
+                }
+                const list = await fetch(url).then(r => r.json());
                 
                 if (list.length === 0) {
                     container.innerHTML = `
                         <div style="text-align: center; color: var(--text-secondary); padding: 3rem;">
-                            <p>No documents or folders currently indexed.</p>
+                            <p>No documents or folders currently indexed ${projectDir ? 'in this directory' : 'globally'}.</p>
                         </div>
                     `;
                     return;
@@ -2349,12 +2379,9 @@
             const query = document.getElementById('rag-search-query').value.trim();
             const select = document.getElementById('rag-search-model-select');
             const model = select.value;
+            const projectDir = document.getElementById('rag-project-dir').value.trim();
 
             if (!query) return;
-            if (!model) {
-                alert("Please select an embedding model.");
-                return;
-            }
 
             const resultsContainer = document.getElementById('rag-search-results');
             resultsContainer.innerHTML = `
@@ -2364,10 +2391,14 @@
             `;
 
             try {
+                const payload = { query: query, limit: 5 };
+                if (model) payload.model = model;
+                if (projectDir) payload.directory = projectDir;
+
                 const matches = await fetch('/v1/db/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query, model: model, limit: 5 })
+                    body: JSON.stringify(payload)
                 }).then(r => r.json());
 
                 if (matches.error) {

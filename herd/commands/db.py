@@ -36,6 +36,12 @@ def index(
         "-m",
         help="The embedding model identifier to use. If not specified, uses default_embedding config.",
     ),
+    types: Optional[str] = typer.Option(
+        None,
+        "--types",
+        "-t",
+        help="Comma-separated file extensions to index (e.g., .py,.md).",
+    ),
 ):
     """Recursively chunks and embeds files in a directory, storing them in the local database."""
     if not os.path.exists(directory):
@@ -81,7 +87,7 @@ def index(
     # 3. Perform indexing
     console.print(f"Indexing directory [bold cyan]{directory}[/bold cyan]...")
     try:
-        count = asyncio.run(index_directory(directory, model_name))
+        count = asyncio.run(index_directory(directory, model_name, types=types))
         console.print(
             f"[bold green]Success![/bold green] Indexed {count} text chunks in the database."
         )
@@ -104,6 +110,12 @@ def ask(
         "-m",
         help="The embedding model identifier to query context from. If omitted, uses default_embedding config.",
     ),
+    directory: Optional[str] = typer.Option(
+        None,
+        "--directory",
+        "-d",
+        help="The target directory containing the local index database. If omitted, uses current directory.",
+    ),
 ):
     """Semantic query: retrieves relevant indexed chunks and answers your question using the LLM."""
     # 1. Ensure gateway is running
@@ -119,7 +131,14 @@ def ask(
         raise typer.Exit(1)
 
     # Resolve embedding model
-    chosen_emb = embedding_model if embedding_model else DEFAULT_EMBEDDING
+    chosen_emb = embedding_model
+    if not chosen_emb:
+        from herd.services.rag import detect_db_embedding_model
+
+        chosen_emb = detect_db_embedding_model(directory)
+    if not chosen_emb:
+        chosen_emb = DEFAULT_EMBEDDING
+
     if not chosen_emb:
         models = get_local_models_info()
         emb_models = [
@@ -151,7 +170,9 @@ def ask(
     console.print("Searching semantic index for context...")
     try:
         query_vector = asyncio.run(get_embedding(query, chosen_emb))
-        matches = search_vectors(query_vector, chosen_emb, top_k=5)
+        matches = search_vectors(
+            query_vector, chosen_emb, top_k=5, target_path=directory
+        )
     except Exception as e:
         console.print(f"[red]Failed to query embeddings: {e}[/red]")
         raise typer.Exit(1)
@@ -218,10 +239,17 @@ def ask(
 
 
 @db_app.command(name="list")
-def db_list():
+def db_list(
+    directory: Optional[str] = typer.Option(
+        None,
+        "--directory",
+        "-d",
+        help="The target directory containing the local index database. If omitted, uses current directory.",
+    ),
+):
     """Lists all files and paths currently indexed in the vector database."""
     try:
-        rows = list_indexed_files()
+        rows = list_indexed_files(directory)
     except Exception as e:
         console.print(f"[red]Error reading database: {e}[/red]")
         raise typer.Exit(1)
@@ -258,12 +286,25 @@ def db_search(
         "-l",
         help="Maximum matches to return.",
     ),
+    directory: Optional[str] = typer.Option(
+        None,
+        "--directory",
+        "-d",
+        help="The target directory containing the local index database. If omitted, uses current directory.",
+    ),
 ):
     """Semantic search: queries the vector database for text segments matching the query."""
     if not auto_start_gateway():
         raise typer.Exit(1)
 
-    chosen_model = model_name if model_name else DEFAULT_EMBEDDING
+    chosen_model = model_name
+    if not chosen_model:
+        from herd.services.rag import detect_db_embedding_model
+
+        chosen_model = detect_db_embedding_model(directory)
+    if not chosen_model:
+        chosen_model = DEFAULT_EMBEDDING
+
     if not chosen_model:
         models = get_local_models_info()
         emb_models = [
@@ -295,7 +336,9 @@ def db_search(
     console.print(f"Searching semantic index for '{query}'...")
     try:
         query_vector = asyncio.run(get_embedding(query, model_name))
-        matches = search_vectors(query_vector, model_name, top_k=limit)
+        matches = search_vectors(
+            query_vector, model_name, top_k=limit, target_path=directory
+        )
     except Exception as e:
         console.print(f"[red]Failed to perform semantic search: {e}[/red]")
         raise typer.Exit(1)
@@ -343,3 +386,40 @@ def db_remove(
     except Exception as e:
         console.print(f"[red]Failed to remove from database: {e}[/red]")
         raise typer.Exit(1)
+
+
+@db_app.command(name="prune")
+def db_prune():
+    """Removes all indexed document chunks for files that no longer exist on the local filesystem."""
+    try:
+        rows = list_indexed_files()
+    except Exception as e:
+        console.print(f"[red]Error reading database: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not rows:
+        console.print("[green]The database is empty. Nothing to prune.[/green]")
+        return
+
+    pruned_files = 0
+    pruned_chunks = 0
+
+    with console.status("[bold yellow]Pruning database entries...[/bold yellow]"):
+        for file_path, model_name, count in rows:
+            if not os.path.exists(file_path):
+                try:
+                    deleted = remove_indexed_path(file_path)
+                    pruned_files += 1
+                    pruned_chunks += deleted
+                except Exception as e:
+                    console.print(f"[red]Failed to remove {file_path}: {e}[/red]")
+
+    if pruned_files > 0:
+        console.print(
+            f"[bold green]Success![/bold green] Pruned [bold white]{pruned_files}[/bold white] files "
+            f"([bold white]{pruned_chunks}[/bold white] chunks) that no longer exist on disk."
+        )
+    else:
+        console.print(
+            "[green]All indexed files exist on disk. No pruning needed.[/green]"
+        )
