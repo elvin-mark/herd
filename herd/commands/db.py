@@ -127,6 +127,11 @@ def ask(
     # Resolve embedding model
     chosen_emb = embedding_model if embedding_model else DEFAULT_EMBEDDING
     if not chosen_emb:
+        from herd.services.rag import detect_db_embedding_model
+
+        chosen_emb = detect_db_embedding_model()
+
+    if not chosen_emb:
         models = get_local_models_info()
         emb_models = [
             m["name"]
@@ -270,6 +275,11 @@ def db_search(
         raise typer.Exit(1)
 
     chosen_model = model_name if model_name else DEFAULT_EMBEDDING
+    if not chosen_model:
+        from herd.services.rag import detect_db_embedding_model
+
+        chosen_model = detect_db_embedding_model()
+
     if not chosen_model:
         models = get_local_models_info()
         emb_models = [
