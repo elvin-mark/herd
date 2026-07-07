@@ -5,6 +5,14 @@ import subprocess
 import shutil
 import typer
 import uvicorn
+import re
+import threading
+import signal
+import socket
+import platform
+import psutil
+import httpx
+from collections import deque
 from typing import Optional
 
 from herd.core.config import (
@@ -51,7 +59,6 @@ def run_tunnel_monitor(process, port):
         line = process.stdout.readline()
         if not line:
             break
-        import re
 
         match = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", line)
         if match:
@@ -103,7 +110,6 @@ def serve(
     if public:
         tunnel_proc = start_public_tunnel(port)
         if tunnel_proc:
-            import threading
 
             def monitor():
                 time.sleep(2.0)
@@ -119,8 +125,6 @@ def serve(
         if tunnel_proc:
             console.print("\n[yellow]Stopping Cloudflare Tunnel...[/yellow]")
             try:
-                import signal
-
                 os.killpg(os.getpgid(tunnel_proc.pid), signal.SIGTERM)
                 tunnel_proc.wait()
             except Exception:
@@ -163,8 +167,6 @@ def logs(
 
     try:
         with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-            from collections import deque
-
             last_lines = deque(f, maxlen=lines)
             for line in last_lines:
                 print(line, end="")
@@ -364,7 +366,6 @@ def setup(
 
 def get_local_ip() -> str:
     """Finds the primary local IP address of this machine."""
-    import socket
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -425,7 +426,6 @@ def share(
                 line = process.stdout.readline()
                 if not line:
                     break
-                import re
 
                 match = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", line)
                 if match:
@@ -483,8 +483,6 @@ def share(
             console.print("\n[yellow]Stopping Cloudflare Tunnel...[/yellow]")
         finally:
             try:
-                import signal
-
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 process.wait()
             except Exception:
@@ -598,10 +596,6 @@ def proxy(
 
 def doctor():
     """Audits system environment, CPU instruction sets, GPU capabilities, and local server status."""
-    import platform
-    import shutil
-    import psutil
-    import httpx
 
     console.print("\n[bold cyan]📋 Herd System Doctor Diagnosis[/bold cyan]\n")
 

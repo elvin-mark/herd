@@ -4,6 +4,13 @@ from fastapi import APIRouter, Request, BackgroundTasks
 
 from herd.api.state import manager
 from herd.api.exceptions import HerdError
+from herd.services.rag import (
+    list_indexed_files,
+    remove_indexed_path,
+    index_directory,
+    get_embedding,
+    search_vectors,
+)
 
 logger = logging.getLogger("herd.server.db")
 router = APIRouter()
@@ -12,8 +19,6 @@ router = APIRouter()
 @router.get("/v1/db/list")
 async def db_list():
     """Lists indexed files in the local database."""
-    from herd.services.rag import list_indexed_files
-
     rows = list_indexed_files()
     data = [{"file_path": r[0], "model_name": r[1], "chunks": r[2]} for r in rows]
     return data
@@ -22,8 +27,6 @@ async def db_list():
 @router.post("/v1/db/remove")
 async def db_remove(request: Request):
     """Removes a file path from the vector database index."""
-    from herd.services.rag import remove_indexed_path
-
     body = await request.json()
     path = body.get("path")
     if not path:
@@ -36,8 +39,6 @@ async def db_remove(request: Request):
 @router.post("/v1/db/index")
 async def db_index(request: Request, background_tasks: BackgroundTasks):
     """Triggers RAG indexing on a local directory in the background."""
-    from herd.services.rag import index_directory
-
     body = await request.json()
     directory = body.get("directory")
     model_name = body.get("model")
@@ -62,8 +63,6 @@ async def db_index(request: Request, background_tasks: BackgroundTasks):
 @router.post("/v1/db/search")
 async def db_search(request: Request):
     """Performs semantic vector RAG search matching the user query."""
-    from herd.services.rag import get_embedding, search_vectors
-
     body = await request.json()
     query = body.get("query")
     model_name = body.get("model")
