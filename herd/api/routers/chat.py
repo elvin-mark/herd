@@ -126,6 +126,8 @@ async def proxy_to_cloud(
     res_headers = dict(response.headers)
     res_headers.pop("transfer-encoding", None)
     res_headers.pop("content-length", None)
+    res_headers.pop("content-encoding", None)
+    res_headers.pop("Content-Encoding", None)
     media_type = res_headers.get("content-type")
 
     return StreamingResponse(

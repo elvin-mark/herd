@@ -48,6 +48,41 @@ def agent_run_command(command: str) -> str:
         return f"Error executing command: {e}"
 
 
+def agent_search_grep(pattern: str, path: str = ".") -> str:
+    matches = []
+    ignored_dirs = {
+        ".git",
+        ".venv",
+        "node_modules",
+        "__pycache__",
+        ".ruff_cache",
+        ".pytest_cache",
+        "build",
+        "dist",
+    }
+    try:
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, "r", errors="ignore") as f:
+                        for line_no, line in enumerate(f, 1):
+                            if pattern.lower() in line.lower():
+                                matches.append(f"{file_path}:{line_no}: {line.strip()}")
+                                if len(matches) >= 50:
+                                    break
+                except Exception:
+                    continue
+                if len(matches) >= 50:
+                    break
+        if not matches:
+            return f"No matches found for pattern '{pattern}'."
+        return "\n".join(matches)
+    except Exception as e:
+        return f"Error executing search_grep: {e}"
+
+
 class AgentSession:
     def __init__(self, model_name: str, gateway_url: str):
         self.model_name = model_name
@@ -62,13 +97,14 @@ class AgentSession:
             "2. read_file: Read a text file. Action Input should be the path to the file.\n"
             '3. write_file: Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".\n'
             "4. run_command: Run a shell command. Action Input should be the command string.\n"
-            "5. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+            '5. search_grep: Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').\n'
+            "6. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
             "CRITICAL: Once the user's objective has been successfully met, you MUST immediately call the 'final_answer' tool to exit the loop.\n"
             "Do NOT perform duplicate, redundant, or repeating actions (e.g. writing the same file repeatedly) once the task is already completed.\n\n"
             "At each turn, you MUST output a valid JSON object matching the following structure:\n"
             "{\n"
             '  "thought": "What you are planning to do and why",\n'
-            '  "action": "The tool name to call (list_dir, read_file, write_file, run_command, final_answer)",\n'
+            '  "action": "The tool name to call (list_dir, read_file, write_file, run_command, search_grep, final_answer)",\n'
             '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
             "}\n\n"
             "Remember:\n"
@@ -100,6 +136,7 @@ class AgentSession:
                         "temperature": 0.2,
                         "stream": False,
                     },
+                    headers={"Accept-Encoding": "identity"},
                     timeout=60.0,
                 )
                 if res.status_code != 200:
@@ -179,6 +216,21 @@ class AgentSession:
                     observation = f"Error parsing write_file parameters: {e}. Expected a JSON object with 'path' and 'content'."
             elif action == "run_command":
                 observation = agent_run_command(action_input)
+            elif action == "search_grep":
+                try:
+                    if isinstance(action_input, str):
+                        try:
+                            search_data = json.loads(action_input)
+                        except Exception:
+                            search_data = {"pattern": action_input}
+                    else:
+                        search_data = action_input
+
+                    pattern = search_data.get("pattern", "")
+                    search_path = search_data.get("path", ".")
+                    observation = agent_search_grep(pattern, search_path)
+                except Exception as e:
+                    observation = f"Error parsing search_grep parameters: {e}. Expected a JSON object with 'pattern' and optional 'path'."
             else:
                 observation = f"Error: Unknown action '{action}'."
 
