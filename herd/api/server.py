@@ -96,12 +96,25 @@ async def health_check():
 @app.get("/dashboard")
 async def get_dashboard():
     """Serves the Herd Web Control Center dashboard."""
-    dashboard_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "templates", "dashboard.html")
+    templates_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "templates")
     )
+    html_path = os.path.join(templates_dir, "dashboard.html")
+    css_path = os.path.join(templates_dir, "dashboard.css")
+    js_path = os.path.join(templates_dir, "dashboard.js")
     try:
-        with open(dashboard_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        with open(css_path, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        with open(js_path, "r", encoding="utf-8") as f:
+            js_content = f.read()
+
+        content = html_content.replace(
+            "<!-- INJECT_STYLE -->", f"<style>\n{css_content}\n</style>"
+        ).replace(
+            "<!-- INJECT_SCRIPT -->", f"<script>\n{js_content}\n</script>"
+        )
         return Response(content=content, media_type="text/html")
     except Exception as e:
         return Response(
