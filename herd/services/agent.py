@@ -1,0 +1,202 @@
+import os
+import json
+import subprocess
+import httpx
+from herd.core.utils import console
+
+
+def agent_list_dir(path: str = ".") -> str:
+    try:
+        files = os.listdir(path)
+        return json.dumps(files)
+    except Exception as e:
+        return f"Error listing directory: {e}"
+
+
+def agent_read_file(path: str) -> str:
+    try:
+        with open(path, "r", errors="ignore") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading file: {e}"
+
+
+def agent_write_file(path: str, content: str) -> str:
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        return f"File successfully written to {path}"
+    except Exception as e:
+        return f"Error writing file: {e}"
+
+
+def agent_run_command(command: str) -> str:
+    try:
+        res = subprocess.run(
+            command, shell=True, capture_output=True, text=True, timeout=30.0
+        )
+        output = f"Exit Code: {res.returncode}\n"
+        if res.stdout:
+            output += f"STDOUT:\n{res.stdout}\n"
+        if res.stderr:
+            output += f"STDERR:\n{res.stderr}\n"
+        return output
+    except subprocess.TimeoutExpired:
+        return "Error: Command execution timed out (30s limit)."
+    except Exception as e:
+        return f"Error executing command: {e}"
+
+
+class AgentSession:
+    def __init__(self, model_name: str, gateway_url: str):
+        self.model_name = model_name
+        self.gateway_url = gateway_url
+
+        self.system_prompt = (
+            "You are an autonomous AI engineering agent executing tasks in a local workspace.\n"
+            "You operate in a loop: Thought -> Action -> Observation -> Repeat.\n"
+            "Your goal is to satisfy the user's objective.\n\n"
+            "Available Tools:\n"
+            "1. list_dir: List files in a folder. Action Input should be the folder path (e.g. '.' or './src').\n"
+            "2. read_file: Read a text file. Action Input should be the path to the file.\n"
+            '3. write_file: Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".\n'
+            "4. run_command: Run a shell command. Action Input should be the command string.\n"
+            "5. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+            "CRITICAL: Once the user's objective has been successfully met, you MUST immediately call the 'final_answer' tool to exit the loop.\n"
+            "Do NOT perform duplicate, redundant, or repeating actions (e.g. writing the same file repeatedly) once the task is already completed.\n\n"
+            "At each turn, you MUST output a valid JSON object matching the following structure:\n"
+            "{\n"
+            '  "thought": "What you are planning to do and why",\n'
+            '  "action": "The tool name to call (list_dir, read_file, write_file, run_command, final_answer)",\n'
+            '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
+            "}\n\n"
+            "Remember:\n"
+            "- Do not explain your response outside of the JSON object.\n"
+            "- Output strictly valid JSON. Do not wrap in markdown code blocks."
+        )
+
+        self.history = [{"role": "system", "content": self.system_prompt}]
+
+    def run_task(self, objective: str, max_turns: int = 10):
+        from rich.panel import Panel
+
+        self.history.append({"role": "user", "content": f"Objective: {objective}"})
+
+        url_chat = f"{self.gateway_url}/v1/chat/completions"
+
+        for turn in range(1, max_turns + 1):
+            console.print(
+                f"[bold dim]── Turn {turn}/{max_turns} ──────────────────────────────────────[/bold dim]"
+            )
+
+            # 1. Ask LLM for next step
+            try:
+                res = httpx.post(
+                    url_chat,
+                    json={
+                        "model": self.model_name,
+                        "messages": self.history,
+                        "temperature": 0.2,
+                        "stream": False,
+                    },
+                    timeout=60.0,
+                )
+                if res.status_code != 200:
+                    console.print(f"[red]Error from Gateway: {res.text}[/red]")
+                    break
+                raw_text = res.json()["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                console.print(f"[red]Error communicating with LLM: {e}[/red]")
+                break
+
+            # Cleanup markdown syntax if returned
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+
+            # 2. Parse action JSON
+            try:
+                action_data = json.loads(raw_text)
+                thought = action_data["thought"]
+                action = action_data["action"]
+                action_input = action_data["action_input"]
+            except Exception:
+                console.print(
+                    f"[red]Error: Model output was not valid JSON. Raw output was:[/red]\n{raw_text}"
+                )
+                self.history.append({"role": "assistant", "content": raw_text})
+                self.history.append(
+                    {
+                        "role": "user",
+                        "content": "Please output strictly a valid JSON object containing 'thought', 'action', and 'action_input'.",
+                    }
+                )
+                continue
+
+            # Print thought
+            console.print(
+                Panel(
+                    f"[italic white]{thought}[/italic white]",
+                    title=f"🧠 Agent Thought (Turn {turn})",
+                    border_style="cyan",
+                )
+            )
+
+            # 3. Handle Actions
+            if action == "final_answer":
+                console.print(
+                    Panel(
+                        f"[bold green]Final Answer:[/bold green]\n{action_input}",
+                        title="🏁 Objective Accomplished",
+                        border_style="green",
+                    )
+                )
+                self.history.append({"role": "assistant", "content": raw_text})
+                break
+
+            console.print(
+                f"⚙️  [bold]Action:[/bold] {action} | [bold]Input:[/bold] {action_input}"
+            )
+
+            observation = ""
+            if action == "list_dir":
+                observation = agent_list_dir(action_input or ".")
+            elif action == "read_file":
+                observation = agent_read_file(action_input)
+            elif action == "write_file":
+                try:
+                    if isinstance(action_input, str):
+                        write_data = json.loads(action_input)
+                    else:
+                        write_data = action_input
+                    observation = agent_write_file(
+                        write_data["path"], write_data["content"]
+                    )
+                except Exception as e:
+                    observation = f"Error parsing write_file parameters: {e}. Expected a JSON object with 'path' and 'content'."
+            elif action == "run_command":
+                observation = agent_run_command(action_input)
+            else:
+                observation = f"Error: Unknown action '{action}'."
+
+            # Show observation
+            console.print(
+                f"👁️  [bold]Observation:[/bold] {observation[:400]}..."
+                if len(observation) > 400
+                else f"👁️  [bold]Observation:[/bold] {observation}"
+            )
+
+            self.history.append({"role": "assistant", "content": raw_text})
+            self.history.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Observation: {observation}\n\n"
+                        "Note: If the objective is now fully accomplished, you MUST call 'final_answer' next. "
+                        "Do not repeat the same action again."
+                    ),
+                }
+            )

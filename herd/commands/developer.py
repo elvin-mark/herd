@@ -894,54 +894,10 @@ def watch(
         console.print("\n[yellow]Generation stopped.[/yellow]")
 
 
-def agent_list_dir(path: str = ".") -> str:
-    try:
-        files = os.listdir(path)
-        return json.dumps(files)
-    except Exception as e:
-        return f"Error listing directory: {e}"
-
-
-def agent_read_file(path: str) -> str:
-    try:
-        with open(path, "r", errors="ignore") as f:
-            return f.read()
-    except Exception as e:
-        return f"Error reading file: {e}"
-
-
-def agent_write_file(path: str, content: str) -> str:
-    try:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        with open(path, "w") as f:
-            f.write(content)
-        return f"File successfully written to {path}"
-    except Exception as e:
-        return f"Error writing file: {e}"
-
-
-def agent_run_command(command: str) -> str:
-    # Run command and capture output
-    try:
-        res = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=30.0
-        )
-        output = f"Exit Code: {res.returncode}\n"
-        if res.stdout:
-            output += f"STDOUT:\n{res.stdout}\n"
-        if res.stderr:
-            output += f"STDERR:\n{res.stderr}\n"
-        return output
-    except subprocess.TimeoutExpired:
-        return "Error: Command execution timed out (30s limit)."
-    except Exception as e:
-        return f"Error executing command: {e}"
-
-
 def agent(
-    objective: str = typer.Argument(
-        ...,
-        help="The objective/task for the agent to accomplish (e.g. 'find todos in python files').",
+    objective: Optional[str] = typer.Argument(
+        None,
+        help="Initial objective/task for the agent to accomplish. If omitted, starts an interactive session.",
     ),
     model_name: Optional[str] = typer.Option(
         None,
@@ -953,10 +909,10 @@ def agent(
         10,
         "--max-turns",
         "-t",
-        help="Maximum execution turns/iterations to run.",
+        help="Maximum execution turns/iterations to run per request.",
     ),
 ):
-    """Launches an autonomous local AI agent loop to execute multi-step tasks in your workspace."""
+    """Launches an interactive or autonomous local AI agent loop to execute multi-step tasks in your workspace."""
     # 1. Resolve LLM model
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
@@ -977,140 +933,33 @@ def agent(
         console.print(f"[red]Failed to load model: {e}[/red]")
         raise typer.Exit(1)
 
-    system_prompt = (
-        "You are an autonomous AI engineering agent executing tasks in a local workspace.\n"
-        "You operate in a loop: Thought -> Action -> Observation -> Repeat.\n"
-        "Your goal is to satisfy the user's objective.\n\n"
-        "Available Tools:\n"
-        "1. list_dir: List files in a folder. Action Input should be the folder path (e.g. '.' or './src').\n"
-        "2. read_file: Read a text file. Action Input should be the path to the file.\n"
-        '3. write_file: Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".\n'
-        "4. run_command: Run a shell command. Action Input should be the command string.\n"
-        "5. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
-        "At each turn, you MUST output a valid JSON object matching the following structure:\n"
-        "{\n"
-        '  "thought": "What you are planning to do and why",\n'
-        '  "action": "The tool name to call (list_dir, read_file, write_file, run_command, final_answer)",\n'
-        '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
-        "}\n\n"
-        "Remember:\n"
-        "- Do not explain your response outside of the JSON object.\n"
-        "- Output strictly valid JSON. Do not wrap in markdown code blocks."
+    # Instantiate the agent session
+    from herd.services.agent import AgentSession
+
+    session = AgentSession(chosen_model, get_gateway_url())
+
+    console.print("\n🚀 [bold green]Starting Herd Agent Interface[/bold green]")
+    console.print(f"  Model: [bold cyan]{chosen_model}[/bold cyan]")
+    console.print(
+        "  Type [bold red]exit[/bold red] or [bold red]quit[/bold red] to end the session.\n"
     )
 
-    history = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Objective: {objective}"},
-    ]
+    # If an initial objective was passed, run it first!
+    if objective:
+        console.print(f"\n[bold yellow]Objective:[/bold yellow] {objective}")
+        session.run_task(objective, max_turns=max_turns)
 
-    console.print("\n🚀 [bold green]Starting Autonomous Agent Loop[/bold green]")
-    console.print(f"  Model:     [bold cyan]{chosen_model}[/bold cyan]")
-    console.print(f"  Objective: [bold yellow]{objective}[/bold yellow]\n")
-
-    url_chat = f"{get_gateway_url()}/v1/chat/completions"
-
-    for turn in range(1, max_turns + 1):
-        console.print(
-            f"[bold dim]── Turn {turn}/{max_turns} ──────────────────────────────────────[/bold dim]"
-        )
-
-        # 1. Ask LLM for next step
+    # Chat REPL loop
+    while True:
         try:
-            res = httpx.post(
-                url_chat,
-                json={
-                    "model": chosen_model,
-                    "messages": history,
-                    "temperature": 0.2,
-                    "stream": False,
-                },
-                timeout=60.0,
-            )
-            if res.status_code != 200:
-                console.print(f"[red]Error from Gateway: {res.text}[/red]")
+            user_input = console.input("[bold green]Agent 🤖 ❯ [/bold green]").strip()
+            if not user_input:
+                continue
+            if user_input.lower() in ("exit", "quit"):
+                console.print("[yellow]Exiting agent session. Goodbye![/yellow]")
                 break
-            raw_text = res.json()["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            console.print(f"[red]Error communicating with LLM: {e}[/red]")
+
+            session.run_task(user_input, max_turns=max_turns)
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[yellow]Exiting agent session. Goodbye![/yellow]")
             break
-
-        # Cleanup markdown syntax if returned
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:]
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3]
-        raw_text = raw_text.strip()
-
-        # 2. Parse action JSON
-        try:
-            action_data = json.loads(raw_text)
-            thought = action_data["thought"]
-            action = action_data["action"]
-            action_input = action_data["action_input"]
-        except Exception:
-            console.print(
-                f"[red]Error: Model output was not valid JSON. Raw output was:[/red]\n{raw_text}"
-            )
-            history.append({"role": "assistant", "content": raw_text})
-            history.append(
-                {
-                    "role": "user",
-                    "content": "Please output strictly a valid JSON object containing 'thought', 'action', and 'action_input'.",
-                }
-            )
-            continue
-
-        # Print thought
-        console.print(
-            Panel(
-                f"[italic white]{thought}[/italic white]",
-                title=f"🧠 Agent Thought (Turn {turn})",
-                border_style="cyan",
-            )
-        )
-
-        # 3. Handle Actions
-        if action == "final_answer":
-            console.print(
-                Panel(
-                    f"[bold green]Final Answer:[/bold green]\n{action_input}",
-                    title="🏁 Objective Accomplished",
-                    border_style="green",
-                )
-            )
-            break
-
-        console.print(
-            f"⚙️  [bold]Action:[/bold] {action} | [bold]Input:[/bold] {action_input}"
-        )
-
-        observation = ""
-        if action == "list_dir":
-            observation = agent_list_dir(action_input or ".")
-        elif action == "read_file":
-            observation = agent_read_file(action_input)
-        elif action == "write_file":
-            try:
-                if isinstance(action_input, str):
-                    write_data = json.loads(action_input)
-                else:
-                    write_data = action_input
-                observation = agent_write_file(
-                    write_data["path"], write_data["content"]
-                )
-            except Exception as e:
-                observation = f"Error parsing write_file parameters: {e}. Expected a JSON object with 'path' and 'content'."
-        elif action == "run_command":
-            observation = agent_run_command(action_input)
-        else:
-            observation = f"Error: Unknown action '{action}'."
-
-        # Show observation
-        console.print(
-            f"👁️  [bold]Observation:[/bold] {observation[:400]}..."
-            if len(observation) > 400
-            else f"👁️  [bold]Observation:[/bold] {observation}"
-        )
-
-        history.append({"role": "assistant", "content": raw_text})
-        history.append({"role": "user", "content": f"Observation: {observation}"})
