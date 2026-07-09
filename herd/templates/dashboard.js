@@ -811,6 +811,30 @@
             }
         }
 
+        const loadedModelFiles = {};
+
+        async function loadModelFiles(repo) {
+            const selectId = `quant-select-${repo.replace(/\//g, '-')}`;
+            const select = document.getElementById(selectId);
+            if (!select || loadedModelFiles[repo]) return;
+
+            loadedModelFiles[repo] = true;
+            select.innerHTML = '<option value="">⏳ Loading files...</option>';
+
+            try {
+                const files = await fetch(`/v1/hf/files?model=${encodeURIComponent(repo)}`).then(r => r.json());
+                if (files.error || !Array.isArray(files) || files.length === 0) {
+                    select.innerHTML = '<option value="">No GGUF files found</option>';
+                    return;
+                }
+
+                select.innerHTML = files.map(f => `<option value="${f}">${f}</option>`).join('');
+            } catch (e) {
+                select.innerHTML = '<option value="">Error loading files</option>';
+                delete loadedModelFiles[repo];
+            }
+        }
+
         async function searchHuggingFaceHub() {
             const query = document.getElementById('hf-search-query').value.trim();
             if (!query) return;
@@ -818,7 +842,7 @@
             const tbody = document.getElementById('hub-search-results');
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 3rem;">🔍 Searching Hugging Face Hub...</td>
+                    <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">🔍 Searching Hugging Face Hub...</td>
                 </tr>
             `;
 
@@ -827,7 +851,7 @@
                 if (results.error) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="5" style="text-align: center; color: var(--accent-rose); padding: 3rem;">Search failed: ${results.error}</td>
+                            <td colspan="6" style="text-align: center; color: var(--accent-rose); padding: 3rem;">Search failed: ${results.error}</td>
                         </tr>
                     `;
                     return;
@@ -836,7 +860,7 @@
                 if (results.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 3rem;">No GGUF models matched query.</td>
+                            <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">No GGUF models matched query.</td>
                         </tr>
                     `;
                     return;
@@ -848,6 +872,7 @@
                     const dl = r.downloads || 0;
                     const likes = r.likes || 0;
                     const dlStr = dl >= 1000000 ? `${(dl/1000000).toFixed(1)}M` : (dl >= 1000 ? `${(dl/1000).toFixed(1)}k` : dl);
+                    const safeRepoId = repo.replace(/\//g, '-');
 
                     return `
                         <tr>
@@ -855,6 +880,11 @@
                             <td>${author}</td>
                             <td>${dlStr}</td>
                             <td>❤️ ${likes}</td>
+                            <td>
+                                <select id="quant-select-${safeRepoId}" class="input-text" style="width: 250px; font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid var(--card-border);" onclick="loadModelFiles('${repo}')">
+                                    <option value="">(Click to load files...)</option>
+                                </select>
+                            </td>
                             <td>
                                 <button class="btn btn-secondary" onclick="pullModel('${repo}')" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
                                     ⬇ Pull Model
@@ -867,22 +897,33 @@
             } catch (err) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align: center; color: var(--accent-rose); padding: 3rem;">Error connecting to gateway: ${err}</td>
+                        <td colspan="6" style="text-align: center; color: var(--accent-rose); padding: 3rem;">Error connecting to gateway: ${err}</td>
                     </tr>
                 `;
             }
         }
 
         async function pullModel(repoId) {
+            const selectId = `quant-select-${repoId.replace(/\//g, '-')}`;
+            const select = document.getElementById(selectId);
+            const chosenFile = select ? select.value : '';
+
+            if (!chosenFile) {
+                alert("Please select a specific quantization file first! (Click the dropdown next to the model to load files).");
+                return;
+            }
+
+            const fullModelId = `${repoId}:${chosenFile}`;
+
             try {
                 const res = await fetch('/v1/models/pull', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: repoId })
+                    body: JSON.stringify({ model: fullModelId })
                 }).then(r => r.json());
 
                 if (res.status === 'started') {
-                    alert(`Download started for model: ${repoId}\nCheck the progress bars above.`);
+                    alert(`Download started for model: ${fullModelId}\nCheck the progress bars above.`);
                     pollDownloadProgress();
                 } else if (res.status === 'already_pulling') {
                     alert("This model is already currently downloading.");
@@ -920,8 +961,13 @@
                     `;
                 }).join('');
 
+                // Schedule next status fetch in 1 second
+                setTimeout(pollDownloadProgress, 1000);
+
             } catch(e) {
                 console.error('Error polling pull status:', e);
+                // Retry in 2 seconds on error
+                setTimeout(pollDownloadProgress, 2000);
             }
         }
 

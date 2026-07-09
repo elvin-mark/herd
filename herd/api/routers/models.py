@@ -166,6 +166,29 @@ async def hf_search(query: str, limit: int = 10):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@router.get("/v1/hf/files")
+async def hf_files(model: str):
+    """Retrieves all available GGUF/BIN files in a Hugging Face model repository."""
+    url = f"https://huggingface.co/api/models/{model}"
+    client = get_async_http_client()
+    try:
+        res = await client.get(url, timeout=10.0)
+        if res.status_code != 200:
+            return JSONResponse(
+                status_code=res.status_code, content={"error": res.text}
+            )
+        data = res.json()
+        siblings = data.get("siblings", [])
+        files = [
+            sib["rfilename"]
+            for sib in siblings
+            if sib.get("rfilename", "").lower().endswith(".gguf") or sib.get("rfilename", "").lower().endswith(".bin")
+        ]
+        return files
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @router.post("/v1/models/pull")
 async def pull_model(request: Request, background_tasks: BackgroundTasks):
     """Starts pulling a model in the background and tracks progress."""
@@ -219,7 +242,7 @@ async def pull_model(request: Request, background_tasks: BackgroundTasks):
 
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
             client = get_async_http_client()
-            async with client.stream("GET", download_url) as r:
+            async with client.stream("GET", download_url, follow_redirects=True) as r:
                 r.raise_for_status()
                 total = int(r.headers.get("content-length", 0))
                 downloaded = 0
