@@ -254,14 +254,17 @@
                                 </div>
                             </div>
                             
-                            <div class="library-actions">
+                            <div class="library-actions" style="display: flex; gap: 0.5rem;">
                                 ${isRunning ? `
                                     <button class="btn btn-stop" onclick="stopModel('${m.id}')">
                                         ⏹ Stop
                                     </button>
                                 ` : `
                                     <button class="btn btn-load" onclick="loadModel('${m.id}', ${idx})">
-                                        ▶ Load Instance
+                                        ▶ Load
+                                    </button>
+                                    <button class="btn btn-stop" onclick="deleteModel('${m.id}')" title="Delete model from disk" style="padding: 0.6rem 0.8rem; background-color: var(--accent-rose); border-color: var(--accent-rose);">
+                                        🗑️
                                     </button>
                                 `}
                             </div>
@@ -314,6 +317,29 @@
                 }
             } catch (err) {
                 alert(`Error stopping model: ${err}`);
+            }
+        }
+
+        async function deleteModel(modelId) {
+            const confirmDel = window.confirm(`Are you sure you want to delete '${modelId}' from your local disk?`);
+            if (!confirmDel) return;
+
+            try {
+                const res = await fetch('/v1/models/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: modelId })
+                }).then(r => r.json());
+
+                if (res.error) {
+                    alert(`Failed to delete model: ${res.error}`);
+                } else {
+                    alert(`Successfully deleted model: ${modelId}`);
+                    fetchData();
+                    populatePlaygroundModelList();
+                }
+            } catch (e) {
+                alert(`Error deleting model: ${e}`);
             }
         }
 

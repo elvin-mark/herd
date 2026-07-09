@@ -182,7 +182,8 @@ async def hf_files(model: str):
         files = [
             sib["rfilename"]
             for sib in siblings
-            if sib.get("rfilename", "").lower().endswith(".gguf") or sib.get("rfilename", "").lower().endswith(".bin")
+            if sib.get("rfilename", "").lower().endswith(".gguf")
+            or sib.get("rfilename", "").lower().endswith(".bin")
         ]
         return files
     except Exception as e:
@@ -268,3 +269,91 @@ async def pull_model(request: Request, background_tasks: BackgroundTasks):
 async def pull_status():
     """Gets status of all pulling tasks."""
     return pull_tasks
+
+
+@router.post("/v1/models/delete")
+async def delete_model_endpoint(request: Request):
+    """Deletes a downloaded model or repository from disk."""
+    body = await request.json()
+    model_name = body.get("model")
+    if not model_name:
+        return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
+
+    from herd.services.downloader import parse_model_identifier
+    from herd.core.config import HERD_MODELS_DIR
+    import shutil
+
+    try:
+        author, repo, tag = parse_model_identifier(model_name)
+        repo_dir = os.path.join(HERD_MODELS_DIR, "huggingface", author, repo)
+    except Exception:
+        # Check if local path inside HERD_MODELS_DIR
+        abs_path = os.path.abspath(model_name)
+        if not abs_path.startswith(os.path.abspath(HERD_MODELS_DIR)):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": f"Invalid model location. Can only delete inside {HERD_MODELS_DIR}."
+                },
+            )
+        if not os.path.exists(abs_path):
+            return JSONResponse(
+                status_code=404, content={"error": "Model path not found"}
+            )
+
+        try:
+            if os.path.isdir(abs_path):
+                shutil.rmtree(abs_path)
+            else:
+                os.remove(abs_path)
+            return {"status": "deleted"}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+
+    if not os.path.exists(repo_dir):
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Model repository directory not found"},
+        )
+
+    if tag:
+        files = [
+            f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))
+        ]
+        model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
+
+        tagged_files = [
+            f
+            for f in model_files
+            if tag.lower() in f.lower() and "mmproj" not in f.lower()
+        ]
+        if not tagged_files:
+            tagged_files = [f for f in model_files if tag.lower() in f.lower()]
+
+        if not tagged_files:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"No files matching tag '{tag}' found"},
+            )
+
+        target_file = os.path.join(repo_dir, tagged_files[0])
+        try:
+            os.remove(target_file)
+            remaining = os.listdir(repo_dir)
+            if not remaining:
+                shutil.rmtree(repo_dir)
+                author_dir = os.path.dirname(repo_dir)
+                if os.path.exists(author_dir) and not os.listdir(author_dir):
+                    os.rmdir(author_dir)
+            return {"status": "deleted"}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
+    else:
+        try:
+            shutil.rmtree(repo_dir)
+            author_dir = os.path.dirname(repo_dir)
+            if os.path.exists(author_dir) and not os.listdir(author_dir):
+                os.rmdir(author_dir)
+            return {"status": "deleted"}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})

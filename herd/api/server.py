@@ -112,9 +112,7 @@ async def get_dashboard():
 
         content = html_content.replace(
             "<!-- INJECT_STYLE -->", f"<style>\n{css_content}\n</style>"
-        ).replace(
-            "<!-- INJECT_SCRIPT -->", f"<script>\n{js_content}\n</script>"
-        )
+        ).replace("<!-- INJECT_SCRIPT -->", f"<script>\n{js_content}\n</script>")
         return Response(content=content, media_type="text/html")
     except Exception as e:
         return Response(

@@ -4,6 +4,7 @@ import typer
 from herd.commands.models import (
     list_models,
     pull,
+    rm,
     stop,
     ps,
     show_stats,
@@ -33,6 +34,7 @@ app.command(name="watch", rich_help_panel="Core Interfaces")(watch)
 # 2. Register Model Management commands
 app.command(name="list", rich_help_panel="Model Management")(list_models)
 app.command(name="pull", rich_help_panel="Model Management")(pull)
+app.command(name="rm", rich_help_panel="Model Management")(rm)
 app.command(name="search", rich_help_panel="Model Management")(search)
 app.command(name="quantize", rich_help_panel="Model Management")(quantize)
 app.command(name="suggest", rich_help_panel="Model Management")(suggest)

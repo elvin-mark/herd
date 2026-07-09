@@ -85,6 +85,130 @@ def pull(
     asyncio.run(pull_model_async(model_name))
 
 
+def rm(
+    model_name: str = typer.Argument(
+        ...,
+        help="Model identifier to delete (e.g. 'unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M' or 'unsloth/Qwen3.5-0.8B-GGUF')",
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
+):
+    """Deletes a downloaded model or repository from local storage."""
+    from herd.services.downloader import parse_model_identifier
+    from herd.core.config import HERD_MODELS_DIR
+
+    try:
+        author, repo, tag = parse_model_identifier(model_name)
+        repo_dir = os.path.join(HERD_MODELS_DIR, "huggingface", author, repo)
+    except Exception:
+        # Check if it's a local path inside HERD_MODELS_DIR
+        abs_path = os.path.abspath(model_name)
+        if not abs_path.startswith(os.path.abspath(HERD_MODELS_DIR)):
+            console.print(
+                f"[red]Error: Cannot delete '{model_name}'. 'herd rm' only deletes models stored inside {HERD_MODELS_DIR}.[/red]"
+            )
+            raise typer.Exit(1)
+
+        if not os.path.exists(abs_path):
+            console.print(
+                f"[red]Error: Model path '{model_name}' does not exist.[/red]"
+            )
+            raise typer.Exit(1)
+
+        if not yes:
+            confirm = typer.confirm(
+                f"Are you sure you want to delete local model path '{model_name}'?"
+            )
+            if not confirm:
+                console.print("[yellow]Deletion cancelled.[/yellow]")
+                return
+
+        try:
+            if os.path.isdir(abs_path):
+                shutil.rmtree(abs_path)
+            else:
+                os.remove(abs_path)
+            console.print(
+                f"[green]Successfully deleted local model path '{model_name}'.[/green]"
+            )
+            return
+        except Exception as e:
+            console.print(f"[red]Error deleting '{model_name}': {e}[/red]")
+            raise typer.Exit(1)
+
+    if not os.path.exists(repo_dir):
+        console.print(
+            f"[yellow]Model repository directory does not exist: {repo_dir}[/yellow]"
+        )
+        return
+
+    if tag:
+        files = [
+            f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))
+        ]
+        model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
+
+        tagged_files = [
+            f
+            for f in model_files
+            if tag.lower() in f.lower() and "mmproj" not in f.lower()
+        ]
+        if not tagged_files:
+            tagged_files = [f for f in model_files if tag.lower() in f.lower()]
+
+        if not tagged_files:
+            console.print(
+                f"[yellow]No files matching tag '{tag}' found in {repo_dir}.[/yellow]"
+            )
+            return
+
+        target_file = os.path.join(repo_dir, tagged_files[0])
+        if not yes:
+            confirm = typer.confirm(
+                f"Are you sure you want to delete model file '{tagged_files[0]}'?"
+            )
+            if not confirm:
+                console.print("[yellow]Deletion cancelled.[/yellow]")
+                return
+
+        try:
+            os.remove(target_file)
+            console.print(
+                f"[green]Successfully deleted model file '{tagged_files[0]}'.[/green]"
+            )
+
+            # If the directory is now empty, clean it up
+            remaining = os.listdir(repo_dir)
+            if not remaining:
+                shutil.rmtree(repo_dir)
+                author_dir = os.path.dirname(repo_dir)
+                if os.path.exists(author_dir) and not os.listdir(author_dir):
+                    os.rmdir(author_dir)
+        except Exception as e:
+            console.print(f"[red]Error deleting model file: {e}[/red]")
+            raise typer.Exit(1)
+    else:
+        if not yes:
+            confirm = typer.confirm(
+                f"Are you sure you want to delete the entire model repository '{model_name}'?"
+            )
+            if not confirm:
+                console.print("[yellow]Deletion cancelled.[/yellow]")
+                return
+
+        try:
+            shutil.rmtree(repo_dir)
+            console.print(
+                f"[green]Successfully deleted model repository '{model_name}'.[/green]"
+            )
+
+            author_dir = os.path.dirname(repo_dir)
+            if os.path.exists(author_dir) and not os.listdir(author_dir):
+                os.rmdir(author_dir)
+        except Exception as e:
+            console.print(f"[red]Error deleting model repository: {e}[/red]")
+            raise typer.Exit(1)
+
+
 def stop(
     model_name: Optional[str] = typer.Argument(
         None, help="Model identifier to stop. Required unless --all is specified."
