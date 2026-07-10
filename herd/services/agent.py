@@ -31,6 +31,25 @@ def agent_write_file(path: str, content: str) -> str:
         return f"Error writing file: {e}"
 
 
+def agent_edit_file(path: str, target: str, replacement: str) -> str:
+    try:
+        if not os.path.exists(path):
+            return f"Error: File '{path}' does not exist."
+        with open(path, "r", errors="ignore") as f:
+            content = f.read()
+        if target not in content:
+            return f"Error: Target content to replace not found in '{path}'. Make sure it matches exactly (including leading whitespace)."
+        count = content.count(target)
+        if count > 1:
+            return f"Error: Target content occurs {count} times in '{path}'. Please specify a more unique block of code (including surrounding lines) to edit."
+        new_content = content.replace(target, replacement)
+        with open(path, "w") as f:
+            f.write(new_content)
+        return f"Successfully edited file '{path}' (replaced target content)."
+    except Exception as e:
+        return f"Error editing file: {e}"
+
+
 def agent_run_command(command: str) -> str:
     try:
         res = subprocess.run(
@@ -96,15 +115,16 @@ class AgentSession:
             "1. list_dir: List files in a folder. Action Input should be the folder path (e.g. '.' or './src').\n"
             "2. read_file: Read a text file. Action Input should be the path to the file.\n"
             '3. write_file: Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".\n'
-            "4. run_command: Run a shell command. Action Input should be the command string.\n"
-            '5. search_grep: Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').\n'
-            "6. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+            '4. edit_file: Edit a text file by replacing a unique block of target content with new content. Action Input should be a JSON object containing "path", "target", and "replacement".\n'
+            "5. run_command: Run a shell command. Action Input should be the command string.\n"
+            '6. search_grep: Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').\n'
+            "7. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
             "CRITICAL: Once the user's objective has been successfully met, you MUST immediately call the 'final_answer' tool to exit the loop.\n"
             "Do NOT perform duplicate, redundant, or repeating actions (e.g. writing the same file repeatedly) once the task is already completed.\n\n"
             "At each turn, you MUST output a valid JSON object matching the following structure:\n"
             "{\n"
             '  "thought": "What you are planning to do and why",\n'
-            '  "action": "The tool name to call (list_dir, read_file, write_file, run_command, search_grep, final_answer)",\n'
+            '  "action": "The tool name to call (list_dir, read_file, write_file, edit_file, run_command, search_grep, final_answer)",\n'
             '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
             "}\n\n"
             "Remember:\n"
@@ -214,6 +234,19 @@ class AgentSession:
                     )
                 except Exception as e:
                     observation = f"Error parsing write_file parameters: {e}. Expected a JSON object with 'path' and 'content'."
+            elif action == "edit_file":
+                try:
+                    if isinstance(action_input, str):
+                        edit_data = json.loads(action_input)
+                    else:
+                        edit_data = action_input
+                    observation = agent_edit_file(
+                        edit_data["path"],
+                        edit_data["target"],
+                        edit_data["replacement"],
+                    )
+                except Exception as e:
+                    observation = f"Error parsing edit_file parameters: {e}. Expected a JSON object with 'path', 'target', and 'replacement'."
             elif action == "run_command":
                 observation = agent_run_command(action_input)
             elif action == "search_grep":
