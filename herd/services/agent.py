@@ -21,6 +21,30 @@ def agent_read_file(path: str) -> str:
         return f"Error reading file: {e}"
 
 
+def agent_view_file_lines(path: str, start_line: int, end_line: int) -> str:
+    try:
+        if not os.path.exists(path):
+            return f"Error: File '{path}' does not exist."
+        if start_line < 1 or end_line < start_line:
+            return "Error: Invalid line range. Ensure start_line >= 1 and end_line >= start_line."
+
+        with open(path, "r", errors="ignore") as f:
+            lines = f.readlines()
+
+        total_lines = len(lines)
+        if start_line > total_lines:
+            return f"Error: start_line {start_line} exceeds total lines ({total_lines}) in '{path}'."
+
+        sliced = lines[start_line - 1 : min(end_line, total_lines)]
+        output = []
+        for idx, line in enumerate(sliced, start=start_line):
+            output.append(f"{idx}: {line}")
+
+        return "".join(output)
+    except Exception as e:
+        return f"Error reading file lines: {e}"
+
+
 def agent_write_file(path: str, content: str) -> str:
     try:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
@@ -103,9 +127,10 @@ def agent_search_grep(pattern: str, path: str = ".") -> str:
 
 
 class AgentSession:
-    def __init__(self, model_name: str, gateway_url: str):
+    def __init__(self, model_name: str, gateway_url: str, yolo: bool = False):
         self.model_name = model_name
         self.gateway_url = gateway_url
+        self.yolo = yolo
 
         self.system_prompt = (
             "You are an autonomous AI engineering agent executing tasks in a local workspace.\n"
@@ -114,17 +139,18 @@ class AgentSession:
             "Available Tools:\n"
             "1. list_dir: List files in a folder. Action Input should be the folder path (e.g. '.' or './src').\n"
             "2. read_file: Read a text file. Action Input should be the path to the file.\n"
-            '3. write_file: Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".\n'
-            '4. edit_file: Edit a text file by replacing a unique block of target content with new content. Action Input should be a JSON object containing "path", "target", and "replacement".\n'
-            "5. run_command: Run a shell command. Action Input should be the command string.\n"
-            '6. search_grep: Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').\n'
-            "7. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+            '3. view_file_lines: Read specific lines from a file. Action Input should be a JSON object containing "path", "start_line" (1-indexed, integer), and "end_line" (1-indexed, integer).\n'
+            '4. write_file: Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".\n'
+            '5. edit_file: Edit a text file by replacing a unique block of target content with new content. Action Input should be a JSON object containing "path", "target", and "replacement".\n'
+            "6. run_command: Run a shell command. Action Input should be the command string.\n"
+            '7. search_grep: Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').\n'
+            "8. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
             "CRITICAL: Once the user's objective has been successfully met, you MUST immediately call the 'final_answer' tool to exit the loop.\n"
             "Do NOT perform duplicate, redundant, or repeating actions (e.g. writing the same file repeatedly) once the task is already completed.\n\n"
             "At each turn, you MUST output a valid JSON object matching the following structure:\n"
             "{\n"
             '  "thought": "What you are planning to do and why",\n'
-            '  "action": "The tool name to call (list_dir, read_file, write_file, edit_file, run_command, search_grep, final_answer)",\n'
+            '  "action": "The tool name to call (list_dir, read_file, view_file_lines, write_file, edit_file, run_command, search_grep, final_answer)",\n'
             '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
             "}\n\n"
             "Remember:\n"
@@ -247,8 +273,34 @@ class AgentSession:
                     )
                 except Exception as e:
                     observation = f"Error parsing edit_file parameters: {e}. Expected a JSON object with 'path', 'target', and 'replacement'."
+            elif action == "view_file_lines":
+                try:
+                    if isinstance(action_input, str):
+                        view_data = json.loads(action_input)
+                    else:
+                        view_data = action_input
+                    observation = agent_view_file_lines(
+                        view_data["path"],
+                        int(view_data["start_line"]),
+                        int(view_data["end_line"]),
+                    )
+                except Exception as e:
+                    observation = f"Error parsing view_file_lines parameters: {e}. Expected a JSON object with 'path', 'start_line', and 'end_line'."
             elif action == "run_command":
-                observation = agent_run_command(action_input)
+                if self.yolo:
+                    observation = agent_run_command(action_input)
+                else:
+                    console.print(
+                        "\n[bold yellow]🔔 Action Approval Required:[/bold yellow] Agent wants to run shell command:"
+                    )
+                    console.print(f"  [cyan]{action_input}[/cyan]\n")
+                    import typer
+
+                    confirm = typer.confirm("Allow execution?")
+                    if confirm:
+                        observation = agent_run_command(action_input)
+                    else:
+                        observation = "Error: User rejected execution of this command."
             elif action == "search_grep":
                 try:
                     if isinstance(action_input, str):

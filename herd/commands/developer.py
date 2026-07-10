@@ -911,6 +911,12 @@ def agent(
         "-t",
         help="Maximum execution turns/iterations to run per request.",
     ),
+    yolo: bool = typer.Option(
+        False,
+        "--yolo",
+        "-y",
+        help="Bypass interactive approvals for running shell commands.",
+    ),
 ):
     """Launches an interactive or autonomous local AI agent loop to execute multi-step tasks in your workspace."""
     # 1. Resolve LLM model
@@ -936,7 +942,7 @@ def agent(
     # Instantiate the agent session
     from herd.services.agent import AgentSession
 
-    session = AgentSession(chosen_model, get_gateway_url())
+    session = AgentSession(chosen_model, get_gateway_url(), yolo=yolo)
 
     console.print("\n🚀 [bold green]Starting Herd Agent Interface[/bold green]")
     console.print(f"  Model: [bold cyan]{chosen_model}[/bold cyan]")
