@@ -64,8 +64,13 @@ async def list_active_models():
             pid = info["process"].pid
             resources = manager.get_process_resources(pid)
             mem_bytes = resources["memory_bytes"]
-            mem_mb = mem_bytes / (1024 * 1024)
-            idle_seconds = int(time.time() - info.get("last_accessed", time.time()))
+            mem_gb = mem_bytes / (1024 * 1024 * 1024)
+            mem_str = (
+                f"{mem_gb:.2f} GB"
+                if mem_gb >= 1.0
+                else f"{mem_bytes / (1024 * 1024):.1f} MB"
+            )
+
             active.append(
                 {
                     "model": info["model_name"],
@@ -73,10 +78,12 @@ async def list_active_models():
                     "is_whisper": info.get("is_whisper", False),
                     "is_embedding": info.get("is_embedding", False),
                     "pid": pid,
-                    "cpu_percent": resources["cpu_percent"],
                     "memory_bytes": mem_bytes,
-                    "memory_str": f"{mem_mb:.1f} MB",
-                    "idle_seconds": idle_seconds,
+                    "memory_str": mem_str,
+                    "cpu_percent": resources["cpu_percent"],
+                    "last_accessed": info["last_accessed"],
+                    "idle_seconds": int(time.time() - info["last_accessed"]),
+                    "log_path": info.get("log_path"),
                 }
             )
     return active

@@ -345,8 +345,13 @@ During an active CLI chat session (launched via `herd run <model>`), you can use
 The Herd gateway listens on port `11434` (by default) and exposes a web control panel as well as standard OpenAI-compatible endpoints:
 
 ### Web Control Center Dashboard
-You can monitor active models, CPU/RAM utilization, view cumulative statistics, and manage your local model library (with load and unload buttons) via a beautiful, real-time GUI in your browser:
-* **URL**: `http://localhost:11434` or `http://localhost:11434/dashboard`
+You can monitor active models, CPU/RAM utilization, view cumulative statistics, and manage your local model library via a beautiful, real-time GUI in your browser. It also features a fully interactive **Chat Playground**:
+*   **URL**: `http://localhost:11434` or `http://localhost:11434/dashboard`
+*   **Interactive Chat Playground**: Chat with any downloaded model directly. If the model is inactive, Herd will automatically spin it up on demand.
+*   **Markdown & Code Syntax Highlighting**: Visualizes code blocks, lists, and tables cleanly using `marked.js` and `Prism.js`.
+*   **Voice Input**: Dictate messages using a microphone button. Audio is recorded directly from the browser and transcribed using local Whisper models.
+*   **System Prompt Presets**: Instantly swap roles (e.g. *Coding Copilot*, *Concise Assistant*, *Academic Tutor*, *Creative Writer*).
+*   **Telemetry Metrics**: Tracks response speed (tokens/sec) and total duration for every query.
 
 ### OpenAI-Compatible API Endpoints
 
