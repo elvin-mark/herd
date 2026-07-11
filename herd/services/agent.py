@@ -193,16 +193,32 @@ class AgentSession:
                 console.print(f"[red]Error communicating with LLM: {e}[/red]")
                 break
 
-            # Cleanup markdown syntax if returned
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
+            # Extract think block if present and format JSON text
+            cleaned_text = raw_text.strip()
+            think_content = ""
+            if "<think>" in cleaned_text and "</think>" in cleaned_text:
+                start_think = cleaned_text.find("<think>") + 7
+                end_think = cleaned_text.find("</think>")
+                think_content = cleaned_text[start_think:end_think].strip()
+                cleaned_text = cleaned_text[end_think + 8 :].strip()
+
+            if "{" in cleaned_text and "}" in cleaned_text:
+                start_json = cleaned_text.find("{")
+                end_json = cleaned_text.rfind("}") + 1
+                cleaned_text = cleaned_text[start_json:end_json].strip()
+
+            if think_content:
+                console.print(
+                    Panel(
+                        f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                        title="💭 Model Reasoning (CoT)",
+                        border_style="yellow",
+                    )
+                )
 
             # 2. Parse action JSON
             try:
-                action_data = json.loads(raw_text)
+                action_data = json.loads(cleaned_text)
                 thought = action_data["thought"]
                 action = action_data["action"]
                 action_input = action_data["action_input"]
