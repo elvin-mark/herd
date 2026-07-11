@@ -127,10 +127,17 @@ def agent_search_grep(pattern: str, path: str = ".") -> str:
 
 
 class AgentSession:
-    def __init__(self, model_name: str, gateway_url: str, yolo: bool = False):
+    def __init__(
+        self,
+        model_name: str,
+        gateway_url: str,
+        yolo: bool = False,
+        use_memory: bool = True,
+    ):
         self.model_name = model_name
         self.gateway_url = gateway_url
         self.yolo = yolo
+        self.use_memory = use_memory
 
         self.system_prompt = (
             "You are an autonomous AI engineering agent executing tasks in a local workspace.\n"
@@ -144,19 +151,52 @@ class AgentSession:
             '5. edit_file: Edit a text file by replacing a unique block of target content with new content. Action Input should be a JSON object containing "path", "target", and "replacement".\n'
             "6. run_command: Run a shell command. Action Input should be the command string.\n"
             '7. search_grep: Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').\n'
-            "8. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+        )
+        if self.use_memory:
+            self.system_prompt += (
+                "8. save_memory: Save an important project rule, context, or lesson learned to your long-term memory database. Action Input should be the text to remember.\n"
+                "9. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+            )
+        else:
+            self.system_prompt += "8. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+
+        self.system_prompt += (
             "CRITICAL: Once the user's objective has been successfully met, you MUST immediately call the 'final_answer' tool to exit the loop.\n"
             "Do NOT perform duplicate, redundant, or repeating actions (e.g. writing the same file repeatedly) once the task is already completed.\n\n"
             "At each turn, you MUST output a valid JSON object matching the following structure:\n"
             "{\n"
             '  "thought": "What you are planning to do and why",\n'
-            '  "action": "The tool name to call (list_dir, read_file, view_file_lines, write_file, edit_file, run_command, search_grep, final_answer)",\n'
+        )
+
+        if self.use_memory:
+            self.system_prompt += '  "action": "The tool name to call (list_dir, read_file, view_file_lines, write_file, edit_file, run_command, search_grep, save_memory, final_answer)",\n'
+        else:
+            self.system_prompt += '  "action": "The tool name to call (list_dir, read_file, view_file_lines, write_file, edit_file, run_command, search_grep, final_answer)",\n'
+
+        self.system_prompt += (
             '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
             "}\n\n"
             "Remember:\n"
             "- Do not explain your response outside of the JSON object.\n"
             "- Output strictly valid JSON. Do not wrap in markdown code blocks."
         )
+
+        # Load Long-Term Memory
+        if self.use_memory:
+            memory_path = os.path.expanduser("~/.herd/agent_memory.json")
+            if os.path.exists(memory_path):
+                try:
+                    with open(memory_path, "r") as f:
+                        memories = json.load(f)
+                    if memories:
+                        memory_block = "\n\nRetrieved Long-Term Memories (Context):\n"
+                        for i, mem in enumerate(
+                            memories[-10:], 1
+                        ):  # Max 10 recent memories
+                            memory_block += f"- {mem}\n"
+                        self.system_prompt += memory_block
+                except Exception:
+                    pass
 
         self.history = [{"role": "system", "content": self.system_prompt}]
 
@@ -340,6 +380,22 @@ class AgentSession:
                     observation = agent_search_grep(pattern, search_path)
                 except Exception as e:
                     observation = f"Error parsing search_grep parameters: {e}. Expected a JSON object with 'pattern' and optional 'path'."
+            elif action == "save_memory":
+                try:
+                    memory_path = os.path.expanduser("~/.herd/agent_memory.json")
+                    os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+                    memories = []
+                    if os.path.exists(memory_path):
+                        with open(memory_path, "r") as f:
+                            memories = json.load(f)
+                    memories.append(action_input)
+                    with open(memory_path, "w") as f:
+                        json.dump(memories, f, indent=2)
+                    observation = (
+                        f"Successfully saved to long-term memory: {action_input}"
+                    )
+                except Exception as e:
+                    observation = f"Error saving memory: {e}"
             else:
                 observation = f"Error: Unknown action '{action}'."
 
