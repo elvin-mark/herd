@@ -246,9 +246,17 @@ class AgentSession:
 
             # 3. Handle Actions
             if action == "final_answer":
+                from rich.markdown import Markdown
+                from rich.console import Group
+                from rich.text import Text
+
+                content_group = Group(
+                    Text("Final Answer:", style="bold green"),
+                    Markdown(action_input),
+                )
                 console.print(
                     Panel(
-                        f"[bold green]Final Answer:[/bold green]\n{action_input}",
+                        content_group,
                         title="🏁 Objective Accomplished",
                         border_style="green",
                     )
