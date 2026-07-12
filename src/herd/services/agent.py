@@ -218,6 +218,20 @@ class AgentSession:
                 except Exception:
                     pass
 
+        # Load Workspace Agent Rules
+        if os.path.exists("AGENTS.md"):
+            try:
+                with open("AGENTS.md", "r", errors="ignore") as f:
+                    agents_rules = f.read().strip()
+                if agents_rules:
+                    self.system_prompt += (
+                        f"\n\nProject Coding Guidelines (from AGENTS.md):\n"
+                        f"{agents_rules}\n"
+                    )
+            except Exception as e:
+                console.print(
+                    f"[dim yellow]Warning: Could not read AGENTS.md: {e}[/dim yellow]"
+                )
         self.history = [{"role": "system", "content": self.system_prompt}]
 
     def _register_default_tools(self):
