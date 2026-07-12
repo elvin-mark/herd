@@ -3,6 +3,40 @@ import json
 import subprocess
 import httpx
 from herd.core.utils import console
+from typing import Callable, Any, Dict
+
+
+class Tool:
+    def __init__(self, name: str, description: str, func: Callable[[Any], str]):
+        self.name = name
+        self.description = description
+        self.func = func
+
+
+class ToolRegistry:
+    def __init__(self):
+        self.tools: Dict[str, Tool] = {}
+
+    def register(self, tool: Tool):
+        self.tools[tool.name] = tool
+
+    def get_prompt_string(self) -> str:
+        lines = ["Available Tools:"]
+        for i, tool in enumerate(self.tools.values(), 1):
+            lines.append(f"{i}. {tool.name}: {tool.description}")
+        return "\n".join(lines) + "\n\n"
+
+    def get_action_schema(self) -> str:
+        names = ", ".join(self.tools.keys())
+        return f'"The tool name to call ({names})"'
+
+    def execute(self, action: str, action_input: Any) -> str:
+        if action not in self.tools:
+            return f"Error: Unknown action '{action}'."
+        try:
+            return self.tools[action].func(action_input)
+        except Exception as e:
+            return f"Error executing {action}: {e}"
 
 
 def agent_list_dir(path: str = ".") -> str:
@@ -139,26 +173,15 @@ class AgentSession:
         self.yolo = yolo
         self.use_memory = use_memory
 
+        self.registry = ToolRegistry()
+        self._register_default_tools()
+
         self.system_prompt = (
             "You are an autonomous AI engineering agent executing tasks in a local workspace.\n"
             "You operate in a loop: Thought -> Action -> Observation -> Repeat.\n"
             "Your goal is to satisfy the user's objective.\n\n"
-            "Available Tools:\n"
-            "1. list_dir: List files in a folder. Action Input should be the folder path (e.g. '.' or './src').\n"
-            "2. read_file: Read a text file. Action Input should be the path to the file.\n"
-            '3. view_file_lines: Read specific lines from a file. Action Input should be a JSON object containing "path", "start_line" (1-indexed, integer), and "end_line" (1-indexed, integer).\n'
-            '4. write_file: Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".\n'
-            '5. edit_file: Edit a text file by replacing a unique block of target content with new content. Action Input should be a JSON object containing "path", "target", and "replacement".\n'
-            "6. run_command: Run a shell command. Action Input should be the command string.\n"
-            '7. search_grep: Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').\n'
         )
-        if self.use_memory:
-            self.system_prompt += (
-                "8. save_memory: Save an important project rule, context, or lesson learned to your long-term memory database. Action Input should be the text to remember.\n"
-                "9. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
-            )
-        else:
-            self.system_prompt += "8. final_answer: Signal that you have finished the objective. Action Input should be a summary of the result.\n\n"
+        self.system_prompt += self.registry.get_prompt_string()
 
         self.system_prompt += (
             "CRITICAL: Once the user's objective has been successfully met, you MUST immediately call the 'final_answer' tool to exit the loop.\n"
@@ -168,10 +191,7 @@ class AgentSession:
             '  "thought": "What you are planning to do and why",\n'
         )
 
-        if self.use_memory:
-            self.system_prompt += '  "action": "The tool name to call (list_dir, read_file, view_file_lines, write_file, edit_file, run_command, search_grep, save_memory, final_answer)",\n'
-        else:
-            self.system_prompt += '  "action": "The tool name to call (list_dir, read_file, view_file_lines, write_file, edit_file, run_command, search_grep, final_answer)",\n'
+        self.system_prompt += f'  "action": {self.registry.get_action_schema()},\n'
 
         self.system_prompt += (
             '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
@@ -199,6 +219,128 @@ class AgentSession:
                     pass
 
         self.history = [{"role": "system", "content": self.system_prompt}]
+
+    def _register_default_tools(self):
+        self.registry.register(
+            Tool(
+                "list_dir",
+                "List files in a folder. Action Input should be the folder path (e.g. '.' or './src').",
+                lambda i: agent_list_dir(i or "."),
+            )
+        )
+        self.registry.register(
+            Tool(
+                "read_file",
+                "Read a text file. Action Input should be the path to the file.",
+                agent_read_file,
+            )
+        )
+
+        def _view_lines(i):
+            data = json.loads(i) if isinstance(i, str) else i
+            return agent_view_file_lines(
+                data["path"], int(data["start_line"]), int(data["end_line"])
+            )
+
+        self.registry.register(
+            Tool(
+                "view_file_lines",
+                'Read specific lines from a file. Action Input should be a JSON object containing "path", "start_line" (1-indexed, integer), and "end_line" (1-indexed, integer).',
+                _view_lines,
+            )
+        )
+
+        def _write_file(i):
+            data = json.loads(i) if isinstance(i, str) else i
+            return agent_write_file(data["path"], data["content"])
+
+        self.registry.register(
+            Tool(
+                "write_file",
+                'Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".',
+                _write_file,
+            )
+        )
+
+        def _edit_file(i):
+            data = json.loads(i) if isinstance(i, str) else i
+            return agent_edit_file(data["path"], data["target"], data["replacement"])
+
+        self.registry.register(
+            Tool(
+                "edit_file",
+                'Edit a text file by replacing a unique block of target content with new content. Action Input should be a JSON object containing "path", "target", and "replacement".',
+                _edit_file,
+            )
+        )
+
+        def _run_cmd(i):
+            if self.yolo:
+                return agent_run_command(i)
+            console.print(
+                "\n[bold yellow]🔔 Action Approval Required:[/bold yellow] Agent wants to run shell command:"
+            )
+            console.print(f"  [cyan]{i}[/cyan]\n")
+            import typer
+
+            if typer.confirm("Allow execution?"):
+                return agent_run_command(i)
+            return "Error: User rejected execution of this command."
+
+        self.registry.register(
+            Tool(
+                "run_command",
+                "Run a shell command. Action Input should be the command string.",
+                _run_cmd,
+            )
+        )
+
+        def _search_grep(i):
+            if isinstance(i, str):
+                try:
+                    data = json.loads(i)
+                except Exception:
+                    data = {"pattern": i}
+            else:
+                data = i
+            return agent_search_grep(data.get("pattern", ""), data.get("path", "."))
+
+        self.registry.register(
+            Tool(
+                "search_grep",
+                'Search file contents recursively in a folder for a text pattern. Action Input should be a JSON object containing "pattern" and optionally "path" (defaults to \'.\').',
+                _search_grep,
+            )
+        )
+
+        def _save_memory(i):
+            memory_path = os.path.expanduser("~/.herd/agent_memory.json")
+            os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+            memories = []
+            if os.path.exists(memory_path):
+                with open(memory_path, "r") as f:
+                    memories = json.load(f)
+            memories.append(i)
+            with open(memory_path, "w") as f:
+                json.dump(memories, f, indent=2)
+            return f"Successfully saved to long-term memory: {i}"
+
+        if self.use_memory:
+            self.registry.register(
+                Tool(
+                    "save_memory",
+                    "Save an important project rule, context, or lesson learned to your long-term memory database. Action Input should be the text to remember.",
+                    _save_memory,
+                )
+            )
+
+        self.registry.register(
+            Tool(
+                "final_answer",
+                "Signal that you have finished the objective. Action Input should be a summary of the result.",
+                lambda i: "",
+            )
+        )
 
     def run_task(self, objective: str, max_turns: int = 10):
         from rich.panel import Panel
@@ -308,96 +450,7 @@ class AgentSession:
                 f"⚙️  [bold]Action:[/bold] {action} | [bold]Input:[/bold] {action_input}"
             )
 
-            observation = ""
-            if action == "list_dir":
-                observation = agent_list_dir(action_input or ".")
-            elif action == "read_file":
-                observation = agent_read_file(action_input)
-            elif action == "write_file":
-                try:
-                    if isinstance(action_input, str):
-                        write_data = json.loads(action_input)
-                    else:
-                        write_data = action_input
-                    observation = agent_write_file(
-                        write_data["path"], write_data["content"]
-                    )
-                except Exception as e:
-                    observation = f"Error parsing write_file parameters: {e}. Expected a JSON object with 'path' and 'content'."
-            elif action == "edit_file":
-                try:
-                    if isinstance(action_input, str):
-                        edit_data = json.loads(action_input)
-                    else:
-                        edit_data = action_input
-                    observation = agent_edit_file(
-                        edit_data["path"],
-                        edit_data["target"],
-                        edit_data["replacement"],
-                    )
-                except Exception as e:
-                    observation = f"Error parsing edit_file parameters: {e}. Expected a JSON object with 'path', 'target', and 'replacement'."
-            elif action == "view_file_lines":
-                try:
-                    if isinstance(action_input, str):
-                        view_data = json.loads(action_input)
-                    else:
-                        view_data = action_input
-                    observation = agent_view_file_lines(
-                        view_data["path"],
-                        int(view_data["start_line"]),
-                        int(view_data["end_line"]),
-                    )
-                except Exception as e:
-                    observation = f"Error parsing view_file_lines parameters: {e}. Expected a JSON object with 'path', 'start_line', and 'end_line'."
-            elif action == "run_command":
-                if self.yolo:
-                    observation = agent_run_command(action_input)
-                else:
-                    console.print(
-                        "\n[bold yellow]🔔 Action Approval Required:[/bold yellow] Agent wants to run shell command:"
-                    )
-                    console.print(f"  [cyan]{action_input}[/cyan]\n")
-                    import typer
-
-                    confirm = typer.confirm("Allow execution?")
-                    if confirm:
-                        observation = agent_run_command(action_input)
-                    else:
-                        observation = "Error: User rejected execution of this command."
-            elif action == "search_grep":
-                try:
-                    if isinstance(action_input, str):
-                        try:
-                            search_data = json.loads(action_input)
-                        except Exception:
-                            search_data = {"pattern": action_input}
-                    else:
-                        search_data = action_input
-
-                    pattern = search_data.get("pattern", "")
-                    search_path = search_data.get("path", ".")
-                    observation = agent_search_grep(pattern, search_path)
-                except Exception as e:
-                    observation = f"Error parsing search_grep parameters: {e}. Expected a JSON object with 'pattern' and optional 'path'."
-            elif action == "save_memory":
-                try:
-                    memory_path = os.path.expanduser("~/.herd/agent_memory.json")
-                    os.makedirs(os.path.dirname(memory_path), exist_ok=True)
-                    memories = []
-                    if os.path.exists(memory_path):
-                        with open(memory_path, "r") as f:
-                            memories = json.load(f)
-                    memories.append(action_input)
-                    with open(memory_path, "w") as f:
-                        json.dump(memories, f, indent=2)
-                    observation = (
-                        f"Successfully saved to long-term memory: {action_input}"
-                    )
-                except Exception as e:
-                    observation = f"Error saving memory: {e}"
-            else:
-                observation = f"Error: Unknown action '{action}'."
+            observation = self.registry.execute(action, action_input)
 
             # Show observation
             console.print(
