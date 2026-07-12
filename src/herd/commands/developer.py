@@ -968,9 +968,63 @@ def agent(
             user_input = console.input("[bold green]Agent 🤖 ❯ [/bold green]").strip()
             if not user_input:
                 continue
-            if user_input.lower() in ("exit", "quit"):
+
+            # Built-in Slash Commands
+            if user_input.lower() in ("exit", "quit", "/exit", "/quit"):
                 console.print("[yellow]Exiting agent session. Goodbye![/yellow]")
                 break
+
+            if user_input.lower() == "/help":
+                console.print("\n[bold cyan]Herd Agent Commands:[/bold cyan]")
+                console.print(
+                    "  [bold white]/help[/bold white]   - Show this help message"
+                )
+                console.print(
+                    "  [bold white]/exit[/bold white]   - Exit the agent session"
+                )
+                console.print(
+                    "  [bold white]/usage[/bold white]  - Show estimated token context usage"
+                )
+                console.print(
+                    "  [bold white]/clear[/bold white]  - Clear the conversational history (resets context)"
+                )
+                console.print(
+                    "  [bold white]/system[/bold white] - Show the current agent system prompt\n"
+                )
+                continue
+
+            if user_input.lower() == "/usage":
+                # Roughly estimate 1 token per 4 characters
+                approx_tokens = sum(
+                    len(str(m.get("content", ""))) // 4 for m in session.history
+                )
+                console.print(f"\n[bold green]Estimated Session Usage:[/bold green]")
+                console.print(
+                    f"  Turns / Messages: [white]{len(session.history)}[/white]"
+                )
+                console.print(
+                    f"  Current Context Load: [white]~{approx_tokens:,} tokens[/white]\n"
+                )
+                continue
+
+            if user_input.lower() == "/clear":
+                session.history = [{"role": "system", "content": session.system_prompt}]
+                console.print(
+                    "\n[bold green]✓ Session history cleared. Context is fresh.[/bold green]\n"
+                )
+                continue
+
+            if user_input.lower() == "/system":
+                from rich.panel import Panel
+
+                console.print(
+                    Panel(
+                        session.system_prompt,
+                        title="[cyan]Current System Prompt[/cyan]",
+                        border_style="cyan",
+                    )
+                )
+                continue
 
             session.run_task(user_input, max_turns=max_turns)
         except (KeyboardInterrupt, EOFError):
