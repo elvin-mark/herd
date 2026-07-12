@@ -214,15 +214,32 @@ def copilot(
         console.print(f"[red]Error contacting Gateway: {e}[/red]")
         raise typer.Exit(1)
 
-    # Clean markdown formatting if any
-    if raw_text.startswith("```json"):
-        raw_text = raw_text[7:]
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]
-    raw_text = raw_text.strip()
+    # Extract think block if present and format JSON text
+    cleaned_text = raw_text.strip()
+    think_content = ""
+    if "<think>" in cleaned_text and "</think>" in cleaned_text:
+        start_think = cleaned_text.find("<think>") + 7
+        end_think = cleaned_text.find("</think>")
+        think_content = cleaned_text[start_think:end_think].strip()
+        cleaned_text = cleaned_text[end_think + 8 :].strip()
+
+    if "{" in cleaned_text and "}" in cleaned_text:
+        start_json = cleaned_text.find("{")
+        end_json = cleaned_text.rfind("}") + 1
+        cleaned_text = cleaned_text[start_json:end_json].strip()
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
 
     try:
-        data = json.loads(raw_text)
+        data = json.loads(cleaned_text)
         command = data["command"]
         explanation = data["explanation"]
     except Exception:
@@ -533,15 +550,32 @@ def review(
         console.print(f"[red]Error contacting Gateway: {e}[/red]")
         raise typer.Exit(1)
 
-    # Clean markdown wrapping if present
-    if raw_text.startswith("```json"):
-        raw_text = raw_text[7:]
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]
-    raw_text = raw_text.strip()
+    # Extract think block if present and format JSON text
+    cleaned_text = raw_text.strip()
+    think_content = ""
+    if "<think>" in cleaned_text and "</think>" in cleaned_text:
+        start_think = cleaned_text.find("<think>") + 7
+        end_think = cleaned_text.find("</think>")
+        think_content = cleaned_text[start_think:end_think].strip()
+        cleaned_text = cleaned_text[end_think + 8 :].strip()
+
+    if "{" in cleaned_text and "}" in cleaned_text:
+        start_json = cleaned_text.find("{")
+        end_json = cleaned_text.rfind("}") + 1
+        cleaned_text = cleaned_text[start_json:end_json].strip()
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
 
     try:
-        data = json.loads(raw_text)
+        data = json.loads(cleaned_text)
         if isinstance(data, list):
             issues = data
         elif isinstance(data, dict):
@@ -567,9 +601,6 @@ def review(
     console.print(
         f"\n[bold white]Review Audit Summary: Found {len(criticals)} critical issue(s) and {len(warnings)} warning(s).[/bold white]\n"
     )
-
-    from rich.panel import Panel
-    from rich.console import Group
 
     for issue in issues:
         file_path = issue.get("file", "Unknown")
@@ -712,15 +743,32 @@ def heal(
         console.print(f"[red]Error contacting Gateway: {e}[/red]")
         raise typer.Exit(1)
 
-    # Clean markdown wrapping if present
-    if raw_text.startswith("```json"):
-        raw_text = raw_text[7:]
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]
-    raw_text = raw_text.strip()
+    # Extract think block if present and format JSON text
+    cleaned_text = raw_text.strip()
+    think_content = ""
+    if "<think>" in cleaned_text and "</think>" in cleaned_text:
+        start_think = cleaned_text.find("<think>") + 7
+        end_think = cleaned_text.find("</think>")
+        think_content = cleaned_text[start_think:end_think].strip()
+        cleaned_text = cleaned_text[end_think + 8 :].strip()
+
+    if "{" in cleaned_text and "}" in cleaned_text:
+        start_json = cleaned_text.find("{")
+        end_json = cleaned_text.rfind("}") + 1
+        cleaned_text = cleaned_text[start_json:end_json].strip()
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
 
     try:
-        data = json.loads(raw_text)
+        data = json.loads(cleaned_text)
         explanation = data["error_explanation"]
         suggested_fix = data["suggested_fix"]
         can_auto_run = data["can_auto_run"]
@@ -731,9 +779,6 @@ def heal(
         raise typer.Exit(1)
 
     # Print diagnosis panel
-    from rich.panel import Panel
-    from rich.console import Group
-
     panel_group = Group(
         f"[bold white]Diagnosis:[/bold white]\n  {explanation}\n",
         f"[bold white]Suggested Fix:[/bold white]\n  [bold yellow]{suggested_fix}[/bold yellow]",
