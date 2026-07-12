@@ -1099,7 +1099,7 @@ def agent(
                 approx_tokens = sum(
                     len(str(m.get("content", ""))) // 4 for m in session.history
                 )
-                console.print(f"\n[bold green]Estimated Session Usage:[/bold green]")
+                console.print("\n[bold green]Estimated Session Usage:[/bold green]")
                 console.print(
                     f"  Turns / Messages: [white]{len(session.history)}[/white]"
                 )
