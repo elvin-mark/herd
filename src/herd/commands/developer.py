@@ -983,13 +983,114 @@ def agent(
                     "  [bold white]/exit[/bold white]   - Exit the agent session"
                 )
                 console.print(
+                    "  [bold white]/show[/bold white]   - Show current session configuration and active model"
+                )
+                console.print(
+                    "  [bold white]/tools[/bold white]  - List all registered agent tools"
+                )
+                console.print(
                     "  [bold white]/usage[/bold white]  - Show estimated token context usage"
+                )
+                console.print(
+                    "  [bold white]/yolo[/bold white]   - Toggle YOLO mode (auto-execute shell commands) ON/OFF"
+                )
+                console.print(
+                    "  [bold white]/memory[/bold white] - Toggle long-term memory ON/OFF"
                 )
                 console.print(
                     "  [bold white]/clear[/bold white]  - Clear the conversational history (resets context)"
                 )
                 console.print(
+                    "  [bold white]/save[/bold white]   - Save the current conversation history to a file"
+                )
+                console.print(
                     "  [bold white]/system[/bold white] - Show the current agent system prompt\n"
+                )
+                continue
+
+            if user_input.lower() in ("/show", "/info"):
+                from rich.table import Table
+
+                table = Table(
+                    title="Agent Session Configuration", show_header=False, box=None
+                )
+                table.add_row(
+                    "[bold cyan]Model:[/bold cyan]",
+                    f"[white]{session.model_name}[/white]",
+                )
+                table.add_row(
+                    "[bold cyan]Gateway:[/bold cyan]",
+                    f"[white]{session.gateway_url}[/white]",
+                )
+                table.add_row(
+                    "[bold cyan]YOLO Mode:[/bold cyan]",
+                    "[bold green]ON[/bold green]"
+                    if session.yolo
+                    else "[bold yellow]OFF[/bold yellow]",
+                )
+                table.add_row(
+                    "[bold cyan]Memory:[/bold cyan]",
+                    "[bold green]ON[/bold green]"
+                    if session.use_memory
+                    else "[bold yellow]OFF[/bold yellow]",
+                )
+                table.add_row(
+                    "[bold cyan]Tools Loaded:[/bold cyan]",
+                    f"[white]{len(session.registry.tools)}[/white]",
+                )
+                console.print()
+                console.print(table)
+                console.print()
+                continue
+
+            if user_input.lower() == "/tools":
+                from rich.table import Table
+
+                table = Table(title="Registered Agent Tools", header_style="cyan")
+                table.add_column("Tool Name", style="bold white")
+                table.add_column("Description", style="dim white")
+                for name, tool in session.registry.tools.items():
+                    table.add_row(name, tool.description)
+                console.print()
+                console.print(table)
+                console.print()
+                continue
+
+            if user_input.lower() == "/yolo":
+                session.yolo = not session.yolo
+                state = (
+                    "[bold green]ON[/bold green] (Auto-executing shell commands)"
+                    if session.yolo
+                    else "[bold yellow]OFF[/bold yellow] (Requiring manual approval)"
+                )
+                console.print(f"\n[bold cyan]YOLO Mode is now {state}[/bold cyan]\n")
+                continue
+
+            if user_input.lower() == "/memory":
+                session.use_memory = not session.use_memory
+                state = (
+                    "[bold green]ON[/bold green]"
+                    if session.use_memory
+                    else "[bold yellow]OFF[/bold yellow]"
+                )
+                console.print(
+                    f"\n[bold cyan]Long-Term Memory is now {state}[/bold cyan]\n"
+                )
+                continue
+
+            if user_input.lower() == "/save":
+                import time
+
+                filename = f"agent_transcript_{int(time.time())}.md"
+                with open(filename, "w") as f:
+                    f.write(
+                        f"# Herd Agent Transcript\nModel: {session.model_name}\nDate: {time.ctime()}\n\n"
+                    )
+                    for msg in session.history:
+                        role = msg.get("role", "unknown").upper()
+                        f.write(f"### {role}\n```\n{msg.get('content', '')}\n```\n\n")
+                console.print(
+                    f"\n[bold green]✓ Transcript saved to {filename}[/bold green]\n"
                 )
                 continue
 
