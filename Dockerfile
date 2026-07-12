@@ -48,7 +48,7 @@ RUN whisper-server --help > /dev/null 2>&1 || true
 
 # Copy project files and install Herd CLI package
 COPY pyproject.toml README.md ./
-COPY herd/ ./herd/
+COPY src/herd/ ./src/herd/
 COPY assets/ ./assets/
 
 RUN pip install --no-cache-dir .

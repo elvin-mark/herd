@@ -33,7 +33,7 @@ jobs:
         run: ruff check .
 
       - name: Verify Code Compilation
-        run: python -m py_compile herd/cli.py herd/commands/*.py herd/services/*.py herd/core/*.py herd/api/*.py herd/api/routers/*.py
+        run: python -m py_compile src/herd/cli.py src/herd/commands/*.py src/herd/services/*.py src/herd/core/*.py src/herd/api/*.py src/herd/api/routers/*.py
 
       - name: Run Pytest Suite
         run: pytest

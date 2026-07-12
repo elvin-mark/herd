@@ -64,8 +64,8 @@ fi
 echo -e "\n"
 
 # 5. Index local source files into the vector database using embedding model
-echo -e "${CYAN}[Step 5/8] Indexing local files (herd/core) using ${YELLOW}${EMBED_MODEL}${NC}..."
-herd index ./herd/core --model "$EMBED_MODEL"
+echo -e "${CYAN}[Step 5/8] Indexing local files (src/herd/core) using ${YELLOW}${EMBED_MODEL}${NC}..."
+herd index ./src/herd/core --model "$EMBED_MODEL"
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: RAG indexing failed.${NC}"
     exit 1
