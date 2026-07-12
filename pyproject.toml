@@ -26,4 +26,6 @@ herd = "herd.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["herd", "herd.core", "herd.services", "herd.api"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
