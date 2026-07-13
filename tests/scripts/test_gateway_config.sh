@@ -104,18 +104,7 @@ else
     exit 1
 fi
 
-# 6. Test "herd proxy" (reverse proxy loop in sandboxed timeout)
-echo -e "${CYAN}[Step 6/6] Testing 'herd proxy' reverse proxy gateway...${NC}"
-# Run herd proxy pointing to local gateway in background using a timeout of 3s
-timeout 3 herd proxy "$BASE_URL" --port "$PROXY_PORT" --host "127.0.0.1" > /dev/null 2>&1
-proxy_exit=$?
 
-if [ $proxy_exit -eq 124 ]; then
-    echo -e "${GREEN}Success! 'herd proxy' reverse proxy server ran successfully without crashing.${NC}\n"
-else
-    echo -e "${RED}Failure! 'herd proxy' crashed on startup with exit code: ${proxy_exit}${NC}"
-    exit 1
-fi
 
 # Stop gateway if started by us
 if [ "$started_by_us" = true ]; then

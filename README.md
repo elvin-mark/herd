@@ -324,11 +324,7 @@ Launches an autonomous local AI agent loop (Thought -> Action -> Observation -> 
 herd agent "Find all python files in this project, scan for TODO comments, and write them into a TODO.md markdown table."
 ```
 
-### 29. Local Reverse Proxy Gateway (`herd proxy`)
-Spawns a local reverse-proxy gateway server (port `11434`) that transparently forwards all API endpoints (such as `/v1/chat/completions`, model load/unload commands, and RAG operations) to a remote Herd instance. It fully preserves server-sent event (SSE) streaming, allowing local client apps (like Chatbox or LibreChat) to offload model execution to a remote GPU host:
-```bash
-herd proxy http://192.168.1.100:11434
-```
+
 
 ### Interactive Chat Slash Commands
 During an active CLI chat session (launched via `herd run <model>`), you can use the following interactive slash commands:

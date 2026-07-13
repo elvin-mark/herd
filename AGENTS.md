@@ -26,7 +26,7 @@ Subcommands must be logically grouped inside the `--help` menu using Typer's `ri
 To test command-line applications reliably in non-TTY (CI/CD) environments, organize integration scripts under `tests/scripts/` using these conventions:
 
 ### A. Testing Infinite / TUI Loops (`timeout` checks)
-For commands that spin up blocking real-time monitors (like `herd top`) or reverse proxy servers (like `herd proxy`):
+For commands that spin up blocking real-time monitors (like `herd top`) or local network servers (like `herd serve`):
 *   **Do not** pipe stdout to log files and grep for text (as interactive consoles behave differently when `stdout.isatty()` is `False`).
 *   **Do** run the command inside a sandboxed `timeout` wrapper and verify that it terminates with the standard timeout exit code `124`. Any exit code other than `124` indicates a startup crash.
 *   *Example:*
