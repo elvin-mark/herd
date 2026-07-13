@@ -13,7 +13,6 @@ from herd.core.config import (
     HERD_LOGS_DIR,
     HERD_MODELS_DIR,
     DEFAULT_LLM,
-    REMOTE_GATEWAY,
 )
 from herd.services.downloader import (
     list_hf_repository_files,
@@ -69,21 +68,13 @@ def close_http_clients():
 
 
 def get_gateway_url() -> str:
-    """Returns the API Gateway base URL, pointing to remote_gateway if configured, otherwise localhost."""
-    if REMOTE_GATEWAY:
-        return REMOTE_GATEWAY.rstrip("/")
+    """Returns the API Gateway base URL."""
     return f"http://127.0.0.1:{HERD_PORT}"
 
 
 def is_gateway_running() -> bool:
     """Checks if the Herd gateway server is currently running."""
     client = get_http_client()
-    if REMOTE_GATEWAY:
-        try:
-            response = client.get(f"{get_gateway_url()}/health", timeout=2.0)
-            return response.status_code == 200
-        except Exception:
-            return False
 
     host = HERD_HOST
     if host == "0.0.0.0":
@@ -97,14 +88,6 @@ def is_gateway_running() -> bool:
 
 def auto_start_gateway() -> bool:
     """Starts the Herd gateway server in the background if it isn't running."""
-    if REMOTE_GATEWAY:
-        if is_gateway_running():
-            return True
-        console.print(
-            f"[red]Error: Remote Herd gateway at '{REMOTE_GATEWAY}' is unreachable.[/red]"
-        )
-        return False
-
     if is_gateway_running():
         return True
 

@@ -42,7 +42,6 @@ class HerdSettings:
         self.default_llm = self.overrides.get("default_llm")
         self.default_embedding = self.overrides.get("default_embedding")
         self.default_whisper = self.overrides.get("default_whisper")
-        self.remote_gateway = self.overrides.get("remote_gateway")
         self.providers = self.overrides.get("providers", {})
 
         # Compiled commits
@@ -62,7 +61,6 @@ class HerdSettings:
             "default_llm": self.default_llm,
             "default_embedding": self.default_embedding,
             "default_whisper": self.default_whisper,
-            "remote_gateway": self.remote_gateway,
             "providers": self.providers,
         }
         if self.llama_server_bin:
@@ -96,7 +94,6 @@ WHISPER_SERVER_BIN = settings.whisper_server_bin
 DEFAULT_LLM = settings.default_llm
 DEFAULT_EMBEDDING = settings.default_embedding
 DEFAULT_WHISPER = settings.default_whisper
-REMOTE_GATEWAY = settings.remote_gateway
 PROVIDERS = settings.providers
 
 LLAMA_COMMIT = settings.llama_commit
@@ -114,7 +111,6 @@ def save_config(config: dict):
         "default_embedding", settings.default_embedding
     )
     settings.default_whisper = config.get("default_whisper", settings.default_whisper)
-    settings.remote_gateway = config.get("remote_gateway", settings.remote_gateway)
     if "LLAMA_SERVER_BIN" in config:
         settings.llama_server_bin = config["LLAMA_SERVER_BIN"]
     if "WHISPER_SERVER_BIN" in config:
