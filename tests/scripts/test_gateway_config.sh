@@ -14,7 +14,6 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 API_PORT=11434
-PROXY_PORT=11435
 BASE_URL="http://127.0.0.1:${API_PORT}"
 TEST_MODEL="second-state/All-MiniLM-L6-v2-Embedding-GGUF:all-MiniLM-L6-v2-Q8_0.gguf"
 
