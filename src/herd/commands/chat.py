@@ -301,7 +301,7 @@ def run(
             raise typer.Exit(1)
 
         data = response.json()
-        port = data["port"]
+        port = data.get("port", "proxy")
     except Exception as e:
         console.print(f"[red]Error loading model: {e}[/red]")
         raise typer.Exit(1)
