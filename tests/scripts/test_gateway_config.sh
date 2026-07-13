@@ -22,7 +22,7 @@ echo -e "${CYAN}=== Starting Herd Gateway & Configuration Tests ===${NC}"
 
 # 1. Ensure gateway is online
 started_by_us=false
-echo -e "${CYAN}[Step 1/6] Verifying gateway server status on port ${API_PORT}...${NC}"
+echo -e "${CYAN}[Step 1/5] Verifying gateway server status on port ${API_PORT}...${NC}"
 if ! curl -s "${BASE_URL}/health" &>/dev/null; then
     echo -e "${YELLOW}Gateway is offline. Starting herd gateway in background...${NC}"
     herd serve &
@@ -40,7 +40,7 @@ else
 fi
 
 # 2. Test "herd doctor" (diagnostics)
-echo -e "${CYAN}[Step 2/6] Testing 'herd doctor' diagnostics...${NC}"
+echo -e "${CYAN}[Step 2/5] Testing 'herd doctor' diagnostics...${NC}"
 doctor_res=$(herd doctor)
 echo "$doctor_res"
 echo -e "\n"
@@ -53,7 +53,7 @@ else
 fi
 
 # 3. Test "herd clean" (clean inactive logs)
-echo -e "${CYAN}[Step 3/6] Testing 'herd clean' logs optimizer...${NC}"
+echo -e "${CYAN}[Step 3/5] Testing 'herd clean' logs optimizer...${NC}"
 clean_res=$(herd clean --force)
 echo "$clean_res"
 echo -e "\n"
@@ -66,7 +66,7 @@ else
 fi
 
 # 4. Test "herd config" (override configurations mutations)
-echo -e "${CYAN}[Step 4/6] Testing 'herd config show' and 'herd config set'...${NC}"
+echo -e "${CYAN}[Step 4/5] Testing 'herd config show' and 'herd config set'...${NC}"
 # Backup existing default model if any
 original_llm=$(herd config show | grep "default_llm" | awk '{print $4}' | tr -d ' ')
 
@@ -92,7 +92,7 @@ if [ -n "$original_llm" ] && [ "$original_llm" != "-" ]; then
 fi
 
 # 5. Test "herd share" (connection pairing helpers)
-echo -e "${CYAN}[Step 5/6] Testing 'herd share' local network pairing...${NC}"
+echo -e "${CYAN}[Step 5/5] Testing 'herd share' local network pairing...${NC}"
 share_res=$(herd share --qr)
 echo "$share_res"
 echo -e "\n"
