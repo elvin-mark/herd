@@ -14,7 +14,16 @@ from herd.commands.models import (
 )
 from herd.commands.chat import run, benchmark
 from herd.commands.audio import transcribe
-from herd.commands.developer import copilot, commit, review, heal, vision, agent, triage
+from herd.commands.developer import (
+    copilot,
+    commit,
+    review,
+    heal,
+    vision,
+    agent,
+    triage,
+    pr,
+)
 from herd.commands.db import index, ask, db_app
 from herd.commands.config import config_app
 from herd.commands.server import serve, logs, setup, share, doctor
@@ -66,10 +75,13 @@ app.command(name="clean", rich_help_panel="Gateway & Configuration")(clean)
 app.add_typer(db_app, rich_help_panel="Semantic RAG Database")
 app.add_typer(config_app, rich_help_panel="Gateway & Configuration")
 
-git_app = typer.Typer(name="git", help="Git automations for committing and code review.")
+git_app = typer.Typer(
+    name="git", help="Git automations for committing and code review."
+)
 git_app.command(name="commit")(commit)
 git_app.command(name="review")(review)
 git_app.command(name="triage")(triage)
+git_app.command(name="pr")(pr)
 app.add_typer(git_app, rich_help_panel="Developer Workflows")
 
 

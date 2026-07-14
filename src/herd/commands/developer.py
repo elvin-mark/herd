@@ -18,7 +18,6 @@ from herd.core.utils import (
 )
 
 
-
 def copilot(
     instruction: str = typer.Argument(
         ...,
@@ -702,6 +701,7 @@ async def stream_watch_async(model_name: str, image_data: str, prompt: str):
                         except Exception:
                             pass
 
+
 def vision(
     image_path: str = typer.Argument(
         ..., help="Path to local image file (or URL) to analyze."
@@ -1039,10 +1039,13 @@ def triage(
         ["git", "diff"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
     diff_text = diff_res.stdout.strip()
-    
+
     if not diff_text:
         diff_res = subprocess.run(
-            ["git", "diff", "--cached"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            ["git", "diff", "--cached"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         diff_text = diff_res.stdout.strip()
 
@@ -1135,18 +1138,133 @@ def triage(
         raise typer.Exit(1)
 
     if not commits:
-        console.print("[yellow]Could not logically group the changes. They might be too entangled.[/yellow]")
+        console.print(
+            "[yellow]Could not logically group the changes. They might be too entangled.[/yellow]"
+        )
         return
 
     console.print("\n[bold green]Recommended Atomic Commits:[/bold green]\n")
     for idx, commit_plan in enumerate(commits, 1):
-        console.print(f"📦 [bold magenta]Commit {idx}: {commit_plan.get('theme', 'Updates')}[/bold magenta]")
+        console.print(
+            f"📦 [bold magenta]Commit {idx}: {commit_plan.get('theme', 'Updates')}[/bold magenta]"
+        )
         console.print(f"   [dim]{commit_plan.get('reasoning', '')}[/dim]")
         for file in commit_plan.get("files", []):
             console.print(f"   - [cyan]{file}[/cyan]")
-        
+
         # Output git command hint
         file_args = " ".join([f'"{f}"' for f in commit_plan.get("files", [])])
         console.print(f"   [dim yellow]> git add {file_args}[/dim yellow]\n")
     print("\n")
 
+
+def pr(
+    base: str = typer.Option(
+        "main",
+        "--base",
+        "-b",
+        help="The base branch to compare against (e.g., main or master).",
+    ),
+    model_name: Optional[str] = typer.Option(
+        None, "--model", "-m", help="Specify the model to use."
+    ),
+):
+    """Generate a comprehensive Markdown Pull Request description based on branch history and code diffs."""
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        console.print(
+            "[red]Error: Not a git repository. Please run inside a git project.[/red]"
+        )
+        raise typer.Exit(1)
+
+    # 1. Get commit history
+    log_res = subprocess.run(
+        ["git", "log", f"{base}..HEAD", "--pretty=format:%h - %s"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if log_res.returncode != 0:
+        console.print(
+            f"[red]Error comparing branches: Could not find base branch '{base}'.[/red]"
+        )
+        raise typer.Exit(1)
+
+    commit_history = log_res.stdout.strip()
+
+    # 2. Get code diff
+    diff_res = subprocess.run(
+        ["git", "diff", f"{base}...HEAD"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    diff_text = diff_res.stdout.strip()
+
+    if not diff_text and not commit_history:
+        console.print(
+            f"[yellow]No differences found between '{base}' and HEAD.[/yellow]"
+        )
+        return
+
+    # Truncate to save tokens
+    if len(diff_text) > 15000:
+        console.print(
+            "[yellow]Warning: Git diff is very large. Truncating to 15,000 characters.[/yellow]"
+        )
+        diff_text = diff_text[:15000] + "\n\n... [TRUNCATED] ..."
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found.[/red]")
+        raise typer.Exit(1)
+
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are an expert technical writer and senior software engineer. "
+        "Your task is to draft a comprehensive, professional Markdown Pull Request description.\n\n"
+        "You will be provided with:\n"
+        "1. The COMMIT HISTORY of the feature branch (to understand the developer's intent and steps).\n"
+        "2. The consolidated CODE DIFF against the base branch.\n\n"
+        "Your Pull Request should include:\n"
+        "- A clear, engaging Title (Header 1).\n"
+        "- A 'Summary' section explaining the high-level purpose of the PR.\n"
+        "- A 'Key Changes' section with bullet points.\n"
+        "- A 'Reasoning / Context' section if applicable.\n"
+        "- Do NOT output any JSON. Output pure Markdown."
+    )
+
+    user_prompt = (
+        f"### COMMIT HISTORY:\n{commit_history}\n\n### CODE DIFF:\n{diff_text}"
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    console.print(
+        f"\n[bold cyan]Generating PR Description using {chosen_model}...[/bold cyan]\n"
+    )
+
+    from herd.commands.chat import stream_chat_completions
+
+    try:
+        asyncio.run(stream_chat_completions(chosen_model, messages))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation stopped.[/yellow]")

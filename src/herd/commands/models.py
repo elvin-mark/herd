@@ -1,7 +1,6 @@
 import os
 import time
 import asyncio
-import subprocess
 import shutil
 import httpx
 import typer
@@ -497,8 +496,6 @@ def search(
     console.print(
         "\nTo pull a model, use: [bold cyan]herd pull <repository_id>:<tag>[/bold cyan]\n"
     )
-
-
 
 
 def top():

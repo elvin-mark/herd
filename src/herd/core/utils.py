@@ -311,6 +311,7 @@ async def pull_model_async(model_name: str):
         console.print(f"[red]Failed to download file: {e}[/red]")
         raise typer.Exit(1)
 
+
 def extract_reasoning_and_json(raw_text: str) -> tuple[str, str]:
     """Extracts <think> blocks and formats the remaining text as JSON string. Returns (think_content, json_string)."""
     cleaned_text = raw_text.strip()

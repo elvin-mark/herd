@@ -34,14 +34,14 @@ class HerdSettings:
                     except Exception:
                         pass
                     break
-                
+
                 parent_dir = os.path.dirname(current_dir)
                 if parent_dir == current_dir:
                     break
                 current_dir = parent_dir
         except Exception:
             pass
-            
+
         # Merged overrides (local takes precedence)
         self.overrides = {}
         self.overrides.update(self.global_overrides)
