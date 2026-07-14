@@ -99,6 +99,47 @@ def serve(
     ),
 ):
     """Starts the central Herd API Gateway server."""
+    # 1. Port conflict detection and resolution
+    bound_pid = None
+    for conn in psutil.net_connections(kind='inet'):
+        if conn.laddr.port == port and conn.status == 'LISTEN':
+            bound_pid = conn.pid
+            break
+            
+    if bound_pid:
+        try:
+            import sys
+            proc = psutil.Process(bound_pid)
+            proc_name = proc.name().lower()
+            cmdline = " ".join(proc.cmdline()).lower()
+            is_herd = "herd" in proc_name or "herd" in cmdline
+            
+            if sys.stdin.isatty():
+                # Interactive mode: always prompt the user
+                console.print(f"\n[yellow]⚠️ Port {port} is currently bound by process '{proc.name()}' (PID {bound_pid}).[/yellow]")
+                kill_it = typer.confirm("Do you want to forcefully terminate it and take over the port?")
+                if kill_it:
+                    console.print(f"[yellow]Terminating PID {bound_pid}...[/yellow]")
+                    proc.terminate()
+                    proc.wait(timeout=5)
+                    time.sleep(1) # Give OS time to free port
+                else:
+                    console.print("[red]Aborting gateway startup due to port conflict.[/red]")
+                    raise typer.Exit(1)
+            else:
+                # Background / Detached mode
+                if is_herd:
+                    console.print(f"[yellow]Background mode detected. Auto-killing unresponsive Herd zombie (PID {bound_pid})...[/yellow]")
+                    proc.terminate()
+                    proc.wait(timeout=5)
+                    time.sleep(1)
+                else:
+                    console.print(f"[red]Error: Port {port} is bound by '{proc.name()}' (PID {bound_pid}). Cannot prompt in background mode. Aborting.[/red]")
+                    raise typer.Exit(1)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            console.print(f"[red]Error: Port {port} is in use by an unknown process (Permission denied).[/red]")
+            raise typer.Exit(1)
+
     # Ensure gateway port and host are set in env so other processes know about it
     os.environ["HERD_PORT"] = str(port)
     os.environ["HERD_HOST"] = host

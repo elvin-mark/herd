@@ -14,6 +14,7 @@ from herd.core.utils import (
     get_gateway_url,
     auto_start_gateway,
     find_running_llm,
+    extract_reasoning_and_json,
 )
 
 
@@ -85,18 +86,7 @@ def copilot(
         raise typer.Exit(1)
 
     # Extract think block if present and format JSON text
-    cleaned_text = raw_text.strip()
-    think_content = ""
-    if "<think>" in cleaned_text and "</think>" in cleaned_text:
-        start_think = cleaned_text.find("<think>") + 7
-        end_think = cleaned_text.find("</think>")
-        think_content = cleaned_text[start_think:end_think].strip()
-        cleaned_text = cleaned_text[end_think + 8 :].strip()
-
-    if "{" in cleaned_text and "}" in cleaned_text:
-        start_json = cleaned_text.find("{")
-        end_json = cleaned_text.rfind("}") + 1
-        cleaned_text = cleaned_text[start_json:end_json].strip()
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
 
     if think_content:
         console.print(
@@ -421,18 +411,7 @@ def review(
         raise typer.Exit(1)
 
     # Extract think block if present and format JSON text
-    cleaned_text = raw_text.strip()
-    think_content = ""
-    if "<think>" in cleaned_text and "</think>" in cleaned_text:
-        start_think = cleaned_text.find("<think>") + 7
-        end_think = cleaned_text.find("</think>")
-        think_content = cleaned_text[start_think:end_think].strip()
-        cleaned_text = cleaned_text[end_think + 8 :].strip()
-
-    if "{" in cleaned_text and "}" in cleaned_text:
-        start_json = cleaned_text.find("{")
-        end_json = cleaned_text.rfind("}") + 1
-        cleaned_text = cleaned_text[start_json:end_json].strip()
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
 
     if think_content:
         console.print(
@@ -614,18 +593,7 @@ def heal(
         raise typer.Exit(1)
 
     # Extract think block if present and format JSON text
-    cleaned_text = raw_text.strip()
-    think_content = ""
-    if "<think>" in cleaned_text and "</think>" in cleaned_text:
-        start_think = cleaned_text.find("<think>") + 7
-        end_think = cleaned_text.find("</think>")
-        think_content = cleaned_text[start_think:end_think].strip()
-        cleaned_text = cleaned_text[end_think + 8 :].strip()
-
-    if "{" in cleaned_text and "}" in cleaned_text:
-        start_json = cleaned_text.find("{")
-        end_json = cleaned_text.rfind("}") + 1
-        cleaned_text = cleaned_text[start_json:end_json].strip()
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
 
     if think_content:
         console.print(

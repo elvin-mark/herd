@@ -310,3 +310,20 @@ async def pull_model_async(model_name: str):
     except Exception as e:
         console.print(f"[red]Failed to download file: {e}[/red]")
         raise typer.Exit(1)
+
+def extract_reasoning_and_json(raw_text: str) -> tuple[str, str]:
+    """Extracts <think> blocks and formats the remaining text as JSON string. Returns (think_content, json_string)."""
+    cleaned_text = raw_text.strip()
+    think_content = ""
+    if "<think>" in cleaned_text and "</think>" in cleaned_text:
+        start_think = cleaned_text.find("<think>") + 7
+        end_think = cleaned_text.find("</think>")
+        think_content = cleaned_text[start_think:end_think].strip()
+        cleaned_text = cleaned_text[end_think + 8 :].strip()
+
+    if "{" in cleaned_text and "}" in cleaned_text:
+        start_json = cleaned_text.find("{")
+        end_json = cleaned_text.rfind("}") + 1
+        cleaned_text = cleaned_text[start_json:end_json].strip()
+
+    return think_content, cleaned_text
