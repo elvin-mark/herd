@@ -701,8 +701,6 @@ async def stream_watch_async(model_name: str, image_data: str, prompt: str):
                                 print(token, end="", flush=True)
                         except Exception:
                             pass
-    print("\n")
-
 
 def vision(
     image_path: str = typer.Argument(
@@ -1014,3 +1012,141 @@ def agent(
         except (KeyboardInterrupt, EOFError):
             console.print("\n[yellow]Exiting agent session. Goodbye![/yellow]")
             break
+
+
+def triage(
+    model_name: Optional[str] = typer.Option(
+        None, "--model", "-m", help="Specify the model to use."
+    ),
+):
+    """Analyze uncommitted changes and group them into logical, atomic commits."""
+    # Check if we are in a git repository
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        console.print(
+            "[red]Error: Not a git repository. Please run inside a git project.[/red]"
+        )
+        raise typer.Exit(1)
+
+    # Get unstaged changes (or staged if empty)
+    diff_res = subprocess.run(
+        ["git", "diff"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    diff_text = diff_res.stdout.strip()
+    
+    if not diff_text:
+        diff_res = subprocess.run(
+            ["git", "diff", "--cached"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        diff_text = diff_res.stdout.strip()
+
+    if not diff_text:
+        console.print(
+            "[yellow]No uncommitted or staged changes detected to triage.[/yellow]"
+        )
+        return
+
+    if len(diff_text) > 10000:
+        console.print(
+            "[yellow]Warning: Git diff is very large. Truncating to 10,000 characters.[/yellow]"
+        )
+        diff_text = diff_text[:10000] + "\n\n... [TRUNCATED] ..."
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print(
+            "[red]Error: No local LLM models found. Please pull a model first.[/red]"
+        )
+        raise typer.Exit(1)
+
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    # Pre-load model
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are an expert software engineer. Analyze the following Git diff and group the modified "
+        "files into logical, independent atomic commits based on their semantic purpose (e.g., separating "
+        "bug fixes from new features or refactors).\n\n"
+        'Your output MUST be valid JSON containing a single key "commits", which is a list of objects. '
+        "Each object must have the following keys:\n"
+        '- "theme": A conventional commit message title for this group (e.g., "fix: resolve port conflict").\n'
+        '- "files": A list of file paths that belong to this atomic change.\n'
+        '- "reasoning": A 1-2 sentence explanation of why these files belong together.\n\n'
+        "Do not wrap the output in markdown code blocks. Output strictly raw JSON."
+    )
+
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {
+        "model": chosen_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Here is the diff:\n\n{diff_text}"},
+        ],
+        "stream": False,
+    }
+
+    console.print(
+        f"Analyzing diff semantics using [bold cyan]{chosen_model}[/bold cyan]..."
+    )
+    try:
+        response = httpx.post(url_chat, json=payload, timeout=120.0)
+        if response.status_code != 200:
+            console.print(f"[red]Failed to generate triage plan: {response.text}[/red]")
+            raise typer.Exit(1)
+        result = response.json()
+        raw_text = result["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        console.print(f"[red]Error contacting Gateway: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Re-use our centralized extraction logic
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    try:
+        data = json.loads(cleaned_text)
+        commits = data.get("commits", [])
+    except Exception:
+        console.print(
+            f"[red]Error: Failed to parse generated triage plan as JSON. Raw output was:[/red]\n{raw_text}"
+        )
+        raise typer.Exit(1)
+
+    if not commits:
+        console.print("[yellow]Could not logically group the changes. They might be too entangled.[/yellow]")
+        return
+
+    console.print("\n[bold green]Recommended Atomic Commits:[/bold green]\n")
+    for idx, commit_plan in enumerate(commits, 1):
+        console.print(f"📦 [bold magenta]Commit {idx}: {commit_plan.get('theme', 'Updates')}[/bold magenta]")
+        console.print(f"   [dim]{commit_plan.get('reasoning', '')}[/dim]")
+        for file in commit_plan.get("files", []):
+            console.print(f"   - [cyan]{file}[/cyan]")
+        
+        # Output git command hint
+        file_args = " ".join([f'"{f}"' for f in commit_plan.get("files", [])])
+        console.print(f"   [dim yellow]> git add {file_args}[/dim yellow]\n")
+    print("\n")
+

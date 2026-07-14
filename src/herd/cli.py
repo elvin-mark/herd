@@ -14,7 +14,7 @@ from herd.commands.models import (
 )
 from herd.commands.chat import run, benchmark
 from herd.commands.audio import transcribe
-from herd.commands.developer import copilot, commit, review, heal, vision, agent
+from herd.commands.developer import copilot, commit, review, heal, vision, agent, triage
 from herd.commands.db import index, ask, db_app
 from herd.commands.config import config_app
 from herd.commands.server import serve, logs, setup, share, doctor
@@ -69,6 +69,7 @@ app.add_typer(config_app, rich_help_panel="Gateway & Configuration")
 git_app = typer.Typer(name="git", help="Git automations for committing and code review.")
 git_app.command(name="commit")(commit)
 git_app.command(name="review")(review)
+git_app.command(name="triage")(triage)
 app.add_typer(git_app, rich_help_panel="Developer Workflows")
 
 
