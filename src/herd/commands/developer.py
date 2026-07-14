@@ -1268,3 +1268,169 @@ def pr(
         asyncio.run(stream_chat_completions(chosen_model, messages))
     except KeyboardInterrupt:
         console.print("\n[yellow]Generation stopped.[/yellow]")
+
+
+def test_cmd(
+    filename: str = typer.Argument(..., help="Path to the file to generate tests for."),
+    model_name: Optional[str] = typer.Option(None, "--model", "-m"),
+):
+    """Autonomous Test Scaffolding: Generates unit tests for the specified file."""
+    if not os.path.exists(filename):
+        console.print(f"[red]Error: File {filename} not found.[/red]")
+        raise typer.Exit(1)
+
+    with open(filename, "r") as f:
+        code_content = f.read()
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found.[/red]")
+        raise typer.Exit(1)
+
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are an expert software engineer specializing in testing. "
+        "Your task is to write comprehensive unit tests for the provided code.\n"
+        "Use modern testing frameworks (e.g., pytest for Python, jest for JS/TS).\n"
+        "Include edge cases and mock external dependencies if necessary.\n"
+        "Output ONLY the raw test code. Do not include markdown code blocks or explanations."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"File content for {filename}:\n\n{code_content}"},
+    ]
+
+    console.print(
+        f"\n[bold cyan]Generating tests for {filename} using {chosen_model}...[/bold cyan]\n"
+    )
+
+    from herd.commands.chat import stream_chat_completions
+    import asyncio
+
+    try:
+        asyncio.run(stream_chat_completions(chosen_model, messages))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation stopped.[/yellow]")
+
+
+def docs_cmd(
+    filename: str = typer.Argument(..., help="Path to the file to document."),
+    model_name: Optional[str] = typer.Option(None, "--model", "-m"),
+):
+    """Inline Documentation Generator: Adds docstrings to undocumented functions/classes."""
+    if not os.path.exists(filename):
+        console.print(f"[red]Error: File {filename} not found.[/red]")
+        raise typer.Exit(1)
+
+    with open(filename, "r") as f:
+        code_content = f.read()
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found.[/red]")
+        raise typer.Exit(1)
+
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are an expert technical writer and developer. "
+        "Your task is to read the following code and output the EXACT same code, but with "
+        "comprehensive, standard docstrings (e.g., Google style for Python, JSDoc for JS/TS) added to every function and class.\n"
+        "Do NOT change the logic of the code. Output ONLY the raw code. Do not include markdown code blocks or explanations."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"File content for {filename}:\n\n{code_content}"},
+    ]
+
+    console.print(
+        f"\n[bold cyan]Generating documentation for {filename} using {chosen_model}...[/bold cyan]\n"
+    )
+
+    from herd.commands.chat import stream_chat_completions
+    import asyncio
+
+    try:
+        asyncio.run(stream_chat_completions(chosen_model, messages))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation stopped.[/yellow]")
+
+
+def refactor_cmd(
+    filename: str = typer.Argument(..., help="Path to the file to refactor."),
+    prompt: str = typer.Option(
+        ...,
+        "--prompt",
+        "-p",
+        help="Instructions for the refactor (e.g., 'Add type hints').",
+    ),
+    model_name: Optional[str] = typer.Option(None, "--model", "-m"),
+):
+    """Semantic File Rewriter: Applies a custom semantic transformation to a file."""
+    if not os.path.exists(filename):
+        console.print(f"[red]Error: File {filename} not found.[/red]")
+        raise typer.Exit(1)
+
+    with open(filename, "r") as f:
+        code_content = f.read()
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found.[/red]")
+        raise typer.Exit(1)
+
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are an expert senior software engineer. "
+        "Your task is to refactor the provided code according to the user's specific instructions.\n"
+        "Ensure the code remains functional and follows best practices.\n"
+        "Output ONLY the raw refactored code. Do not include markdown code blocks or explanations."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": f"Instructions: {prompt}\n\nFile content for {filename}:\n\n{code_content}",
+        },
+    ]
+
+    console.print(
+        f"\n[bold cyan]Refactoring {filename} using {chosen_model}...[/bold cyan]\n"
+    )
+
+    from herd.commands.chat import stream_chat_completions
+    import asyncio
+
+    try:
+        asyncio.run(stream_chat_completions(chosen_model, messages))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation stopped.[/yellow]")

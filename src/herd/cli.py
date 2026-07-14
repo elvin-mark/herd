@@ -23,6 +23,9 @@ from herd.commands.developer import (
     agent,
     triage,
     pr,
+    test_cmd,
+    docs_cmd,
+    refactor_cmd,
 )
 from herd.commands.db import index, ask, db_app
 from herd.commands.config import config_app
@@ -54,11 +57,15 @@ app.command(name="stats", rich_help_panel="Runtime Operations")(show_stats)
 app.command(name="logs", rich_help_panel="Runtime Operations")(logs)
 
 # 4. Register Developer Workflows commands
-app.command(name="copilot", rich_help_panel="Developer Workflows")(copilot)
-
-app.command(name="heal", rich_help_panel="Developer Workflows")(heal)
-app.command(name="agent", rich_help_panel="Developer Workflows")(agent)
-app.command(name="benchmark", rich_help_panel="Developer Workflows")(benchmark)
+dev_app = typer.Typer(name="dev", help="Developer productivity tools and generators.")
+dev_app.command(name="copilot")(copilot)
+dev_app.command(name="heal")(heal)
+dev_app.command(name="agent")(agent)
+dev_app.command(name="benchmark")(benchmark)
+dev_app.command(name="test")(test_cmd)
+dev_app.command(name="docs")(docs_cmd)
+dev_app.command(name="refactor")(refactor_cmd)
+app.add_typer(dev_app, rich_help_panel="Developer Workflows")
 
 # 5. Register Semantic RAG Database commands
 app.command(name="index", rich_help_panel="Semantic RAG Database")(index)
