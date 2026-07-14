@@ -1302,9 +1302,7 @@ def pr(
             )
         )
 
-    from rich.markdown import Markdown
-
-    console.print(Markdown(cleaned_text))
+    console.print(cleaned_text, markup=False)
 
 
 def test_cmd(
@@ -1632,6 +1630,4 @@ def explain_cmd(
             )
         )
 
-    from rich.markdown import Markdown
-
-    console.print(Markdown(cleaned_text))
+    console.print(cleaned_text, markup=False)
