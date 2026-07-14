@@ -499,68 +499,6 @@ def search(
     )
 
 
-def find_llama_quantize():
-    """Finds the compiled llama-quantize binary."""
-    # Check ~/.herd/src/llama.cpp/build/bin/llama-quantize
-    local_path = os.path.expanduser("~/.herd/src/llama.cpp/build/bin/llama-quantize")
-    if os.path.exists(local_path):
-        return local_path
-    # Fallback to PATH
-    return shutil.which("llama-quantize")
-
-
-def quantize(
-    input_file: str = typer.Argument(
-        ..., help="Path to the source GGUF file (e.g. FP16/FP32)."
-    ),
-    output_file: str = typer.Argument(
-        ..., help="Path to save the output quantized GGUF file."
-    ),
-    method: str = typer.Argument(
-        ..., help="Quantization method (e.g. Q4_K_M, Q8_0, Q5_K_M)."
-    ),
-):
-    """Quantizes (compresses) a GGUF model file locally using the compiled llama-quantize binary."""
-    if not os.path.exists(input_file):
-        console.print(f"[red]Error: Input file not found: {input_file}[/red]")
-        raise typer.Exit(1)
-
-    quant_bin = find_llama_quantize()
-    if not quant_bin:
-        console.print("[red]Error: 'llama-quantize' binary not found.[/red]")
-        console.print(
-            "Please make sure you have run [bold cyan]herd setup[/bold cyan] to build the compilation tools locally."
-        )
-        raise typer.Exit(1)
-
-    console.print(
-        f"Quantizing [bold cyan]{input_file}[/bold cyan] to [bold green]{output_file}[/bold green] using method [bold yellow]{method}[/bold yellow]..."
-    )
-    try:
-        cmd = [quant_bin, input_file, output_file, method]
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
-        )
-        for line in process.stdout:
-            print(line, end="")
-        process.wait()
-
-        if process.returncode == 0:
-            console.print(
-                f"\n[bold green]Success![/bold green] Quantized model saved to {output_file}"
-            )
-        else:
-            console.print(
-                f"\n[red]Quantization failed with exit code: {process.returncode}[/red]"
-            )
-            raise typer.Exit(1)
-
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Quantization interrupted.[/yellow]")
-        raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"[red]Error running quantization: {e}[/red]")
-        raise typer.Exit(1)
 
 
 def top():

@@ -21,7 +21,7 @@ echo -e "${CYAN}=== Starting Herd Model Management Tests ===${NC}"
 
 # 1. Ensure gateway is online
 started_by_us=false
-echo -e "${CYAN}[Step 1/5] Verifying gateway server status on port ${API_PORT}...${NC}"
+echo -e "${CYAN}[Step 1/4] Verifying gateway server status on port ${API_PORT}...${NC}"
 if ! curl -s "${BASE_URL}/health" &>/dev/null; then
     echo -e "${YELLOW}Gateway is offline. Starting herd gateway in background...${NC}"
     herd serve &
@@ -39,7 +39,7 @@ else
 fi
 
 # 2. Test "herd list" (list local downloaded models)
-echo -e "${CYAN}[Step 2/5] Testing 'herd list'...${NC}"
+echo -e "${CYAN}[Step 2/4] Testing 'herd list'...${NC}"
 list_res=$(herd list)
 echo "$list_res"
 echo -e "\n"
@@ -52,7 +52,7 @@ else
 fi
 
 # 3. Test "herd search" (Hugging Face registry search)
-echo -e "${CYAN}[Step 3/5] Testing 'herd search' on Hugging Face...${NC}"
+echo -e "${CYAN}[Step 3/4] Testing 'herd search' on Hugging Face...${NC}"
 search_res=$(herd search "All-MiniLM-L6-v2")
 echo "$search_res"
 echo -e "\n"
@@ -64,21 +64,9 @@ else
     exit 1
 fi
 
-# 4. Test "herd suggest" (Hardware-based model recommender)
-echo -e "${CYAN}[Step 4/5] Testing 'herd suggest' recommender...${NC}"
-suggest_res=$(herd suggest)
-echo "$suggest_res"
-echo -e "\n"
 
-if [[ "$suggest_res" == *"Audit"* || "$suggest_res" == *"RAM"* || "$suggest_res" == *"Recommend"* ]]; then
-    echo -e "${GREEN}Success! 'herd suggest' diagnostics recommended compatible models.${NC}\n"
-else
-    echo -e "${RED}Failure! 'herd suggest' failed to audit hardware configuration.${NC}"
-    exit 1
-fi
-
-# 5. Test "herd pull" (GGUF model downloader checks)
-echo -e "${CYAN}[Step 5/5] Testing 'herd pull' model validator...${NC}"
+# 4. Test "herd pull" (GGUF model downloader checks)
+echo -e "${CYAN}[Step 4/4] Testing 'herd pull' model validator...${NC}"
 pull_res=$(herd pull "$TEST_MODEL")
 echo "$pull_res"
 echo -e "\n"

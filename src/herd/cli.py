@@ -10,12 +10,11 @@ from herd.commands.models import (
     show_stats,
     clean,
     search,
-    quantize,
     top,
 )
 from herd.commands.chat import run, benchmark
 from herd.commands.audio import transcribe
-from herd.commands.developer import suggest, copilot, commit, review, heal, watch, agent
+from herd.commands.developer import copilot, commit, review, heal, vision, agent
 from herd.commands.db import index, ask, db_app
 from herd.commands.config import config_app
 from herd.commands.server import serve, logs, setup, share, doctor
@@ -29,15 +28,14 @@ app = typer.Typer(
 # 1. Register Core Interfaces commands
 app.command(name="run", rich_help_panel="Core Interfaces")(run)
 app.command(name="transcribe", rich_help_panel="Core Interfaces")(transcribe)
-app.command(name="watch", rich_help_panel="Core Interfaces")(watch)
+app.command(name="vision", rich_help_panel="Core Interfaces")(vision)
 
 # 2. Register Model Management commands
 app.command(name="list", rich_help_panel="Model Management")(list_models)
 app.command(name="pull", rich_help_panel="Model Management")(pull)
 app.command(name="rm", rich_help_panel="Model Management")(rm)
 app.command(name="search", rich_help_panel="Model Management")(search)
-app.command(name="quantize", rich_help_panel="Model Management")(quantize)
-app.command(name="suggest", rich_help_panel="Model Management")(suggest)
+
 
 # 3. Register Runtime Operations commands
 app.command(name="ps", rich_help_panel="Runtime Operations")(ps)
@@ -48,8 +46,7 @@ app.command(name="logs", rich_help_panel="Runtime Operations")(logs)
 
 # 4. Register Developer Workflows commands
 app.command(name="copilot", rich_help_panel="Developer Workflows")(copilot)
-app.command(name="commit", rich_help_panel="Developer Workflows")(commit)
-app.command(name="review", rich_help_panel="Developer Workflows")(review)
+
 app.command(name="heal", rich_help_panel="Developer Workflows")(heal)
 app.command(name="agent", rich_help_panel="Developer Workflows")(agent)
 app.command(name="benchmark", rich_help_panel="Developer Workflows")(benchmark)
@@ -68,6 +65,11 @@ app.command(name="clean", rich_help_panel="Gateway & Configuration")(clean)
 # 7. Register Sub-Typer Applications with Rich Help Panels
 app.add_typer(db_app, rich_help_panel="Semantic RAG Database")
 app.add_typer(config_app, rich_help_panel="Gateway & Configuration")
+
+git_app = typer.Typer(name="git", help="Git automations for committing and code review.")
+git_app.command(name="commit")(commit)
+git_app.command(name="review")(review)
+app.add_typer(git_app, rich_help_panel="Developer Workflows")
 
 
 def main():

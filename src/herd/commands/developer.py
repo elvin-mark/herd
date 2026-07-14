@@ -17,136 +17,6 @@ from herd.core.utils import (
 )
 
 
-def check_gpu_info() -> Optional[dict]:
-    """Retrieves NVIDIA GPU model and VRAM size if nvidia-smi is available."""
-    nv_smi = shutil.which("nvidia-smi")
-    if not nv_smi:
-        return None
-    try:
-        res = subprocess.run(
-            [
-                nv_smi,
-                "--query-gpu=name,memory.total,driver_version",
-                "--format=csv,noheader,nounits",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        parts = res.stdout.strip().split(",")
-        if len(parts) >= 3:
-            mem_mb = float(parts[1].strip())
-            return {
-                "name": parts[0].strip(),
-                "vram_gb": round(mem_mb / 1024.0, 2),
-                "driver": parts[2].strip(),
-            }
-    except Exception:
-        pass
-    return None
-
-
-def suggest():
-    """Analyzes system hardware (RAM and VRAM) and suggests compatible LLMs and Whisper models."""
-    import psutil
-
-    console.print(
-        "\n🔍 [bold green]Auditing hardware to generate model recommendations...[/bold green]\n"
-    )
-
-    # Check RAM
-    try:
-        ram_bytes = psutil.virtual_memory().total
-        ram_gb = ram_bytes / (1024 * 1024 * 1024)
-    except Exception:
-        ram_gb = 8.0  # Fallback default
-
-    # Check GPU
-    gpu = check_gpu_info()
-    vram_gb = gpu["vram_gb"] if gpu else 0.0
-
-    # CPU recommendations based on RAM
-    if ram_gb >= 16.0:
-        cpu_llm = "unsloth/Qwen3.5-7B-Instruct-GGUF:Q4_K_M"
-        cpu_desc = "Runs comfortably on CPU. Balanced speed/reasoning."
-    elif ram_gb >= 8.0:
-        cpu_llm = "unsloth/Qwen3.5-3B-Instruct-GGUF:Q4_K_M"
-        cpu_desc = "Optimal size for standard CPU memory. Good code/chat."
-    else:
-        cpu_llm = "Qwen/Qwen3.5-0.8B:Q8_0"
-        cpu_desc = "Lightweight model to prevent memory swapping on low RAM."
-
-    # GPU recommendations based on VRAM
-    gpu_llm = None
-    gpu_desc = ""
-    if vram_gb >= 16.0:
-        gpu_llm = "unsloth/Qwen3.5-14B-Instruct-GGUF:Q8_0"
-        gpu_desc = "Fits fully in VRAM. Outstanding coding/reasoning speed."
-    elif vram_gb >= 8.0:
-        gpu_llm = "unsloth/Llama-3-8B-Instruct-GGUF:Q8_0"
-        gpu_desc = "Fits fully in VRAM. Great generalist assistant at extreme speeds."
-    elif vram_gb >= 4.0:
-        gpu_llm = "unsloth/Qwen3.5-3B-Instruct-GGUF:Q8_0"
-        gpu_desc = "Fits in low VRAM. Good chat response speeds."
-
-    # Whisper STT recommendations
-    if ram_gb >= 16.0 or vram_gb >= 8.0:
-        whisper_rec = "ggerganov/whisper.cpp:ggml-large-v3-turbo.bin"
-        whisper_desc = "Large multilingual STT model. Highest accuracy."
-        whisper_multilingual = "ggerganov/whisper.cpp:ggml-large-v3-turbo.bin"
-        whisper_multi_desc = "Highly accurate multilingual support."
-    elif ram_gb >= 8.0 or vram_gb >= 4.0:
-        whisper_rec = "ggerganov/whisper.cpp:ggml-base.en.bin"
-        whisper_desc = "English-only base model. Fast and balanced accuracy."
-        whisper_multilingual = "ggerganov/whisper.cpp:ggml-base.bin"
-        whisper_multi_desc = "Good speed/accuracy multilingual model."
-    else:
-        whisper_rec = "ggerganov/whisper.cpp:ggml-tiny.en.bin"
-        whisper_desc = "Tiny english model. Fast but lower accuracy."
-        whisper_multilingual = "ggerganov/whisper.cpp:ggml-tiny.bin"
-        whisper_multi_desc = "Fastest multilingual model."
-
-    report = []
-    report.append(f"System RAM: [bold white]{ram_gb:.1f} GB[/bold white]")
-    if gpu:
-        report.append(
-            f"GPU Detected: [bold white]{gpu['name']}[/bold white] | VRAM: [bold white]{vram_gb:.1f} GB[/bold white] (Driver: {gpu['driver']})"
-        )
-    else:
-        report.append("GPU Detected: [bold white]None / Integrated[/bold white]")
-
-    report.append("")
-    report.append("[bold green]🤖 Recommended Chat LLM (CPU-only):[/bold green]")
-    report.append(f"  Model: [white]{cpu_llm}[/white] ({cpu_desc})")
-    report.append(f"  Pull Command: [bold cyan]herd pull {cpu_llm}[/bold cyan]")
-    report.append("")
-
-    if gpu_llm:
-        report.append(
-            "[bold green]⚡ Recommended Chat LLM (GPU-accelerated):[/bold green]"
-        )
-        report.append(f"  Model: [white]{gpu_llm}[/white] ({gpu_desc})")
-        report.append(f"  Pull Command: [bold cyan]herd pull {gpu_llm}[/bold cyan]")
-        report.append("")
-
-    report.append("[bold green]🎙️ Recommended Speech-to-Text (Whisper):[/bold green]")
-    report.append(f"  English: [white]{whisper_rec}[/white] ({whisper_desc})")
-    report.append(
-        f"  Multilingual: [white]{whisper_multilingual}[/white] ({whisper_multi_desc})"
-    )
-    report.append(
-        "  Pull Command: [bold cyan]herd pull " + whisper_rec + "[/bold cyan]"
-    )
-
-    console.print(
-        Panel(
-            "\n".join(report),
-            title="[bold green]Herd Model Recommendation Report[/bold green]",
-            border_style="green",
-            expand=False,
-        )
-    )
-
 
 def copilot(
     instruction: str = typer.Argument(
@@ -429,7 +299,7 @@ def review(
         False,
         "--install",
         "-i",
-        help="Install herd review as a local Git pre-commit hook.",
+        help="Install herd git review as a local Git pre-commit hook.",
     ),
 ):
     """Inspects Git repository modifications and audits code changes for quality, bugs, and security risks."""
@@ -444,7 +314,7 @@ def review(
         os.makedirs(hook_dir, exist_ok=True)
         hook_path = os.path.join(hook_dir, "pre-commit")
 
-        script = "#!/bin/sh\nherd review --pre-commit\n"
+        script = "#!/bin/sh\nherd git review --pre-commit\n"
         try:
             with open(hook_path, "w") as f:
                 f.write(script)
@@ -866,7 +736,7 @@ async def stream_watch_async(model_name: str, image_data: str, prompt: str):
     print("\n")
 
 
-def watch(
+def vision(
     image_path: str = typer.Argument(
         ..., help="Path to local image file (or URL) to analyze."
     ),

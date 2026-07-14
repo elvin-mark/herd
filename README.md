@@ -167,11 +167,7 @@ herd benchmark unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M
 herd benchmark unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M -p "Write a song.,Tell a joke." -r 2
 ```
 
-### 12. Smart Model Recommendations (`herd suggest`)
-Audits your active hardware (CPU, RAM, GPU VRAM) and outputs custom-tailored LLM and Whisper model suggestions from Hugging Face that are guaranteed to run fast and fit comfortably on your machine:
-```bash
-herd suggest
-```
+
 
 ### 13. Speech-to-Text Transcription (`herd transcribe`)
 Transcribes or translates audio files locally into raw text (`.txt`) or standard subtitle files (`.srt` / `.vtt`) using Whisper:
@@ -230,11 +226,6 @@ Searches the Hugging Face Hub for GGUF model repositories matching the query, so
 herd search qwen --limit 5
 ```
 
-### 20. Compress GGUF Models (`herd quantize`)
-Compresses a GGUF model file locally using the precompiled `llama-quantize` compilation tool:
-```bash
-herd quantize model-fp16.gguf model-q4_k_m.gguf Q4_K_M
-```
 
 ### 21. Real-Time Resource Monitor (`herd top`)
 Opens a live terminal HUD showing running model processes, ports, CPU percentage bar meters, RSS memory footprints, and idle timers:
@@ -261,19 +252,19 @@ Translates natural language instructions into local shell commands, explains wha
 herd copilot "find all python files recursively and count their lines of code"
 ```
 
-### 24. Automated Local Git Commits (`herd commit`)
+### 24. Automated Local Git Commits (`herd git commit`)
 Inspects unstaged or staged modifications in the current Git repository using `git diff`, queries the local LLM to generate a clear Conventional Commit message, and commits changes upon confirmation:
 ```bash
-herd commit
+herd git commit
 ```
 
 ### 25. Configuration Defaults (`herd config`)
-Herd allows configuring global default models, ports, and execution timeouts in `~/.herd/config.json`. These defaults are automatically used as fallback settings across all commands (`run`, `copilot`, `commit`, `index`, `ask`, `transcribe`) so you don't need to specify model flags every time:
+Herd allows configuring global default models, ports, and execution timeouts in `~/.herd/config.json`. These defaults are automatically used as fallback settings across all commands (`run`, `copilot`, `git commit`, `index`, `ask`, `transcribe`) so you don't need to specify model flags every time:
 ```bash
 # Display a formatted table of all current settings and defaults
 herd config show
 
-# Set the default LLM model for chatting, copilot, and commits
+# Set the default LLM model for chatting, copilot, and git commits
 herd config set default_llm Qwen/Qwen3.5-0.8B:Q8_0
 
 # Set the default embedding model for indexing and semantic context queries
@@ -281,9 +272,6 @@ herd config set default_embedding sentence-transformers/all-MiniLM-L6-v2:Q8_0
 
 # Set the default Whisper model for STT transcribing
 herd config set default_whisper ggerganov/whisper.cpp:ggml-base.en.bin
-
-# Route all local CLI commands directly to a remote Herd gateway
-herd config set remote_gateway http://192.168.1.100:11434
 
 # Configure a remote cloud model provider (e.g. Groq, OpenAI, DeepSeek)
 herd config set-provider groq --api-key gsk_yourAPIkeyHere
@@ -308,14 +296,14 @@ Runs a shell command in real-time, intercepts process crashes (non-zero exit cod
 herd heal "python3 app.py"
 ```
 
-### 27. Multimodal Vision Analyzer (`herd watch`)
+### 27. Multimodal Vision Analyzer (`herd vision`)
 Analyzes local image paths or remote image URLs using vision-language models (VLM) with automatic multimodal projector loading support:
 ```bash
 # Analyze a local screenshot
-herd watch screenshot.png "What error code is shown in the image?"
+herd vision screenshot.png "What error code is shown in the image?"
 
 # Query a remote image URL
-herd watch https://example.com/logo.png "Describe the design and colors."
+herd vision https://example.com/logo.png "Describe the design and colors."
 ```
 
 ### 28. Autonomous AI Agent (`herd agent`)

@@ -14,9 +14,9 @@ This document outlines the architectural paradigms, CLI organization schemas, te
 ## 🐚 2. CLI Command Clustering (Typer Panels)
 Subcommands must be logically grouped inside the `--help` menu using Typer's `rich_help_panel` parameter to maintain visual hierarchy and structure. Group subcommands into the following panels:
 1.  **Core Interfaces**: Interactive, modal user-facing engines (e.g., text chat `run`, audio speech `transcribe`, vision multimodal `watch`).
-2.  **Model Management**: Downloading, listing, searching, and compressing catalog files (e.g., `list`, `pull`, `search`, `quantize`, `suggest`).
+2.  **Model Management**: Downloading, listing, searching, and compressing catalog files (e.g., `list`, `pull`, `search`).
 3.  **Runtime Operations**: Live process listings, unloading, performance metrics, and console tail outputs (e.g., `ps`, `stop`, `top`, `stats`, `logs`).
-4.  **Developer Workflows**: Code quality auditors, automations, and benchmark loops (e.g., `copilot`, `commit`, `review`, `heal`, `agent`, `benchmark`).
+4.  **Developer Workflows**: Code quality auditors, automations, and benchmark loops (e.g., `copilot`, `git commit`, `git review`, `heal`, `agent`, `benchmark`).
 5.  **Semantic RAG Database**: Document chunking, indexing, and vector similarity operations.
 6.  **Gateway & Configuration**: Server bindings, tunnel sharing, and global parameter overrides.
 

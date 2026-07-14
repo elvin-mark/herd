@@ -85,22 +85,20 @@ else
     exit 1
 fi
 
-# 5. Test "herd watch" (multimodal vision-language interface)
-echo -e "${CYAN}[Step 5/6] Testing 'herd watch' multimodal vision analysis...${NC}"
-if [ ! -f "$IMAGE_PATH" ]; then
-    echo -e "${RED}Error: Test image file not found at ${IMAGE_PATH}${NC}"
-    exit 1
-fi
+# 5. Test "herd vision" (multimodal vision-language interface)
+echo -e "${CYAN}[Step 5/6] Testing 'herd vision' multimodal vision analysis...${NC}"
+# Setup a small 1x1 base64 encoded PNG for testing (doesn't need a real image for a dry run)
+IMAGE_PATH="/tmp/test_image.png"
+echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > "$IMAGE_PATH"
 
-watch_res=$(herd watch "$IMAGE_PATH" "Describe what you see in the image." --model "$VLM_MODEL")
-echo -e "${YELLOW}Response output:${NC}"
-echo "$watch_res"
+vision_res=$(herd vision "$IMAGE_PATH" "Describe what you see in the image." --model "$VLM_MODEL")
+echo "$vision_res"
 echo -e "\n"
 
-if [ -n "$watch_res" ]; then
-    echo -e "${GREEN}Success! 'herd watch' vision analysis test passed.${NC}\n"
+if [ -n "$vision_res" ]; then
+    echo -e "${GREEN}Success! 'herd vision' vision analysis test passed.${NC}\n"
 else
-    echo -e "${RED}Failure! 'herd watch' returned an empty response.${NC}"
+    echo -e "${RED}Failure! 'herd vision' returned an empty response.${NC}"
     exit 1
 fi
 
