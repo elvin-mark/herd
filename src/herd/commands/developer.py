@@ -1434,3 +1434,56 @@ def refactor_cmd(
         asyncio.run(stream_chat_completions(chosen_model, messages))
     except KeyboardInterrupt:
         console.print("\n[yellow]Generation stopped.[/yellow]")
+
+
+def explain_cmd(
+    filename: str = typer.Argument(..., help="Path to the file to explain."),
+    model_name: Optional[str] = typer.Option(None, "--model", "-m"),
+):
+    """Spaghetti Code Deobfuscator: Analyzes and explains the architecture and logic of a file."""
+    if not os.path.exists(filename):
+        console.print(f"[red]Error: File {filename} not found.[/red]")
+        raise typer.Exit(1)
+
+    with open(filename, "r", encoding="utf-8", errors="ignore") as f:
+        code_content = f.read()
+
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found.[/red]")
+        raise typer.Exit(1)
+
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are a Senior Principal Staff Engineer. "
+        "Your task is to analyze the following code file and explain it clearly and concisely.\n"
+        "Provide a high-level architectural summary, break down the core entry points and data flow, "
+        "and explain any obscure algorithms or design patterns used in the code.\n"
+        "Use Markdown for formatting, with clear headings and bullet points."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"File content for {filename}:\n\n{code_content}"},
+    ]
+
+    console.print(
+        f"\n[bold cyan]Deobfuscating {filename} using {chosen_model}...[/bold cyan]\n"
+    )
+
+    from herd.commands.chat import stream_chat_completions
+    import asyncio
+
+    try:
+        asyncio.run(stream_chat_completions(chosen_model, messages))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation stopped.[/yellow]")
