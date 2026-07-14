@@ -1302,7 +1302,18 @@ def pr(
             )
         )
 
-    console.print(cleaned_text, markup=False)
+    # Strip outer markdown block if the model wrapped the entire response
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+
+    from rich.markdown import Markdown
+
+    console.print(Markdown(cleaned_text))
 
 
 def test_cmd(
@@ -1630,4 +1641,15 @@ def explain_cmd(
             )
         )
 
-    console.print(cleaned_text, markup=False)
+    # Strip outer markdown block if the model wrapped the entire response
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+
+    from rich.markdown import Markdown
+
+    console.print(Markdown(cleaned_text))
