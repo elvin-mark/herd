@@ -10,14 +10,42 @@ class HerdSettings:
         self.logs_dir = os.path.join(self.home, "logs")
         self.config_file = os.path.join(self.home, "config.json")
 
-        # Load local overrides
-        self.overrides = {}
+        # Load global overrides
+        self.global_overrides = {}
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, "r") as f:
-                    self.overrides = json.load(f)
+                    self.global_overrides = json.load(f)
             except Exception:
                 pass
+
+        # Load local overrides (.herd.json) by searching upwards
+        self.local_overrides = {}
+        try:
+            current_dir = os.getcwd()
+            while True:
+                local_config_path = os.path.join(current_dir, ".herd.json")
+                if os.path.exists(local_config_path):
+                    try:
+                        with open(local_config_path, "r") as f:
+                            data = json.load(f)
+                            if isinstance(data, dict):
+                                self.local_overrides = data
+                    except Exception:
+                        pass
+                    break
+                
+                parent_dir = os.path.dirname(current_dir)
+                if parent_dir == current_dir:
+                    break
+                current_dir = parent_dir
+        except Exception:
+            pass
+            
+        # Merged overrides (local takes precedence)
+        self.overrides = {}
+        self.overrides.update(self.global_overrides)
+        self.overrides.update(self.local_overrides)
 
         # Host and Port
         self.host = os.environ.get("HERD_HOST", "127.0.0.1")
@@ -57,23 +85,8 @@ class HerdSettings:
         self.__init__()
 
     def save(self):
-        data = {
-            "default_llm": self.default_llm,
-            "default_embedding": self.default_embedding,
-            "default_whisper": self.default_whisper,
-            "providers": self.providers,
-        }
-        if self.llama_server_bin:
-            data["LLAMA_SERVER_BIN"] = self.llama_server_bin
-        if self.whisper_server_bin:
-            data["WHISPER_SERVER_BIN"] = self.whisper_server_bin
-        if self.llama_commit:
-            data["LLAMA_COMMIT"] = self.llama_commit
-        if self.whisper_commit:
-            data["WHISPER_COMMIT"] = self.whisper_commit
-
         with open(self.config_file, "w") as f:
-            json.dump(data, f, indent=4)
+            json.dump(self.global_overrides, f, indent=4)
 
 
 settings = HerdSettings()
@@ -106,6 +119,10 @@ def load_config() -> dict:
 
 
 def save_config(config: dict):
+    # Only update global overrides for things explicitly passed in the config dict
+    for k, v in config.items():
+        settings.global_overrides[k] = v
+
     settings.default_llm = config.get("default_llm", settings.default_llm)
     settings.default_embedding = config.get(
         "default_embedding", settings.default_embedding
