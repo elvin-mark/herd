@@ -245,7 +245,7 @@ def commit(
                 expand=False,
             )
         )
-        
+
     commit_message = cleaned_text.strip()
 
     # Clean markdown wrapping if present
@@ -1273,16 +1273,38 @@ def pr(
         {"role": "user", "content": user_prompt},
     ]
 
-    console.print(
-        f"\n[bold cyan]Generating PR Description using {chosen_model}...[/bold cyan]\n"
-    )
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {"model": chosen_model, "messages": messages, "stream": False}
 
-    from herd.commands.chat import stream_chat_completions
+    with console.status(
+        f"[bold cyan]Generating PR Description using {chosen_model}...[/bold cyan]",
+        spinner="dots",
+    ):
+        try:
+            response = httpx.post(url_chat, json=payload, timeout=180.0)
+            if response.status_code != 200:
+                console.print(f"[red]Failed: {response.text}[/red]")
+                raise typer.Exit(1)
+            raw_text = response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            console.print(f"[red]Error contacting Gateway: {e}[/red]")
+            raise typer.Exit(1)
 
-    try:
-        asyncio.run(stream_chat_completions(chosen_model, messages))
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Generation stopped.[/yellow]")
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    from rich.markdown import Markdown
+
+    console.print(Markdown(cleaned_text))
 
 
 def test_cmd(
@@ -1325,17 +1347,47 @@ def test_cmd(
         {"role": "user", "content": f"File content for {filename}:\n\n{code_content}"},
     ]
 
-    console.print(
-        f"\n[bold cyan]Generating tests for {filename} using {chosen_model}...[/bold cyan]\n"
-    )
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {"model": chosen_model, "messages": messages, "stream": False}
 
-    from herd.commands.chat import stream_chat_completions
-    import asyncio
+    with console.status(
+        f"[bold cyan]Generating tests for {filename} using {chosen_model}...[/bold cyan]",
+        spinner="dots",
+    ):
+        try:
+            response = httpx.post(url_chat, json=payload, timeout=180.0)
+            if response.status_code != 200:
+                console.print(f"[red]Failed: {response.text}[/red]")
+                raise typer.Exit(1)
+            raw_text = response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            console.print(f"[red]Error contacting Gateway: {e}[/red]")
+            raise typer.Exit(1)
 
-    try:
-        asyncio.run(stream_chat_completions(chosen_model, messages))
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Generation stopped.[/yellow]")
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    # Clean markdown if present
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+
+    from rich.syntax import Syntax
+
+    console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
 
 def docs_cmd(
@@ -1377,17 +1429,47 @@ def docs_cmd(
         {"role": "user", "content": f"File content for {filename}:\n\n{code_content}"},
     ]
 
-    console.print(
-        f"\n[bold cyan]Generating documentation for {filename} using {chosen_model}...[/bold cyan]\n"
-    )
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {"model": chosen_model, "messages": messages, "stream": False}
 
-    from herd.commands.chat import stream_chat_completions
-    import asyncio
+    with console.status(
+        f"[bold cyan]Generating documentation for {filename} using {chosen_model}...[/bold cyan]",
+        spinner="dots",
+    ):
+        try:
+            response = httpx.post(url_chat, json=payload, timeout=180.0)
+            if response.status_code != 200:
+                console.print(f"[red]Failed: {response.text}[/red]")
+                raise typer.Exit(1)
+            raw_text = response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            console.print(f"[red]Error contacting Gateway: {e}[/red]")
+            raise typer.Exit(1)
 
-    try:
-        asyncio.run(stream_chat_completions(chosen_model, messages))
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Generation stopped.[/yellow]")
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    # Clean markdown if present
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+
+    from rich.syntax import Syntax
+
+    console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
 
 def refactor_cmd(
@@ -1438,17 +1520,47 @@ def refactor_cmd(
         },
     ]
 
-    console.print(
-        f"\n[bold cyan]Refactoring {filename} using {chosen_model}...[/bold cyan]\n"
-    )
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {"model": chosen_model, "messages": messages, "stream": False}
 
-    from herd.commands.chat import stream_chat_completions
-    import asyncio
+    with console.status(
+        f"[bold cyan]Refactoring {filename} using {chosen_model}...[/bold cyan]",
+        spinner="dots",
+    ):
+        try:
+            response = httpx.post(url_chat, json=payload, timeout=180.0)
+            if response.status_code != 200:
+                console.print(f"[red]Failed: {response.text}[/red]")
+                raise typer.Exit(1)
+            raw_text = response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            console.print(f"[red]Error contacting Gateway: {e}[/red]")
+            raise typer.Exit(1)
 
-    try:
-        asyncio.run(stream_chat_completions(chosen_model, messages))
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Generation stopped.[/yellow]")
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    # Clean markdown if present
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+
+    from rich.syntax import Syntax
+
+    console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
 
 def explain_cmd(
@@ -1491,14 +1603,35 @@ def explain_cmd(
         {"role": "user", "content": f"File content for {filename}:\n\n{code_content}"},
     ]
 
-    console.print(
-        f"\n[bold cyan]Deobfuscating {filename} using {chosen_model}...[/bold cyan]\n"
-    )
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {"model": chosen_model, "messages": messages, "stream": False}
 
-    from herd.commands.chat import stream_chat_completions
-    import asyncio
+    with console.status(
+        f"[bold cyan]Deobfuscating {filename} using {chosen_model}...[/bold cyan]",
+        spinner="dots",
+    ):
+        try:
+            response = httpx.post(url_chat, json=payload, timeout=180.0)
+            if response.status_code != 200:
+                console.print(f"[red]Failed: {response.text}[/red]")
+                raise typer.Exit(1)
+            raw_text = response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            console.print(f"[red]Error contacting Gateway: {e}[/red]")
+            raise typer.Exit(1)
 
-    try:
-        asyncio.run(stream_chat_completions(chosen_model, messages))
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Generation stopped.[/yellow]")
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    from rich.markdown import Markdown
+
+    console.print(Markdown(cleaned_text))
