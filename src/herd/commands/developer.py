@@ -233,6 +233,21 @@ def commit(
         console.print(f"[red]Error contacting Gateway: {e}[/red]")
         raise typer.Exit(1)
 
+    # Intercept and neatly extract any reasoning/thinking blocks
+    think_content, cleaned_text = extract_reasoning_and_json(commit_message)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+        
+    commit_message = cleaned_text.strip()
+
     # Clean markdown wrapping if present
     if commit_message.startswith("```"):
         lines = commit_message.split("\n")
