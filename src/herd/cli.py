@@ -67,7 +67,7 @@ dev_app.command(name="test")(test_cmd)
 dev_app.command(name="docs")(docs_cmd)
 dev_app.command(name="refactor")(refactor_cmd)
 dev_app.command(name="explain")(explain_cmd)
-app.add_typer(dev_app, rich_help_panel="Developer Workflows")
+app.add_typer(dev_app, rich_help_panel="Tools")
 
 # 5. Bind RAG core commands to the db subgroup
 db_app.command(name="index")(index)
@@ -81,7 +81,7 @@ app.command(name="doctor", rich_help_panel="Gateway & Configuration")(doctor)
 app.command(name="clean", rich_help_panel="Gateway & Configuration")(clean)
 
 # 7. Register Sub-Typer Applications with Rich Help Panels
-app.add_typer(db_app, rich_help_panel="Semantic RAG Database")
+app.add_typer(db_app, rich_help_panel="Tools")
 app.add_typer(config_app, rich_help_panel="Gateway & Configuration")
 
 git_app = typer.Typer(
@@ -91,7 +91,7 @@ git_app.command(name="commit")(commit)
 git_app.command(name="review")(review)
 git_app.command(name="triage")(triage)
 git_app.command(name="pr")(pr)
-app.add_typer(git_app, rich_help_panel="Developer Workflows")
+app.add_typer(git_app, rich_help_panel="Tools")
 
 
 def main():
