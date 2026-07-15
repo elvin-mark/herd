@@ -49,7 +49,7 @@ echo -e "${GREEN}Model pull verified.${NC}\n"
 
 # 3. Index the temporary directory
 echo -e "${CYAN}[Step 3/8] Indexing temporary workspace (should create local .herd-index.db)...${NC}"
-herd index "$TEMP_DIR" --model "$EMBED_MODEL"
+herd db index "$TEMP_DIR" --model "$EMBED_MODEL"
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: RAG indexing failed.${NC}"
     rm -rf "$TEMP_DIR"
@@ -109,7 +109,7 @@ echo -e "\n"
 
 # 7. Run Semantic Ask Query using target directory flag (should auto-detect local index)
 echo -e "${CYAN}[Step 7/8] Querying semantic ask with --directory flag and local DB auto-detection...${NC}"
-ask_res=$(herd ask --directory "$TEMP_DIR" "What is the secret code phrase for accessing the research vault?" "$MODEL_NAME")
+ask_res=$(herd db ask --directory "$TEMP_DIR" "What is the secret code phrase for accessing the research vault?" "$MODEL_NAME")
 
 echo -e "${YELLOW}Response output:${NC}"
 echo "$ask_res"
