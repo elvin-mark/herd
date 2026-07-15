@@ -203,39 +203,62 @@ def ask(
         f"Context:\n{context}"
     )
 
-    # 5. Stream response
-    async def ask_async():
-        url_chat = f"{get_gateway_url()}/v1/chat/completions"
-        payload = {
-            "model": chosen_llm,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query},
-            ],
-            "stream": True,
-        }
-        console.print("\n[bold green]Answer:[/bold green]")
-        async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream("POST", url_chat, json=payload) as response:
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_str = line[6:]
-                        if data_str.strip() == "[DONE]":
-                            break
-                        try:
-                            data = json.loads(data_str)
-                            content = data["choices"][0]["delta"].get("content", "")
-                            print(content, end="", flush=True)
-                        except Exception:
-                            pass
-        print("\n")
+    # 5. Non-streaming generation with spinner
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {
+        "model": chosen_llm,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query},
+        ],
+        "stream": False,
+    }
 
-    try:
-        asyncio.run(ask_async())
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Generation interrupted.[/yellow]")
-    except Exception as e:
-        console.print(f"[red]Error during generation: {e}[/red]")
+    with console.status(
+        f"[bold cyan]Generating answer using {chosen_llm}...[/bold cyan]",
+        spinner="dots",
+    ):
+        try:
+            response = httpx.post(url_chat, json=payload, timeout=180.0)
+            if response.status_code != 200:
+                console.print(f"[red]Failed: {response.text}[/red]")
+                raise typer.Exit(1)
+            raw_text = response.json()["choices"][0]["message"]["content"].strip()
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Generation interrupted.[/yellow]")
+            return
+        except Exception as e:
+            console.print(f"[red]Error during generation: {e}[/red]")
+            raise typer.Exit(1)
+
+    from herd.core.utils import extract_reasoning_and_json
+    from rich.panel import Panel
+    from rich.markdown import Markdown
+
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    console.print("\n[bold green]Answer:[/bold green]")
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Model Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    # Strip outer markdown block if the model wrapped the entire response
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+
+    console.print(Markdown(cleaned_text))
 
 
 @db_app.command(name="list")
