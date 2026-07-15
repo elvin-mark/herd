@@ -1686,3 +1686,94 @@ def explain_cmd(
     from rich.markdown import Markdown
 
     console.print(Markdown(cleaned_text))
+
+
+def shell_cmd(
+    prompt: str = typer.Argument(
+        ..., help="Natural language description of the bash command you want to run."
+    ),
+    model_name: Optional[str] = typer.Option(None, "--model", "-m"),
+):
+    """The Bash Wizard: Translates natural language into complex, executable bash commands."""
+    chosen_model = model_name if model_name else find_running_llm()
+    if not chosen_model:
+        console.print("[red]Error: No local LLM models found.[/red]")
+        raise typer.Exit(1)
+
+    if not auto_start_gateway():
+        raise typer.Exit(1)
+
+    url_load = f"{get_gateway_url()}/v1/models/load"
+    try:
+        httpx.post(url_load, json={"model": chosen_model}, timeout=45.0)
+    except Exception as e:
+        console.print(f"[red]Failed to load model: {e}[/red]")
+        raise typer.Exit(1)
+
+    system_prompt = (
+        "You are an elite Linux Bash scripting expert. "
+        "Your task is to translate the user's natural language request into a single, highly optimized bash command.\n"
+        "Explain how the command works and any specific flags you used inside your reasoning block.\n"
+        "For your final output, print ONLY the exact raw bash command. Do NOT wrap it in markdown code blocks or add any other text."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
+
+    url_chat = f"{get_gateway_url()}/v1/chat/completions"
+    payload = {"model": chosen_model, "messages": messages, "stream": False}
+
+    with console.status(
+        f"[bold cyan]Conjuring bash spell using {chosen_model}...[/bold cyan]",
+        spinner="dots",
+    ):
+        try:
+            response = httpx.post(url_chat, json=payload, timeout=60.0)
+            if response.status_code != 200:
+                console.print(f"[red]Failed: {response.text}[/red]")
+                raise typer.Exit(1)
+            raw_text = response.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            console.print(f"[red]Error contacting Gateway: {e}[/red]")
+            raise typer.Exit(1)
+
+    think_content, cleaned_text = extract_reasoning_and_json(raw_text)
+
+    if think_content:
+        console.print(
+            Panel(
+                f"[italic dim yellow]{think_content}[/italic dim yellow]",
+                title="💭 Bash Wizard Reasoning (CoT)",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+
+    # Clean markdown if present
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+
+    from rich.syntax import Syntax
+
+    console.print(
+        Panel(
+            Syntax(cleaned_text, "bash", theme="monokai"),
+            border_style="cyan",
+            title="Executable Command",
+            expand=False,
+        )
+    )
+
+    confirm = typer.confirm("\nWould you like me to run this command now?")
+    if confirm:
+        console.print("[bold green]Executing...[/bold green]\n")
+        subprocess.run(cleaned_text, shell=True)
+    else:
+        console.print("[yellow]Aborted.[/yellow]")
