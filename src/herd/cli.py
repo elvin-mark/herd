@@ -69,9 +69,9 @@ dev_app.command(name="refactor")(refactor_cmd)
 dev_app.command(name="explain")(explain_cmd)
 app.add_typer(dev_app, rich_help_panel="Developer Workflows")
 
-# 5. Register Semantic RAG Database commands
-app.command(name="index", rich_help_panel="Semantic RAG Database")(index)
-app.command(name="ask", rich_help_panel="Semantic RAG Database")(ask)
+# 5. Bind RAG core commands to the db subgroup
+db_app.command(name="index")(index)
+db_app.command(name="ask")(ask)
 
 # 6. Register Gateway & Configuration commands
 app.command(name="serve", rich_help_panel="Gateway & Configuration")(serve)
