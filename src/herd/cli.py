@@ -27,7 +27,6 @@ from herd.commands.developer import (
     docs_cmd,
     refactor_cmd,
     explain_cmd,
-    shell_cmd,
 )
 from herd.commands.db import index, ask, db_app
 from herd.commands.config import config_app
@@ -68,7 +67,6 @@ dev_app.command(name="test")(test_cmd)
 dev_app.command(name="docs")(docs_cmd)
 dev_app.command(name="refactor")(refactor_cmd)
 dev_app.command(name="explain")(explain_cmd)
-dev_app.command(name="shell")(shell_cmd)
 app.add_typer(dev_app, rich_help_panel="Tools")
 
 # 5. Bind RAG core commands to the db subgroup
