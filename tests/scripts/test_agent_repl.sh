@@ -22,7 +22,7 @@ echo -e "${CYAN}=== Starting Herd Agent REPL Interactive Tests ===${NC}"
 
 # 1. Test clean exit on 'exit' input
 echo -e "${CYAN}[Step 1/3] Testing clean REPL exit on 'exit' command...${NC}"
-echo "exit" | herd agent
+echo "exit" | herd dev agent
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Success! Agent exited cleanly with status code 0.${NC}\n"
 else
@@ -32,7 +32,7 @@ fi
 
 # 2. Test clean exit on EOF (empty stdin)
 echo -e "${CYAN}[Step 2/3] Testing clean REPL exit on EOF (empty stdin)...${NC}"
-echo -n "" | herd agent
+echo -n "" | herd dev agent
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Success! Agent exited cleanly on EOF with status code 0.${NC}\n"
 else
@@ -43,7 +43,7 @@ fi
 # 3. Test objective execution + REPL exit combination
 echo -e "${CYAN}[Step 3/3] Testing task execution followed by interactive exit...${NC}"
 # Use a simple objective that doesn't require actual LLM reasoning to test pipeline flow
-(echo "list the files in the current folder"; echo "exit") | herd agent --max-turns 1
+(echo "list the files in the current folder"; echo "exit") | herd dev agent --max-turns 1
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Success! Agent processed conversation and exited cleanly.${NC}\n"
 else
