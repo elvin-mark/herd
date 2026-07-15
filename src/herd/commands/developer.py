@@ -1398,12 +1398,16 @@ def test_cmd(
 
     console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
-    confirm = typer.confirm(f"\nWould you like to save these tests to a file?")
+    confirm = typer.confirm("\nWould you like to save these tests to a file?")
     if confirm:
-        test_filename = typer.prompt("Enter filename", default=f"test_{os.path.basename(filename)}")
+        test_filename = typer.prompt(
+            "Enter filename", default=f"test_{os.path.basename(filename)}"
+        )
         with open(test_filename, "w") as f:
             f.write(cleaned_text)
-        console.print(f"[bold green]Successfully saved tests to {test_filename}![/bold green]")
+        console.print(
+            f"[bold green]Successfully saved tests to {test_filename}![/bold green]"
+        )
     else:
         console.print("[yellow]Aborted.[/yellow]")
 
@@ -1489,7 +1493,9 @@ def docs_cmd(
 
     console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
-    confirm = typer.confirm(f"\nWould you like to overwrite {filename} with these changes?")
+    confirm = typer.confirm(
+        f"\nWould you like to overwrite {filename} with these changes?"
+    )
     if confirm:
         with open(filename, "w") as f:
             f.write(cleaned_text)
@@ -1588,7 +1594,9 @@ def refactor_cmd(
 
     console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
-    confirm = typer.confirm(f"\nWould you like to overwrite {filename} with these changes?")
+    confirm = typer.confirm(
+        f"\nWould you like to overwrite {filename} with these changes?"
+    )
     if confirm:
         with open(filename, "w") as f:
             f.write(cleaned_text)
