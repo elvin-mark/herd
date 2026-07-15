@@ -65,7 +65,7 @@ echo -e "\n"
 
 # 5. Index local source files into the vector database using embedding model
 echo -e "${CYAN}[Step 5/8] Indexing local files (src/herd/core) using ${YELLOW}${EMBED_MODEL}${NC}..."
-herd index ./src/herd/core --model "$EMBED_MODEL"
+herd db index ./src/herd/core --model "$EMBED_MODEL"
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: RAG indexing failed.${NC}"
     exit 1
@@ -74,7 +74,7 @@ echo -e "${GREEN}Local codebase directory indexed successfully.${NC}\n"
 
 # 6. Run semantic search query against the index
 echo -e "${CYAN}[Step 6/8] Executing semantic search against indexed files...${NC}"
-herd ask "What are the default host and port configs?" "$MODEL_NAME" --model "$EMBED_MODEL"
+herd db ask "What are the default host and port configs?" "$MODEL_NAME" --model "$EMBED_MODEL"
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Semantic RAG search failed.${NC}"
     exit 1
