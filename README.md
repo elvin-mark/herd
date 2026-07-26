@@ -19,25 +19,26 @@ Herd is a local AI model coordinator and API gateway inspired by Ollama. The nam
 
 ## Installation
 
+### Quick Start (One-Line Installer)
+Install Herd in an isolated environment with a single command:
+```bash
+curl -fsSL https://raw.githubusercontent.com/elvin-mark/herd/main/install.sh | bash
+```
+
+### Manual Installation
 1. **Prerequisites**:
    - Python 3.10 or higher
-   - `llama-server` (from [llama.cpp](https://github.com/ggerganov/llama.cpp)) and `whisper-server` (from [whisper.cpp](https://github.com/ggerganov/whisper.cpp)) must be installed on your system path, or their paths set via environment variables.
+   - `llama-server` (from [llama.cpp](https://github.com/ggerganov/llama.cpp)) and `whisper-server` (from [whisper.cpp](https://github.com/ggerganov/whisper.cpp)) installed on your path.
 
 2. **Clone & Install**:
    ```bash
-   # Clone the repository
-   git clone <repo-url>
+   git clone https://github.com/elvin-mark/herd.git
    cd herd
 
-    # Create virtual environment and install (Standard Python)
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -e .
-
-    # OR install using uv (Blazing-Fast)
-    uv venv
-    source .venv/bin/activate
-    uv pip install -e .
+   # Create virtual environment and install
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -e .
    ```
 
 ---
