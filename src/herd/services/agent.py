@@ -1,9 +1,11 @@
-import os
 import json
+import os
 import subprocess
+from typing import Any, Callable, Dict
+
 import httpx
+
 from herd.core.utils import console
-from typing import Callable, Any, Dict
 
 
 class Tool:
@@ -67,7 +69,9 @@ def agent_view_file_lines(path: str, start_line: int, end_line: int) -> str:
 
         total_lines = len(lines)
         if start_line > total_lines:
-            return f"Error: start_line {start_line} exceeds total lines ({total_lines}) in '{path}'."
+            return (
+                f"Error: start_line {start_line} exceeds total lines ({total_lines}) in '{path}'."
+            )
 
         sliced = lines[start_line - 1 : min(end_line, total_lines)]
         output = []
@@ -110,9 +114,7 @@ def agent_edit_file(path: str, target: str, replacement: str) -> str:
 
 def agent_run_command(command: str) -> str:
     try:
-        res = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=30.0
-        )
+        res = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30.0)
         output = f"Exit Code: {res.returncode}\n"
         if res.stdout:
             output += f"STDOUT:\n{res.stdout}\n"
@@ -210,9 +212,7 @@ class AgentSession:
                         memories = json.load(f)
                     if memories:
                         memory_block = "\n\nRetrieved Long-Term Memories (Context):\n"
-                        for i, mem in enumerate(
-                            memories[-10:], 1
-                        ):  # Max 10 recent memories
+                        for i, mem in enumerate(memories[-10:], 1):  # Max 10 recent memories
                             memory_block += f"- {mem}\n"
                         self.system_prompt += memory_block
                 except Exception:
@@ -225,13 +225,10 @@ class AgentSession:
                     agents_rules = f.read().strip()
                 if agents_rules:
                     self.system_prompt += (
-                        f"\n\nProject Coding Guidelines (from AGENTS.md):\n"
-                        f"{agents_rules}\n"
+                        f"\n\nProject Coding Guidelines (from AGENTS.md):\n{agents_rules}\n"
                     )
             except Exception as e:
-                console.print(
-                    f"[dim yellow]Warning: Could not read AGENTS.md: {e}[/dim yellow]"
-                )
+                console.print(f"[dim yellow]Warning: Could not read AGENTS.md: {e}[/dim yellow]")
         self.history = [{"role": "system", "content": self.system_prompt}]
 
     def _register_default_tools(self):
@@ -442,8 +439,8 @@ class AgentSession:
 
             # 3. Handle Actions
             if action == "final_answer":
-                from rich.markdown import Markdown
                 from rich.console import Group
+                from rich.markdown import Markdown
                 from rich.text import Text
 
                 content_group = Group(
@@ -460,9 +457,7 @@ class AgentSession:
                 self.history.append({"role": "assistant", "content": raw_text})
                 break
 
-            console.print(
-                f"⚙️  [bold]Action:[/bold] {action} | [bold]Input:[/bold] {action_input}"
-            )
+            console.print(f"⚙️  [bold]Action:[/bold] {action} | [bold]Input:[/bold] {action_input}")
 
             observation = self.registry.execute(action, action_input)
 

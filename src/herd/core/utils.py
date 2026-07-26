@@ -1,22 +1,23 @@
 import os
+import subprocess
 import sys
 import time
-import subprocess
+from typing import Optional
+
 import httpx
 import typer
-from typing import Optional
 from rich.console import Console
 
 from herd.core.config import (
+    DEFAULT_LLM,
     HERD_HOST,
-    HERD_PORT,
     HERD_LOGS_DIR,
     HERD_MODELS_DIR,
-    DEFAULT_LLM,
+    HERD_PORT,
 )
 from herd.services.downloader import (
-    list_hf_repository_files,
     download_file,
+    list_hf_repository_files,
     parse_model_identifier,
 )
 
@@ -119,9 +120,7 @@ def auto_start_gateway() -> bool:
     for _ in range(20):
         time.sleep(0.5)
         if is_gateway_running():
-            console.print(
-                "[green]Herd API gateway started successfully in the background.[/green]"
-            )
+            console.print("[green]Herd API gateway started successfully in the background.[/green]")
             return True
 
     console.print(
@@ -256,9 +255,7 @@ async def pull_model_async(model_name: str):
     # Filter files ending in .gguf or .bin
     model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
     if not model_files:
-        console.print(
-            f"[red]No GGUF or BIN model files found in repository {author}/{repo}.[/red]"
-        )
+        console.print(f"[red]No GGUF or BIN model files found in repository {author}/{repo}.[/red]")
         raise typer.Exit(1)
 
     chosen_file = None
@@ -266,18 +263,14 @@ async def pull_model_async(model_name: str):
         # Search for file matching the tag
         matches = [f for f in model_files if tag.lower() in f.lower()]
         if not matches:
-            console.print(
-                f"[red]No files matching tag '{tag}' found. Available model files:[/red]"
-            )
+            console.print(f"[red]No files matching tag '{tag}' found. Available model files:[/red]")
             for f in model_files:
                 console.print(f" - {f}")
             raise typer.Exit(1)
         chosen_file = matches[0]
     else:
         # Interactive mode: let the user choose
-        console.print(
-            "\nMultiple model files available. Please select one to download:"
-        )
+        console.print("\nMultiple model files available. Please select one to download:")
         for idx, f in enumerate(model_files):
             console.print(f"[{idx}] {f}")
 
@@ -304,9 +297,7 @@ async def pull_model_async(model_name: str):
     console.print(f"Downloading file: [bold cyan]{chosen_file}[/bold cyan]")
     try:
         await download_file(download_url, dest_path, chosen_file)
-        console.print(
-            f"[green]Successfully downloaded and saved model to: {dest_path}[/green]"
-        )
+        console.print(f"[green]Successfully downloaded and saved model to: {dest_path}[/green]")
     except Exception as e:
         console.print(f"[red]Failed to download file: {e}[/red]")
         raise typer.Exit(1)

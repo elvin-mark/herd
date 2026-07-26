@@ -1,14 +1,16 @@
 import os
 import re
+
 import httpx
 from rich.progress import (
-    Progress,
     BarColumn,
     DownloadColumn,
-    TransferSpeedColumn,
-    TimeRemainingColumn,
+    Progress,
     TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
 )
+
 from herd.core.config import HERD_MODELS_DIR
 
 
@@ -33,11 +35,7 @@ def resolve_model_path(model_name: str) -> str:
     Supports absolute/relative paths and Hugging Face repository style.
     """
     # 1. Check if absolute or relative path
-    if (
-        os.path.isabs(model_name)
-        or model_name.startswith("./")
-        or model_name.startswith("../")
-    ):
+    if os.path.isabs(model_name) or model_name.startswith("./") or model_name.startswith("../"):
         if os.path.exists(model_name):
             return os.path.abspath(model_name)
         raise FileNotFoundError(f"Local model path not found: {model_name}")
@@ -52,9 +50,7 @@ def resolve_model_path(model_name: str) -> str:
         )
 
     # Get all .gguf or .bin files in repository directory
-    files = [
-        f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))
-    ]
+    files = [f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))]
     model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
 
     if not model_files:
@@ -65,9 +61,7 @@ def resolve_model_path(model_name: str) -> str:
     if tag:
         # Search for files matching the tag (case insensitive) but excluding mmproj first
         tagged_files = [
-            f
-            for f in model_files
-            if tag.lower() in f.lower() and "mmproj" not in f.lower()
+            f for f in model_files if tag.lower() in f.lower() and "mmproj" not in f.lower()
         ]
         if not tagged_files:
             # Fallback to any file matching the tag (including mmproj if that is specifically what's requested)
@@ -122,9 +116,7 @@ async def download_file(url: str, dest_path: str, filename: str):
     )
 
     async with httpx.AsyncClient() as client:
-        async with client.stream(
-            "GET", url, follow_redirects=True, timeout=None
-        ) as response:
+        async with client.stream("GET", url, follow_redirects=True, timeout=None) as response:
             if response.status_code == 404:
                 raise FileNotFoundError(f"File not found at URL: {url}")
             response.raise_for_status()

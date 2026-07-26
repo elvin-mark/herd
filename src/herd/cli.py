@@ -1,36 +1,37 @@
 import typer
 
+from herd.commands.audio import transcribe
+from herd.commands.chat import benchmark, run
+from herd.commands.config import config_app
+from herd.commands.db import ask, db_app, index
+from herd.commands.developer import (
+    agent,
+    commit,
+    copilot,
+    docs_cmd,
+    explain_cmd,
+    heal,
+    pr,
+    refactor_cmd,
+    review,
+    test_cmd,
+    triage,
+    vision,
+)
+
 # Import sub-commands from modular command files
 from herd.commands.models import (
+    clean,
     list_models,
+    ps,
     pull,
     rm,
-    stop,
-    ps,
-    show_stats,
-    clean,
     search,
+    show_stats,
+    stop,
     top,
 )
-from herd.commands.chat import run, benchmark
-from herd.commands.audio import transcribe
-from herd.commands.developer import (
-    copilot,
-    commit,
-    review,
-    heal,
-    vision,
-    agent,
-    triage,
-    pr,
-    test_cmd,
-    docs_cmd,
-    refactor_cmd,
-    explain_cmd,
-)
-from herd.commands.db import index, ask, db_app
-from herd.commands.config import config_app
-from herd.commands.server import serve, logs, setup, share, doctor
+from herd.commands.server import doctor, logs, serve, setup, share
 
 app = typer.Typer(
     name="herd",
@@ -84,9 +85,7 @@ app.command(name="clean", rich_help_panel="Gateway & Configuration")(clean)
 app.add_typer(db_app, rich_help_panel="Tools")
 app.add_typer(config_app, rich_help_panel="Gateway & Configuration")
 
-git_app = typer.Typer(
-    name="git", help="Git automations for committing and code review."
-)
+git_app = typer.Typer(name="git", help="Git automations for committing and code review.")
 git_app.command(name="commit")(commit)
 git_app.command(name="review")(review)
 git_app.command(name="triage")(triage)

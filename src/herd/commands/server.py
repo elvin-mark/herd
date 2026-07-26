@@ -1,25 +1,26 @@
-import os
-import time
 import json
-import subprocess
-import shutil
-import typer
-import uvicorn
+import os
+import platform
 import re
-import threading
+import shutil
 import signal
 import socket
-import platform
-import psutil
-import httpx
+import subprocess
+import threading
+import time
 from collections import deque
 from typing import Optional
 
+import httpx
+import psutil
+import typer
+import uvicorn
+
 from herd.core.config import (
-    HERD_HOST,
-    HERD_PORT,
     HERD_HOME,
+    HERD_HOST,
     HERD_LOGS_DIR,
+    HERD_PORT,
 )
 from herd.core.utils import console
 
@@ -27,9 +28,7 @@ from herd.core.utils import console
 def start_public_tunnel(port: int):
     cloudflared_bin = shutil.which("cloudflared")
     if not cloudflared_bin:
-        console.print(
-            "[red]Error: 'cloudflared' is not installed or not in PATH.[/red]"
-        )
+        console.print("[red]Error: 'cloudflared' is not installed or not in PATH.[/red]")
         console.print("Please install Cloudflare Tunnel first. Examples:")
         console.print("  [bold white]macOS:[/bold white] brew install cloudflared")
         console.print("  [bold white]Linux:[/bold white] sudo apt install cloudflared")
@@ -89,9 +88,7 @@ def serve(
         "-h",
         help="Host IP address to bind the gateway server to (use '0.0.0.0' for local network access).",
     ),
-    port: int = typer.Option(
-        HERD_PORT, "--port", "-p", help="Port to run the gateway server on."
-    ),
+    port: int = typer.Option(HERD_PORT, "--port", "-p", help="Port to run the gateway server on."),
     public: bool = typer.Option(
         False,
         "--public",
@@ -129,9 +126,7 @@ def serve(
                     proc.wait(timeout=5)
                     time.sleep(1)  # Give OS time to free port
                 else:
-                    console.print(
-                        "[red]Aborting gateway startup due to port conflict.[/red]"
-                    )
+                    console.print("[red]Aborting gateway startup due to port conflict.[/red]")
                     raise typer.Exit(1)
             else:
                 # Background / Detached mode
@@ -156,9 +151,7 @@ def serve(
     # Ensure gateway port and host are set in env so other processes know about it
     os.environ["HERD_PORT"] = str(port)
     os.environ["HERD_HOST"] = host
-    console.print(
-        f"[bold green]Starting Herd API Gateway on {host}:{port}...[/bold green]"
-    )
+    console.print(f"[bold green]Starting Herd API Gateway on {host}:{port}...[/bold green]")
 
     tunnel_proc = None
     if public:
@@ -195,9 +188,7 @@ def logs(
         None,
         help="Model identifier to view logs for. If omitted, tails the gateway logs.",
     ),
-    follow: bool = typer.Option(
-        False, "--follow", "-f", help="Follow log output in real-time."
-    ),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output in real-time."),
     lines: int = typer.Option(
         20, "--lines", "-n", help="Number of lines to show from the end of the logs."
     ),
@@ -215,9 +206,7 @@ def logs(
         console.print(f"[red]No logs found at: {log_path}[/red]")
         raise typer.Exit(1)
 
-    console.print(
-        f"[bold green]Tailing last {lines} lines of {target_desc} logs...[/bold green]"
-    )
+    console.print(f"[bold green]Tailing last {lines} lines of {target_desc} logs...[/bold green]")
 
     try:
         with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -308,9 +297,7 @@ def setup(
             check=True,
         )
     else:
-        console.print(
-            "[yellow]llama.cpp directory already exists. Skipping clone.[/yellow]"
-        )
+        console.print("[yellow]llama.cpp directory already exists. Skipping clone.[/yellow]")
 
     console.print("[bold cyan]Compiling llama-server...[/bold cyan]")
     cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
@@ -350,9 +337,7 @@ def setup(
             check=True,
         )
     else:
-        console.print(
-            "[yellow]whisper.cpp directory already exists. Skipping clone.[/yellow]"
-        )
+        console.print("[yellow]whisper.cpp directory already exists. Skipping clone.[/yellow]")
 
     console.print("[bold cyan]Compiling whisper-server...[/bold cyan]")
     whisper_cmake_args = [cmake_bin, "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
@@ -377,16 +362,10 @@ def setup(
     )
 
     # 3. Configure binary paths
-    llama_bin_path = os.path.abspath(
-        os.path.join(llama_dir, "build", "bin", "llama-server")
-    )
-    whisper_bin_path = os.path.abspath(
-        os.path.join(whisper_dir, "build", "bin", "whisper-server")
-    )
+    llama_bin_path = os.path.abspath(os.path.join(llama_dir, "build", "bin", "llama-server"))
+    whisper_bin_path = os.path.abspath(os.path.join(whisper_dir, "build", "bin", "whisper-server"))
     if not os.path.exists(whisper_bin_path):
-        fallback_path = os.path.abspath(
-            os.path.join(whisper_dir, "build", "whisper-server")
-        )
+        fallback_path = os.path.abspath(os.path.join(whisper_dir, "build", "whisper-server"))
         if os.path.exists(fallback_path):
             whisper_bin_path = fallback_path
 
@@ -407,9 +386,7 @@ def setup(
     save_config(config_data)
 
     console.print("\n[bold green]Herd setup completed successfully![/bold green]")
-    console.print(
-        f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:"
-    )
+    console.print(f"Custom binary paths registered in [bold cyan]{config_path}[/bold cyan]:")
     console.print(f"  llama-server:   [bold white]{llama_bin_path}[/bold white]")
     if llama_commit:
         console.print(f"    (Commit: [bold white]{llama_commit}[/bold white])")
@@ -452,14 +429,10 @@ def share(
     if public:
         cloudflared_bin = shutil.which("cloudflared")
         if not cloudflared_bin:
-            console.print(
-                "[red]Error: 'cloudflared' is not installed or not in PATH.[/red]"
-            )
+            console.print("[red]Error: 'cloudflared' is not installed or not in PATH.[/red]")
             console.print("Please install Cloudflare Tunnel first. Examples:")
             console.print("  [bold white]macOS:[/bold white] brew install cloudflared")
-            console.print(
-                "  [bold white]Linux:[/bold white] sudo apt install cloudflared"
-            )
+            console.print("  [bold white]Linux:[/bold white] sudo apt install cloudflared")
             raise typer.Exit(1)
 
         console.print("[bold cyan]Starting public Cloudflare Tunnel...[/bold cyan]")
@@ -495,12 +468,8 @@ def share(
                 raise typer.Exit(1)
 
             console.print("\n🌎 [bold green]Public Exposure Active![/bold green]\n")
-            console.print(
-                f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]"
-            )
-            console.print(
-                f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]"
-            )
+            console.print(f"  Public API Base URL:  [bold cyan]{public_url}/v1[/bold cyan]")
+            console.print(f"  Public Web Dashboard: [bold cyan]{public_url}[/bold cyan]")
             console.print("")
             console.print(
                 "[yellow]Your local Herd gateway is now securely accessible from anywhere in the world![/yellow]"
@@ -557,9 +526,7 @@ def share(
     console.print(f"  API Base URL:  [bold cyan]{url}[/bold cyan]")
     console.print(f"  Web Dashboard: [bold cyan]http://{ip}:{port}[/bold cyan]")
     console.print("")
-    console.print(
-        "Configure your mobile client (e.g. Chatbox, LibreChat) with this API Base URL."
-    )
+    console.print("Configure your mobile client (e.g. Chatbox, LibreChat) with this API Base URL.")
     console.print("")
 
     if qr:
@@ -626,9 +593,7 @@ def doctor():
             f"  CPU Flags:    [bold green]{', '.join(cpu_flags)}[/bold green] (Inference-capable)"
         )
     else:
-        console.print(
-            "  CPU Flags:    [bold white]Standard instruction set[/bold white]"
-        )
+        console.print("  CPU Flags:    [bold white]Standard instruction set[/bold white]")
 
     # 3. GPU/CUDA Capabilities
     console.print("\n[bold yellow]3. GPU / Hardware Acceleration:[/bold yellow]")
@@ -660,9 +625,7 @@ def doctor():
                     "  GPU Device:   [bold yellow]NVIDIA Driver present but query failed[/bold yellow]"
                 )
         except Exception:
-            console.print(
-                "  GPU Device:   [bold yellow]Error querying nvidia-smi[/bold yellow]"
-            )
+            console.print("  GPU Device:   [bold yellow]Error querying nvidia-smi[/bold yellow]")
     else:
         console.print(
             "  GPU Device:   [bold white]No NVIDIA GPU detected (CPU mode active)[/bold white]"
@@ -691,9 +654,7 @@ def doctor():
         llama_bin = shutil.which("llama-server")
     if llama_bin and os.path.exists(llama_bin):
         commit_str = f" | Commit: {llama_commit}" if llama_commit else ""
-        console.print(
-            f"  llama-server:   [bold green]Found[/bold green] ({llama_bin}){commit_str}"
-        )
+        console.print(f"  llama-server:   [bold green]Found[/bold green] ({llama_bin}){commit_str}")
     else:
         console.print(
             "  llama-server:   [bold red]Missing[/bold red] (Run 'herd setup' to compile)"
@@ -718,9 +679,7 @@ def doctor():
     try:
         res = httpx.get(f"{gateway_url}/health", timeout=1.0)
         if res.status_code == 200:
-            console.print(
-                f"  Connection:   [bold green]Online[/bold green] ({gateway_url})"
-            )
+            console.print(f"  Connection:   [bold green]Online[/bold green] ({gateway_url})")
         else:
             console.print(
                 f"  Connection:   [bold red]Offline[/bold red] (Status code {res.status_code})"

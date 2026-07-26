@@ -1,26 +1,27 @@
+import asyncio
 import os
+from typing import Optional
+
 import httpx
 import typer
-import asyncio
-from typing import Optional
 from rich.table import Table
 
 from herd.core.config import (
     DEFAULT_EMBEDDING,
 )
 from herd.core.utils import (
-    console,
-    get_gateway_url,
     auto_start_gateway,
-    get_local_models_info,
+    console,
     find_running_llm,
+    get_gateway_url,
+    get_local_models_info,
 )
 from herd.services.rag import (
-    index_directory,
     get_embedding,
-    search_vectors,
+    index_directory,
     list_indexed_files,
     remove_indexed_path,
+    search_vectors,
 )
 
 # Typer app for db subcommands
@@ -76,9 +77,7 @@ def index(
     )
     url_load = f"{get_gateway_url()}/v1/models/load"
     try:
-        httpx.post(
-            url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0
-        )
+        httpx.post(url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0)
     except Exception as e:
         console.print(f"[red]Failed to load embedding model: {e}[/red]")
         raise typer.Exit(1)
@@ -96,9 +95,7 @@ def index(
 
 
 def ask(
-    query: str = typer.Argument(
-        ..., help="The question to ask the model using indexed context."
-    ),
+    query: str = typer.Argument(..., help="The question to ask the model using indexed context."),
     model_name: Optional[str] = typer.Argument(
         None,
         help="LLM model identifier to ask. If omitted, uses active or default LLM.",
@@ -124,9 +121,7 @@ def ask(
     # Resolve LLM model
     chosen_llm = model_name if model_name else find_running_llm()
     if not chosen_llm:
-        console.print(
-            "[red]Error: No LLM model specified and no default LLM configured.[/red]"
-        )
+        console.print("[red]Error: No LLM model specified and no default LLM configured.[/red]")
         raise typer.Exit(1)
 
     # Resolve embedding model
@@ -157,9 +152,7 @@ def ask(
     # 2. Pre-load the models
     url_load = f"{get_gateway_url()}/v1/models/load"
     try:
-        httpx.post(
-            url_load, json={"model": chosen_emb, "is_embedding": True}, timeout=45.0
-        )
+        httpx.post(url_load, json={"model": chosen_emb, "is_embedding": True}, timeout=45.0)
         httpx.post(url_load, json={"model": chosen_llm}, timeout=45.0)
     except Exception as e:
         console.print(f"[red]Failed to load models: {e}[/red]")
@@ -169,9 +162,7 @@ def ask(
     console.print("Searching semantic index for context...")
     try:
         query_vector = asyncio.run(get_embedding(query, chosen_emb))
-        matches = search_vectors(
-            query_vector, chosen_emb, top_k=5, target_path=directory
-        )
+        matches = search_vectors(query_vector, chosen_emb, top_k=5, target_path=directory)
     except Exception as e:
         console.print(f"[red]Failed to query embeddings: {e}[/red]")
         raise typer.Exit(1)
@@ -185,14 +176,9 @@ def ask(
         console.print("\n[bold white]Retrieved Context Sources:[/bold white]")
         for idx, m in enumerate(matches):
             basename = os.path.basename(m["file_path"])
-            console.print(
-                f"  [{idx + 1}] {basename} (similarity: {m['similarity']:.3f})"
-            )
+            console.print(f"  [{idx + 1}] {basename} (similarity: {m['similarity']:.3f})")
         context = "\n\n".join(
-            [
-                f"Source: {os.path.basename(m['file_path'])}\nContent:\n{m['text']}"
-                for m in matches
-            ]
+            [f"Source: {os.path.basename(m['file_path'])}\nContent:\n{m['text']}" for m in matches]
         )
 
     # 4. Prompt construction
@@ -230,9 +216,10 @@ def ask(
             console.print(f"[red]Error during generation: {e}[/red]")
             raise typer.Exit(1)
 
-    from herd.core.utils import extract_reasoning_and_json
-    from rich.panel import Panel
     from rich.markdown import Markdown
+    from rich.panel import Panel
+
+    from herd.core.utils import extract_reasoning_and_json
 
     think_content, cleaned_text = extract_reasoning_and_json(raw_text)
 
@@ -348,9 +335,7 @@ def db_search(
     # Pre-load the embedding model
     url_load = f"{get_gateway_url()}/v1/models/load"
     try:
-        httpx.post(
-            url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0
-        )
+        httpx.post(url_load, json={"model": model_name, "is_embedding": True}, timeout=45.0)
     except Exception as e:
         console.print(f"[red]Failed to load embedding model: {e}[/red]")
         raise typer.Exit(1)
@@ -358,9 +343,7 @@ def db_search(
     console.print(f"Searching semantic index for '{query}'...")
     try:
         query_vector = asyncio.run(get_embedding(query, model_name))
-        matches = search_vectors(
-            query_vector, model_name, top_k=limit, target_path=directory
-        )
+        matches = search_vectors(query_vector, model_name, top_k=limit, target_path=directory)
     except Exception as e:
         console.print(f"[red]Failed to perform semantic search: {e}[/red]")
         raise typer.Exit(1)
@@ -386,17 +369,13 @@ def db_search(
 
 @db_app.command(name="remove")
 def db_remove(
-    path: str = typer.Argument(
-        ..., help="The file or directory path to remove from the index."
-    ),
+    path: str = typer.Argument(..., help="The file or directory path to remove from the index."),
 ):
     """Removes indexed chunks and files from the vector database."""
     # Resolve absolute path to match DB entries
     abs_path = os.path.abspath(path)
 
-    console.print(
-        f"Removing indexed path [bold red]{abs_path}[/bold red] from database..."
-    )
+    console.print(f"Removing indexed path [bold red]{abs_path}[/bold red] from database...")
     try:
         count = remove_indexed_path(abs_path)
         if count > 0:
@@ -442,6 +421,4 @@ def db_prune():
             f"([bold white]{pruned_chunks}[/bold white] chunks) that no longer exist on disk."
         )
     else:
-        console.print(
-            "[green]All indexed files exist on disk. No pruning needed.[/green]"
-        )
+        console.print("[green]All indexed files exist on disk. No pruning needed.[/green]")

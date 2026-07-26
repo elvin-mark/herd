@@ -1,19 +1,21 @@
-import os
-import time
 import asyncio
+import json
 import logging
+import os
 import socket
-from typing import Dict, Any, Optional
+import time
+from typing import Any, Dict, Optional
+
 import httpx
+
 from herd.core.config import (
+    HERD_HOME,
     HERD_LOGS_DIR,
+    IDLE_TIMEOUT,
     LLAMA_SERVER_BIN,
     WHISPER_SERVER_BIN,
-    IDLE_TIMEOUT,
-    HERD_HOME,
 )
 from herd.services.downloader import resolve_model_path
-import json
 
 
 def _set_pdeathsig():
@@ -185,10 +187,7 @@ class ProcessManager:
                 # Verify that the process is still running
                 if info["process"].returncode is None:
                     # Check if the startup flags match
-                    if (
-                        info["is_whisper"] == is_whisper
-                        and info["is_embedding"] == is_embedding
-                    ):
+                    if info["is_whisper"] == is_whisper and info["is_embedding"] == is_embedding:
                         if idle_timeout is not None:
                             info["idle_timeout"] = idle_timeout
                         return info["port"]
@@ -211,9 +210,7 @@ class ProcessManager:
                                 process.kill()
                                 await process.wait()
                         except Exception as e:
-                            logger.error(
-                                f"Error terminating model server for restart: {e}"
-                            )
+                            logger.error(f"Error terminating model server for restart: {e}")
                         finally:
                             try:
                                 log_file.close()
@@ -266,9 +263,7 @@ class ProcessManager:
             log_path = os.path.join(HERD_LOGS_DIR, f"{model_safe}.log")
             os.makedirs(HERD_LOGS_DIR, exist_ok=True)
 
-            logger.info(
-                f"Starting server for '{model_name}' on port {port}. Log: {log_path}"
-            )
+            logger.info(f"Starting server for '{model_name}' on port {port}. Log: {log_path}")
             log_file = open(log_path, "w")
 
             try:
@@ -321,9 +316,7 @@ class ProcessManager:
                 "model_name": model_name,
                 "model_path": model_path,
                 "log_path": log_path,
-                "idle_timeout": idle_timeout
-                if idle_timeout is not None
-                else IDLE_TIMEOUT,
+                "idle_timeout": idle_timeout if idle_timeout is not None else IDLE_TIMEOUT,
             }
 
             self._save_active_processes_sync()
@@ -346,17 +339,13 @@ class ProcessManager:
             process = info["process"]
             log_file = info["log_file"]
 
-            logger.info(
-                f"Stopping model server '{model_name}' on port {info['port']}..."
-            )
+            logger.info(f"Stopping model server '{model_name}' on port {info['port']}...")
             try:
                 process.terminate()
                 try:
                     await asyncio.wait_for(process.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
-                    logger.warning(
-                        f"Process for '{model_name}' did not exit. Force killing..."
-                    )
+                    logger.warning(f"Process for '{model_name}' did not exit. Force killing...")
                     process.kill()
                     await process.wait()
             except ProcessLookupError:

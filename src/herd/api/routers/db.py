@@ -1,15 +1,16 @@
-import os
 import logging
+import os
 from typing import Optional
-from fastapi import APIRouter, Request, BackgroundTasks
 
-from herd.api.state import manager
+from fastapi import APIRouter, BackgroundTasks, Request
+
 from herd.api.exceptions import HerdError
+from herd.api.state import manager
 from herd.services.rag import (
+    get_embedding,
+    index_directory,
     list_indexed_files,
     remove_indexed_path,
-    index_directory,
-    get_embedding,
     search_vectors,
 )
 
@@ -90,7 +91,5 @@ async def db_search(request: Request):
 
     await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
     query_vector = await get_embedding(query, model_name)
-    matches = search_vectors(
-        query_vector, model_name, top_k=limit, target_path=directory
-    )
+    matches = search_vectors(query_vector, model_name, top_k=limit, target_path=directory)
     return matches

@@ -3,16 +3,16 @@ from rich.table import Table
 
 from herd.core.config import (
     CONFIG_FILE,
+    DEFAULT_EMBEDDING,
+    DEFAULT_LLM,
+    DEFAULT_WHISPER,
     HERD_HOST,
     HERD_PORT,
     IDLE_TIMEOUT,
-    LLAMA_SERVER_BIN,
-    WHISPER_SERVER_BIN,
     LLAMA_COMMIT,
+    LLAMA_SERVER_BIN,
     WHISPER_COMMIT,
-    DEFAULT_LLM,
-    DEFAULT_EMBEDDING,
-    DEFAULT_WHISPER,
+    WHISPER_SERVER_BIN,
     load_config,
     save_config,
 )
@@ -43,9 +43,7 @@ def config_show():
         table.add_row(key, str(active_val) if active_val is not None else "-", source)
 
     add_row("default_llm", DEFAULT_LLM, "Default LLM model identifier")
-    add_row(
-        "default_embedding", DEFAULT_EMBEDDING, "Default embedding model identifier"
-    )
+    add_row("default_embedding", DEFAULT_EMBEDDING, "Default embedding model identifier")
     add_row("default_whisper", DEFAULT_WHISPER, "Default Whisper model identifier")
     add_row("HERD_HOST", HERD_HOST, "Gateway listen host")
     add_row("HERD_PORT", HERD_PORT, "Gateway listen port")
@@ -73,9 +71,7 @@ def config_show():
             p_table.add_row(p_name, p_info.get("base_url", "-"), key_masked)
         console.print(p_table)
 
-    console.print(
-        "\nTo update defaults, run: [bold cyan]herd config set <key> <value>[/bold cyan]"
-    )
+    console.print("\nTo update defaults, run: [bold cyan]herd config set <key> <value>[/bold cyan]")
     console.print(
         "To manage providers, run: [bold cyan]herd config set-provider <name> --api-key <key>[/bold cyan]\n"
     )
@@ -121,9 +117,7 @@ def config_set(
         try:
             val_to_save = int(value)
         except ValueError:
-            console.print(
-                f"[red]Error: Value for '{matched_key}' must be an integer.[/red]"
-            )
+            console.print(f"[red]Error: Value for '{matched_key}' must be an integer.[/red]")
             raise typer.Exit(1)
 
     config[matched_key] = val_to_save
@@ -196,9 +190,7 @@ def config_set_provider(
 
 @config_app.command(name="remove-provider")
 def config_remove_provider(
-    name: str = typer.Argument(
-        ..., help="The cloud provider name to remove (e.g. groq, openai)."
-    ),
+    name: str = typer.Argument(..., help="The cloud provider name to remove (e.g. groq, openai)."),
 ):
     """Deletes a configured cloud provider from settings."""
     config = load_config()

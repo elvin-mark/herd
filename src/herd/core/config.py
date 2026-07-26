@@ -1,6 +1,6 @@
+import json
 import os
 import shutil
-import json
 
 
 class HerdSettings:
@@ -124,9 +124,7 @@ def save_config(config: dict):
         settings.global_overrides[k] = v
 
     settings.default_llm = config.get("default_llm", settings.default_llm)
-    settings.default_embedding = config.get(
-        "default_embedding", settings.default_embedding
-    )
+    settings.default_embedding = config.get("default_embedding", settings.default_embedding)
     settings.default_whisper = config.get("default_whisper", settings.default_whisper)
     if "LLAMA_SERVER_BIN" in config:
         settings.llama_server_bin = config["LLAMA_SERVER_BIN"]

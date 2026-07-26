@@ -1,25 +1,26 @@
-import os
-import time
 import asyncio
+import os
 import shutil
+import time
+from typing import Optional
+
 import httpx
 import typer
-from typing import Optional
-from rich.table import Table
+from rich.console import Group
 from rich.live import Live
 from rich.panel import Panel
-from rich.console import Group
+from rich.table import Table
 
 from herd.core.config import (
     HERD_HOST,
-    HERD_PORT,
     HERD_LOGS_DIR,
+    HERD_PORT,
 )
 from herd.core.utils import (
     console,
     get_gateway_url,
-    is_gateway_running,
     get_local_models_info,
+    is_gateway_running,
     pull_model_async,
 )
 
@@ -39,9 +40,7 @@ def list_models(
     models = get_local_models_info()
 
     if provider:
-        models = [
-            m for m in models if m.get("provider", "").lower() == provider.lower()
-        ]
+        models = [m for m in models if m.get("provider", "").lower() == provider.lower()]
 
     if filter_query:
         models = [
@@ -53,9 +52,7 @@ def list_models(
 
     if not models:
         if filter_query or provider:
-            console.print(
-                "[yellow]No models matched the specified filter criteria.[/yellow]"
-            )
+            console.print("[yellow]No models matched the specified filter criteria.[/yellow]")
         else:
             console.print(
                 "[yellow]No models found. Use 'herd pull <model_name>' to download some.[/yellow]"
@@ -92,8 +89,8 @@ def rm(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
 ):
     """Deletes a downloaded model or repository from local storage."""
-    from herd.services.downloader import parse_model_identifier
     from herd.core.config import HERD_MODELS_DIR
+    from herd.services.downloader import parse_model_identifier
 
     try:
         author, repo, tag = parse_model_identifier(model_name)
@@ -108,9 +105,7 @@ def rm(
             raise typer.Exit(1)
 
         if not os.path.exists(abs_path):
-            console.print(
-                f"[red]Error: Model path '{model_name}' does not exist.[/red]"
-            )
+            console.print(f"[red]Error: Model path '{model_name}' does not exist.[/red]")
             raise typer.Exit(1)
 
         if not yes:
@@ -126,38 +121,28 @@ def rm(
                 shutil.rmtree(abs_path)
             else:
                 os.remove(abs_path)
-            console.print(
-                f"[green]Successfully deleted local model path '{model_name}'.[/green]"
-            )
+            console.print(f"[green]Successfully deleted local model path '{model_name}'.[/green]")
             return
         except Exception as e:
             console.print(f"[red]Error deleting '{model_name}': {e}[/red]")
             raise typer.Exit(1)
 
     if not os.path.exists(repo_dir):
-        console.print(
-            f"[yellow]Model repository directory does not exist: {repo_dir}[/yellow]"
-        )
+        console.print(f"[yellow]Model repository directory does not exist: {repo_dir}[/yellow]")
         return
 
     if tag:
-        files = [
-            f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))
-        ]
+        files = [f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))]
         model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
 
         tagged_files = [
-            f
-            for f in model_files
-            if tag.lower() in f.lower() and "mmproj" not in f.lower()
+            f for f in model_files if tag.lower() in f.lower() and "mmproj" not in f.lower()
         ]
         if not tagged_files:
             tagged_files = [f for f in model_files if tag.lower() in f.lower()]
 
         if not tagged_files:
-            console.print(
-                f"[yellow]No files matching tag '{tag}' found in {repo_dir}.[/yellow]"
-            )
+            console.print(f"[yellow]No files matching tag '{tag}' found in {repo_dir}.[/yellow]")
             return
 
         target_file = os.path.join(repo_dir, tagged_files[0])
@@ -171,9 +156,7 @@ def rm(
 
         try:
             os.remove(target_file)
-            console.print(
-                f"[green]Successfully deleted model file '{tagged_files[0]}'.[/green]"
-            )
+            console.print(f"[green]Successfully deleted model file '{tagged_files[0]}'.[/green]")
 
             # If the directory is now empty, clean it up
             remaining = os.listdir(repo_dir)
@@ -196,9 +179,7 @@ def rm(
 
         try:
             shutil.rmtree(repo_dir)
-            console.print(
-                f"[green]Successfully deleted model repository '{model_name}'.[/green]"
-            )
+            console.print(f"[green]Successfully deleted model repository '{model_name}'.[/green]")
 
             author_dir = os.path.dirname(repo_dir)
             if os.path.exists(author_dir) and not os.listdir(author_dir):
@@ -212,9 +193,7 @@ def stop(
     model_name: Optional[str] = typer.Argument(
         None, help="Model identifier to stop. Required unless --all is specified."
     ),
-    stop_all: bool = typer.Option(
-        False, "--all", "-a", help="Stop all running model processes."
-    ),
+    stop_all: bool = typer.Option(False, "--all", "-a", help="Stop all running model processes."),
 ):
     """Stops a running model process."""
     if not is_gateway_running():
@@ -229,9 +208,7 @@ def stop(
         try:
             active_res = httpx.get(active_url, timeout=5.0)
             if active_res.status_code != 200:
-                console.print(
-                    f"[red]Failed to query active models: {active_res.text}[/red]"
-                )
+                console.print(f"[red]Failed to query active models: {active_res.text}[/red]")
                 raise typer.Exit(1)
             active_models = active_res.json()
         except Exception as e:
@@ -247,13 +224,9 @@ def stop(
             try:
                 response = httpx.post(url, json={"model": m_name})
                 if response.status_code == 200:
-                    console.print(
-                        f"[green]Successfully stopped model '{m_name}'.[/green]"
-                    )
+                    console.print(f"[green]Successfully stopped model '{m_name}'.[/green]")
                 else:
-                    console.print(
-                        f"[red]Failed to stop model '{m_name}': {response.text}[/red]"
-                    )
+                    console.print(f"[red]Failed to stop model '{m_name}': {response.text}[/red]")
             except Exception as e:
                 console.print(f"[red]Error stopping model '{m_name}': {e}[/red]")
     else:
@@ -266,9 +239,7 @@ def stop(
         try:
             response = httpx.post(url, json={"model": model_name})
             if response.status_code == 200:
-                console.print(
-                    f"[green]Successfully stopped model '{model_name}'.[/green]"
-                )
+                console.print(f"[green]Successfully stopped model '{model_name}'.[/green]")
             else:
                 console.print(f"[red]Failed to stop model: {response.text}[/red]")
         except Exception as e:
@@ -304,9 +275,7 @@ def ps():
 
     for a in active:
         m_type = (
-            "Speech"
-            if a.get("is_whisper")
-            else ("Embedding" if a.get("is_embedding") else "LLM")
+            "Speech" if a.get("is_whisper") else ("Embedding" if a.get("is_embedding") else "LLM")
         )
         idle_str = f"{a['idle_seconds']}s"
         cpu_str = f"{a.get('cpu_percent', 0.0)}%"
@@ -332,9 +301,7 @@ def show_stats():
         return
 
     if not stats:
-        console.print(
-            "[yellow]No stats collected yet. Send some requests first![/yellow]"
-        )
+        console.print("[yellow]No stats collected yet. Send some requests first![/yellow]")
         return
 
     table = Table(title="Herd Model Usage Statistics")
@@ -378,9 +345,7 @@ def clean(
 ):
     """Cleans up inactive model logs in the log directory to free up disk space."""
     if not os.path.exists(HERD_LOGS_DIR):
-        console.print(
-            "[yellow]Log directory does not exist. Nothing to clean.[/yellow]"
-        )
+        console.print("[yellow]Log directory does not exist. Nothing to clean.[/yellow]")
         return
 
     # Find active logs to preserve
@@ -402,9 +367,7 @@ def clean(
     to_delete = [f for f in log_files if f not in active_log_names]
 
     if not to_delete:
-        console.print(
-            "[green]No inactive logs found. Your log directory is clean![/green]"
-        )
+        console.print("[green]No inactive logs found. Your log directory is clean![/green]")
         return
 
     # Calculate total size
@@ -434,15 +397,11 @@ def clean(
         except Exception as e:
             console.print(f"[red]Failed to delete {f_name}: {e}[/red]")
 
-    console.print(
-        f"[green]Successfully deleted {deleted_count} inactive log file(s).[/green]"
-    )
+    console.print(f"[green]Successfully deleted {deleted_count} inactive log file(s).[/green]")
 
 
 def search(
-    query: str = typer.Argument(
-        ..., help="Search term for GGUF models on Hugging Face Hub."
-    ),
+    query: str = typer.Argument(..., help="Search term for GGUF models on Hugging Face Hub."),
     limit: int = typer.Option(
         10,
         "--limit",
@@ -515,9 +474,7 @@ def top():
                 )
             active = res.json()
         except Exception:
-            return Panel(
-                "[yellow]Herd Gateway is not running.[/yellow]", title="Herd Top"
-            )
+            return Panel("[yellow]Herd Gateway is not running.[/yellow]", title="Herd Top")
 
         if not active:
             return Panel("No models currently running.", title="Herd Top — Idle")

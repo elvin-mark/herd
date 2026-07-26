@@ -1,12 +1,13 @@
-import os
 import logging
+import os
 from typing import List
-from fastapi import APIRouter, Request, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 
-from herd.core.config import HERD_MODELS_DIR
-from herd.api.state import manager, pull_tasks
 from herd.api.exceptions import HerdError
+from herd.api.state import manager, pull_tasks
+from herd.core.config import HERD_MODELS_DIR
 from herd.core.metrics import collector
 from herd.core.utils import get_async_http_client
 
@@ -34,9 +35,7 @@ def list_downloaded_models() -> List[str]:
 
             # Look for model files
             files = os.listdir(repo_path)
-            model_files = [
-                f for f in files if f.endswith(".gguf") or f.endswith(".bin")
-            ]
+            model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
             if model_files:
                 models.append(f"{author}/{repo}")
 
@@ -65,11 +64,7 @@ async def list_active_models():
             resources = manager.get_process_resources(pid)
             mem_bytes = resources["memory_bytes"]
             mem_gb = mem_bytes / (1024 * 1024 * 1024)
-            mem_str = (
-                f"{mem_gb:.2f} GB"
-                if mem_gb >= 1.0
-                else f"{mem_bytes / (1024 * 1024):.1f} MB"
-            )
+            mem_str = f"{mem_gb:.2f} GB" if mem_gb >= 1.0 else f"{mem_bytes / (1024 * 1024):.1f} MB"
 
             active.append(
                 {
@@ -165,9 +160,7 @@ async def hf_search(query: str, limit: int = 10):
     try:
         res = await client.get(url, timeout=10.0)
         if res.status_code != 200:
-            return JSONResponse(
-                status_code=res.status_code, content={"error": res.text}
-            )
+            return JSONResponse(status_code=res.status_code, content={"error": res.text})
         return res.json()
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -181,9 +174,7 @@ async def hf_files(model: str):
     try:
         res = await client.get(url, timeout=10.0)
         if res.status_code != 200:
-            return JSONResponse(
-                status_code=res.status_code, content={"error": res.text}
-            )
+            return JSONResponse(status_code=res.status_code, content={"error": res.text})
         data = res.json()
         siblings = data.get("siblings", [])
         files = [
@@ -215,16 +206,14 @@ async def pull_model(request: Request, background_tasks: BackgroundTasks):
 
     async def download_worker(name: str):
         from herd.services.downloader import (
-            parse_model_identifier,
             list_hf_repository_files,
+            parse_model_identifier,
         )
 
         try:
             author, repo, tag = parse_model_identifier(name)
             files = await list_hf_repository_files(author, repo)
-            model_files = [
-                f for f in files if f.endswith(".gguf") or f.endswith(".bin")
-            ]
+            model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
             if not model_files:
                 pull_tasks[name] = {
                     "status": "failed",
@@ -239,12 +228,8 @@ async def pull_model(request: Request, background_tasks: BackgroundTasks):
                 if matches:
                     chosen_file = matches[0]
 
-            download_url = (
-                f"https://huggingface.co/{author}/{repo}/resolve/main/{chosen_file}"
-            )
-            dest_path = os.path.join(
-                HERD_MODELS_DIR, "huggingface", author, repo, chosen_file
-            )
+            download_url = f"https://huggingface.co/{author}/{repo}/resolve/main/{chosen_file}"
+            dest_path = os.path.join(HERD_MODELS_DIR, "huggingface", author, repo, chosen_file)
 
             pull_tasks[name]["status"] = "downloading"
 
@@ -259,9 +244,7 @@ async def pull_model(request: Request, background_tasks: BackgroundTasks):
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total > 0:
-                            pull_tasks[name]["progress"] = int(
-                                (downloaded / total) * 100
-                            )
+                            pull_tasks[name]["progress"] = int((downloaded / total) * 100)
 
             pull_tasks[name]["status"] = "completed"
             pull_tasks[name]["progress"] = 100
@@ -286,9 +269,10 @@ async def delete_model_endpoint(request: Request):
     if not model_name:
         return JSONResponse(status_code=400, content={"error": "Missing 'model' field"})
 
-    from herd.services.downloader import parse_model_identifier
-    from herd.core.config import HERD_MODELS_DIR
     import shutil
+
+    from herd.core.config import HERD_MODELS_DIR
+    from herd.services.downloader import parse_model_identifier
 
     try:
         author, repo, tag = parse_model_identifier(model_name)
@@ -304,9 +288,7 @@ async def delete_model_endpoint(request: Request):
                 },
             )
         if not os.path.exists(abs_path):
-            return JSONResponse(
-                status_code=404, content={"error": "Model path not found"}
-            )
+            return JSONResponse(status_code=404, content={"error": "Model path not found"})
 
         try:
             if os.path.isdir(abs_path):
@@ -324,15 +306,11 @@ async def delete_model_endpoint(request: Request):
         )
 
     if tag:
-        files = [
-            f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))
-        ]
+        files = [f for f in os.listdir(repo_dir) if os.path.isfile(os.path.join(repo_dir, f))]
         model_files = [f for f in files if f.endswith(".gguf") or f.endswith(".bin")]
 
         tagged_files = [
-            f
-            for f in model_files
-            if tag.lower() in f.lower() and "mmproj" not in f.lower()
+            f for f in model_files if tag.lower() in f.lower() and "mmproj" not in f.lower()
         ]
         if not tagged_files:
             tagged_files = [f for f in model_files if tag.lower() in f.lower()]

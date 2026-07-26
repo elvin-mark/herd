@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 class MetricsCollector:
@@ -35,9 +35,7 @@ class MetricsCollector:
         model_stats["total_duration_sec"] += duration_sec
 
         # Track endpoint specific request counts
-        model_stats["endpoints"][endpoint] = (
-            model_stats["endpoints"].get(endpoint, 0) + 1
-        )
+        model_stats["endpoints"][endpoint] = model_stats["endpoints"].get(endpoint, 0) + 1
 
     def get_stats(self) -> Dict[str, Any]:
         """Returns computed statistics for all models."""
@@ -94,25 +92,15 @@ class MetricsCollector:
 
         for m in active_models:
             labels = {"model": m["model"], "port": str(m["port"])}
-            lines.append(
-                f"herd_model_cpu_percent{fmt_labels(labels)} {m.get('cpu_percent', 0.0)}"
-            )
-            lines.append(
-                f"herd_model_memory_bytes{fmt_labels(labels)} {m.get('memory_bytes', 0)}"
-            )
+            lines.append(f"herd_model_cpu_percent{fmt_labels(labels)} {m.get('cpu_percent', 0.0)}")
+            lines.append(f"herd_model_memory_bytes{fmt_labels(labels)} {m.get('memory_bytes', 0)}")
 
         # Cumulative statistics (Counters & Histograms)
-        lines.append(
-            "# HELP herd_requests_total Total number of API requests sent to Herd."
-        )
+        lines.append("# HELP herd_requests_total Total number of API requests sent to Herd.")
         lines.append("# TYPE herd_requests_total counter")
-        lines.append(
-            "# HELP herd_request_errors_total Total number of failed requests."
-        )
+        lines.append("# HELP herd_request_errors_total Total number of failed requests.")
         lines.append("# TYPE herd_request_errors_total counter")
-        lines.append(
-            "# HELP herd_tokens_total Total tokens processed (prompt or completion)."
-        )
+        lines.append("# HELP herd_tokens_total Total tokens processed (prompt or completion).")
         lines.append("# TYPE herd_tokens_total counter")
         lines.append(
             "# HELP herd_request_duration_seconds_total Total latency spent processing requests in seconds."
@@ -122,12 +110,8 @@ class MetricsCollector:
         for model, data in self.stats.items():
             # Requests
             for ep, count in data["endpoints"].items():
-                lines.append(
-                    f'herd_requests_total{{model="{model}",endpoint="{ep}"}} {count}'
-                )
-            lines.append(
-                f'herd_request_errors_total{{model="{model}"}} {data["errors_total"]}'
-            )
+                lines.append(f'herd_requests_total{{model="{model}",endpoint="{ep}"}} {count}')
+            lines.append(f'herd_request_errors_total{{model="{model}"}} {data["errors_total"]}')
 
             # Tokens
             lines.append(

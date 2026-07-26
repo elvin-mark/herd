@@ -1,11 +1,12 @@
-import time
 import json
 import logging
-from fastapi import APIRouter, Request, Response, Form, UploadFile
-from fastapi.responses import StreamingResponse, JSONResponse
+import time
 
-from herd.api.state import manager
+from fastapi import APIRouter, Form, Request, Response, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
+
 from herd.api.exceptions import HerdError
+from herd.api.state import manager
 from herd.core.metrics import collector
 from herd.core.utils import get_async_http_client
 
@@ -29,13 +30,9 @@ async def proxy_to_cloud(
     api_key = prov_config.get("api_key")
     base_url = prov_config.get("base_url", "").rstrip("/")
     if not api_key:
-        raise HerdError(
-            f"API key is missing for provider '{provider}'.", status_code=400
-        )
+        raise HerdError(f"API key is missing for provider '{provider}'.", status_code=400)
     if not base_url:
-        raise HerdError(
-            f"Base URL is missing for provider '{provider}'.", status_code=400
-        )
+        raise HerdError(f"Base URL is missing for provider '{provider}'.", status_code=400)
 
     # Rewrite model field to match the remote provider target model name
     body["model"] = target_model
@@ -43,9 +40,7 @@ async def proxy_to_cloud(
     # Prevent duplicate '/v1/v1' path prefix nesting if the provider base URL already ends with '/v1'
     path_suffix = path
     if base_url.endswith("/v1") and path.startswith("/v1"):
-        path_suffix = path[
-            3:
-        ]  # Strip '/v1' (e.g. '/v1/chat/completions' -> '/chat/completions')
+        path_suffix = path[3:]  # Strip '/v1' (e.g. '/v1/chat/completions' -> '/chat/completions')
 
     url = f"{base_url}{path_suffix}"
 
@@ -75,9 +70,7 @@ async def proxy_to_cloud(
         try:
             err_json = json.loads(content)
             err_msg = (
-                err_json.get("error", {}).get("message")
-                or err_json.get("error")
-                or str(content)
+                err_json.get("error", {}).get("message") or err_json.get("error") or str(content)
             )
         except Exception:
             err_msg = content.decode("utf-8", errors="ignore")
@@ -257,15 +250,11 @@ async def whisper_proxy(
         data["translate"] = "true"
 
     start_time = time.time()
-    endpoint_path = (
-        "/v1/audio/translations" if translate else "/v1/audio/transcriptions"
-    )
+    endpoint_path = "/v1/audio/translations" if translate else "/v1/audio/transcriptions"
 
     client = get_async_http_client()
     try:
-        response = await client.post(
-            f"http://127.0.0.1:{port}/inference", files=files, data=data
-        )
+        response = await client.post(f"http://127.0.0.1:{port}/inference", files=files, data=data)
     except Exception as e:
         logger.error(f"Failed to connect to whisper server on port {port}: {e}")
         collector.record_request(
@@ -281,9 +270,7 @@ async def whisper_proxy(
 
     duration = time.time() - start_time
     if response.status_code != 200:
-        logger.error(
-            f"Whisper server returned status {response.status_code}: {response.text}"
-        )
+        logger.error(f"Whisper server returned status {response.status_code}: {response.text}")
         collector.record_request(
             model_name=model,
             endpoint=endpoint_path,
@@ -346,15 +333,11 @@ async def chat_completions(request: Request):
             )
 
     try:
-        port = await manager.get_or_start_server(
-            model_name, is_whisper=False, is_embedding=False
-        )
+        port = await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=False)
     except FileNotFoundError as e:
         raise HerdError(str(e), status_code=404)
 
-    return await proxy_to_port(
-        port, "/v1/chat/completions", request, body_bytes, model_name
-    )
+    return await proxy_to_port(port, "/v1/chat/completions", request, body_bytes, model_name)
 
 
 @router.post("/v1/completions")
@@ -378,14 +361,10 @@ async def completions(request: Request):
         if parts[0] in settings.providers:
             provider = parts[0]
             target_model = parts[1]
-            return await proxy_to_cloud(
-                provider, target_model, request, body, "/v1/completions"
-            )
+            return await proxy_to_cloud(provider, target_model, request, body, "/v1/completions")
 
     try:
-        port = await manager.get_or_start_server(
-            model_name, is_whisper=False, is_embedding=False
-        )
+        port = await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=False)
     except FileNotFoundError as e:
         raise HerdError(str(e), status_code=404)
 
@@ -413,14 +392,10 @@ async def embeddings(request: Request):
         if parts[0] in settings.providers:
             provider = parts[0]
             target_model = parts[1]
-            return await proxy_to_cloud(
-                provider, target_model, request, body, "/v1/embeddings"
-            )
+            return await proxy_to_cloud(provider, target_model, request, body, "/v1/embeddings")
 
     try:
-        port = await manager.get_or_start_server(
-            model_name, is_whisper=False, is_embedding=True
-        )
+        port = await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
     except FileNotFoundError as e:
         raise HerdError(str(e), status_code=404)
 

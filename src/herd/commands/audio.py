@@ -1,15 +1,16 @@
 import os
+from typing import Optional
+
 import httpx
 import typer
-from typing import Optional
 
 from herd.core.config import (
     DEFAULT_WHISPER,
 )
 from herd.core.utils import (
+    auto_start_gateway,
     console,
     get_gateway_url,
-    auto_start_gateway,
     get_local_models_info,
 )
 
@@ -31,9 +32,7 @@ def ms_to_vtt_time(ms: int) -> str:
 
 
 def transcribe(
-    audio_file: str = typer.Argument(
-        ..., help="Path to the local audio file to transcribe."
-    ),
+    audio_file: str = typer.Argument(..., help="Path to the local audio file to transcribe."),
     model_name: Optional[str] = typer.Option(
         None,
         "--model",
@@ -109,9 +108,7 @@ def transcribe(
     else:
         dest_path = output_file
 
-    console.print(
-        f"Loading Whisper model [bold cyan]{chosen_model}[/bold cyan] in Gateway..."
-    )
+    console.print(f"Loading Whisper model [bold cyan]{chosen_model}[/bold cyan] in Gateway...")
 
     # 5. Send transcription request to the Gateway
     url = f"{get_gateway_url()}/v1/audio/transcriptions"

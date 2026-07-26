@@ -1,20 +1,21 @@
-import os
+import asyncio
 import json
-import subprocess
+import os
 import shutil
+import subprocess
+from typing import Optional
+
 import httpx
 import typer
-import asyncio
-from typing import Optional
-from rich.panel import Panel
 from rich.console import Group
+from rich.panel import Panel
 
 from herd.core.utils import (
-    console,
-    get_gateway_url,
     auto_start_gateway,
-    find_running_llm,
+    console,
     extract_reasoning_and_json,
+    find_running_llm,
+    get_gateway_url,
 )
 
 
@@ -33,12 +34,8 @@ def copilot(
     """Translates natural language into a shell command, explains it, and executes it on confirmation."""
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
-        console.print(
-            "[red]Error: No local LLM models found. Please pull a model first.[/red]"
-        )
-        console.print(
-            "Example: [bold cyan]herd pull Qwen/Qwen3.5-0.8B:Q8_0[/bold cyan]"
-        )
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
+        console.print("Example: [bold cyan]herd pull Qwen/Qwen3.5-0.8B:Q8_0[/bold cyan]")
         raise typer.Exit(1)
 
     # Ensure gateway is running
@@ -157,15 +154,11 @@ def commit(
 
     # If no unstaged, check staged changes
     if not diff_text:
-        diff_res = subprocess.run(
-            ["git", "diff", "--staged"], capture_output=True, text=True
-        )
+        diff_res = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True)
         diff_text = diff_res.stdout.strip()
 
     if not diff_text:
-        console.print(
-            "[yellow]No changes detected in Git repository to commit.[/yellow]"
-        )
+        console.print("[yellow]No changes detected in Git repository to commit.[/yellow]")
         return
 
     # Truncate diff if context limit exceeded
@@ -177,9 +170,7 @@ def commit(
 
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
-        console.print(
-            "[red]Error: No local LLM models found. Please pull a model first.[/red]"
-        )
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
         raise typer.Exit(1)
 
     # Ensure gateway is running
@@ -217,15 +208,11 @@ def commit(
         "stream": False,
     }
 
-    console.print(
-        f"Generating commit message using [bold cyan]{chosen_model}[/bold cyan]..."
-    )
+    console.print(f"Generating commit message using [bold cyan]{chosen_model}[/bold cyan]...")
     try:
         response = httpx.post(url_chat, json=payload, timeout=30.0)
         if response.status_code != 200:
-            console.print(
-                f"[red]Failed to generate commit message: {response.text}[/red]"
-            )
+            console.print(f"[red]Failed to generate commit message: {response.text}[/red]")
             raise typer.Exit(1)
         result = response.json()
         commit_message = result["choices"][0]["message"]["content"].strip()
@@ -310,9 +297,7 @@ def review(
     # 1. Install hook option
     if install_hook:
         if not os.path.exists(".git"):
-            console.print(
-                "[red]Error: Current directory is not a Git repository.[/red]"
-            )
+            console.print("[red]Error: Current directory is not a Git repository.[/red]")
             raise typer.Exit(1)
         hook_dir = ".git/hooks"
         os.makedirs(hook_dir, exist_ok=True)
@@ -342,20 +327,14 @@ def review(
     # 3. Get git diff
     if pre_commit:
         # Pre-commit hook only audits staged changes
-        diff_res = subprocess.run(
-            ["git", "diff", "--staged"], capture_output=True, text=True
-        )
+        diff_res = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True)
     else:
         # Normal mode audits both staged + unstaged changes
-        diff_res = subprocess.run(
-            ["git", "diff", "HEAD"], capture_output=True, text=True
-        )
+        diff_res = subprocess.run(["git", "diff", "HEAD"], capture_output=True, text=True)
 
     diff_text = diff_res.stdout.strip()
     if not diff_text:
-        console.print(
-            "[yellow]No modifications detected in Git repository to review.[/yellow]"
-        )
+        console.print("[yellow]No modifications detected in Git repository to review.[/yellow]")
         return
 
     # Truncate diff if context limit exceeded
@@ -367,9 +346,7 @@ def review(
 
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
-        console.print(
-            "[red]Error: No local LLM models found. Please pull a model first.[/red]"
-        )
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
         raise typer.Exit(1)
 
     # Ensure gateway is running
@@ -408,15 +385,11 @@ def review(
         "stream": False,
     }
 
-    console.print(
-        f"Auditing code modifications using [bold cyan]{chosen_model}[/bold cyan]..."
-    )
+    console.print(f"Auditing code modifications using [bold cyan]{chosen_model}[/bold cyan]...")
     try:
         response = httpx.post(url_chat, json=payload, timeout=180.0)
         if response.status_code != 200:
-            console.print(
-                f"[red]Failed to generate review audit: {response.text}[/red]"
-            )
+            console.print(f"[red]Failed to generate review audit: {response.text}[/red]")
             raise typer.Exit(1)
         result = response.json()
         raw_text = result["choices"][0]["message"]["content"].strip()
@@ -480,9 +453,7 @@ def review(
             f"[bold white]Suggestion:[/bold white]\n  {suggestion}",
         )
 
-        console.print(
-            Panel(content_group, title=title, border_style=border_style, expand=False)
-        )
+        console.print(Panel(content_group, title=title, border_style=border_style, expand=False))
 
     if pre_commit and criticals:
         console.print(
@@ -541,9 +512,7 @@ def heal(
         raise typer.Exit(1)
 
     if exit_code == 0:
-        console.print(
-            "\n[bold green]Command completed successfully (exit code 0).[/bold green]"
-        )
+        console.print("\n[bold green]Command completed successfully (exit code 0).[/bold green]")
         return
 
     console.print(
@@ -553,9 +522,7 @@ def heal(
     # Resolve LLM model
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
-        console.print(
-            "[red]Error: No local LLM models found. Please pull a model first.[/red]"
-        )
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
         raise typer.Exit(1)
 
     # Ensure gateway is running
@@ -664,9 +631,7 @@ def heal(
                     )
                     subprocess.run(command_str, shell=True)
             except Exception as e:
-                console.print(
-                    f"[red]Failed to execute fix or original command: {e}[/red]"
-                )
+                console.print(f"[red]Failed to execute fix or original command: {e}[/red]")
     else:
         console.print(
             "\n[yellow]This issue requires manual intervention or file editing. Please apply the fix above manually.[/yellow]"
@@ -690,9 +655,7 @@ async def stream_watch_async(model_name: str, image_data: str, prompt: str):
         "stream": True,
     }
 
-    console.print(
-        f"\n[bold green]Querying multimodal model {model_name}...[/bold green]\n"
-    )
+    console.print(f"\n[bold green]Querying multimodal model {model_name}...[/bold green]\n")
     async with httpx.AsyncClient(timeout=None) as client:
         async with client.stream("POST", url, json=payload) as response:
             if response.status_code != 200:
@@ -718,9 +681,7 @@ async def stream_watch_async(model_name: str, image_data: str, prompt: str):
 
 
 def vision(
-    image_path: str = typer.Argument(
-        ..., help="Path to local image file (or URL) to analyze."
-    ),
+    image_path: str = typer.Argument(..., help="Path to local image file (or URL) to analyze."),
     prompt: str = typer.Argument(
         "Describe the image.",
         help="The prompt/question to ask the model about the image.",
@@ -766,9 +727,7 @@ def vision(
     # 2. Resolve VLM
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
-        console.print(
-            "[red]Error: No VLM models found. Please pull a model first.[/red]"
-        )
+        console.print("[red]Error: No VLM models found. Please pull a model first.[/red]")
         raise typer.Exit(1)
 
     # Ensure gateway is running
@@ -823,9 +782,7 @@ def agent(
     # 1. Resolve LLM model
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
-        console.print(
-            "[red]Error: No local LLM models found. Please pull a model first.[/red]"
-        )
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
         raise typer.Exit(1)
 
     # Ensure gateway is running
@@ -843,9 +800,7 @@ def agent(
     # Instantiate the agent session
     from herd.services.agent import AgentSession
 
-    session = AgentSession(
-        chosen_model, get_gateway_url(), yolo=yolo, use_memory=memory
-    )
+    session = AgentSession(chosen_model, get_gateway_url(), yolo=yolo, use_memory=memory)
 
     console.print("\n🚀 [bold green]Starting Herd Agent Interface[/bold green]")
     console.print(f"  Model: [bold cyan]{chosen_model}[/bold cyan]")
@@ -872,12 +827,8 @@ def agent(
 
             if user_input.lower() == "/help":
                 console.print("\n[bold cyan]Herd Agent Commands:[/bold cyan]")
-                console.print(
-                    "  [bold white]/help[/bold white]   - Show this help message"
-                )
-                console.print(
-                    "  [bold white]/exit[/bold white]   - Exit the agent session"
-                )
+                console.print("  [bold white]/help[/bold white]   - Show this help message")
+                console.print("  [bold white]/exit[/bold white]   - Exit the agent session")
                 console.print(
                     "  [bold white]/show[/bold white]   - Show current session configuration and active model"
                 )
@@ -890,9 +841,7 @@ def agent(
                 console.print(
                     "  [bold white]/yolo[/bold white]   - Toggle YOLO mode (auto-execute shell commands) ON/OFF"
                 )
-                console.print(
-                    "  [bold white]/memory[/bold white] - Toggle long-term memory ON/OFF"
-                )
+                console.print("  [bold white]/memory[/bold white] - Toggle long-term memory ON/OFF")
                 console.print(
                     "  [bold white]/clear[/bold white]  - Clear the conversational history (resets context)"
                 )
@@ -907,9 +856,7 @@ def agent(
             if user_input.lower() in ("/show", "/info"):
                 from rich.table import Table
 
-                table = Table(
-                    title="Agent Session Configuration", show_header=False, box=None
-                )
+                table = Table(title="Agent Session Configuration", show_header=False, box=None)
                 table.add_row(
                     "[bold cyan]Model:[/bold cyan]",
                     f"[white]{session.model_name}[/white]",
@@ -969,9 +916,7 @@ def agent(
                     if session.use_memory
                     else "[bold yellow]OFF[/bold yellow]"
                 )
-                console.print(
-                    f"\n[bold cyan]Long-Term Memory is now {state}[/bold cyan]\n"
-                )
+                console.print(f"\n[bold cyan]Long-Term Memory is now {state}[/bold cyan]\n")
                 continue
 
             if user_input.lower() == "/save":
@@ -985,23 +930,15 @@ def agent(
                     for msg in session.history:
                         role = msg.get("role", "unknown").upper()
                         f.write(f"### {role}\n```\n{msg.get('content', '')}\n```\n\n")
-                console.print(
-                    f"\n[bold green]✓ Transcript saved to {filename}[/bold green]\n"
-                )
+                console.print(f"\n[bold green]✓ Transcript saved to {filename}[/bold green]\n")
                 continue
 
             if user_input.lower() == "/usage":
                 # Roughly estimate 1 token per 4 characters
-                approx_tokens = sum(
-                    len(str(m.get("content", ""))) // 4 for m in session.history
-                )
+                approx_tokens = sum(len(str(m.get("content", ""))) // 4 for m in session.history)
                 console.print("\n[bold green]Estimated Session Usage:[/bold green]")
-                console.print(
-                    f"  Turns / Messages: [white]{len(session.history)}[/white]"
-                )
-                console.print(
-                    f"  Current Context Load: [white]~{approx_tokens:,} tokens[/white]\n"
-                )
+                console.print(f"  Turns / Messages: [white]{len(session.history)}[/white]")
+                console.print(f"  Current Context Load: [white]~{approx_tokens:,} tokens[/white]\n")
                 continue
 
             if user_input.lower() == "/clear":
@@ -1044,9 +981,7 @@ def triage(
             check=True,
         )
     except subprocess.CalledProcessError:
-        console.print(
-            "[red]Error: Not a git repository. Please run inside a git project.[/red]"
-        )
+        console.print("[red]Error: Not a git repository. Please run inside a git project.[/red]")
         raise typer.Exit(1)
 
     # Get unstaged changes (or staged if empty)
@@ -1065,9 +1000,7 @@ def triage(
         diff_text = diff_res.stdout.strip()
 
     if not diff_text:
-        console.print(
-            "[yellow]No uncommitted or staged changes detected to triage.[/yellow]"
-        )
+        console.print("[yellow]No uncommitted or staged changes detected to triage.[/yellow]")
         return
 
     if len(diff_text) > 10000:
@@ -1078,9 +1011,7 @@ def triage(
 
     chosen_model = model_name if model_name else find_running_llm()
     if not chosen_model:
-        console.print(
-            "[red]Error: No local LLM models found. Please pull a model first.[/red]"
-        )
+        console.print("[red]Error: No local LLM models found. Please pull a model first.[/red]")
         raise typer.Exit(1)
 
     if not auto_start_gateway():
@@ -1116,9 +1047,7 @@ def triage(
         "stream": False,
     }
 
-    console.print(
-        f"Analyzing diff semantics using [bold cyan]{chosen_model}[/bold cyan]..."
-    )
+    console.print(f"Analyzing diff semantics using [bold cyan]{chosen_model}[/bold cyan]...")
     try:
         response = httpx.post(url_chat, json=payload, timeout=120.0)
         if response.status_code != 200:
@@ -1193,9 +1122,7 @@ def pr(
             check=True,
         )
     except subprocess.CalledProcessError:
-        console.print(
-            "[red]Error: Not a git repository. Please run inside a git project.[/red]"
-        )
+        console.print("[red]Error: Not a git repository. Please run inside a git project.[/red]")
         raise typer.Exit(1)
 
     # 1. Get commit history
@@ -1206,9 +1133,7 @@ def pr(
         text=True,
     )
     if log_res.returncode != 0:
-        console.print(
-            f"[red]Error comparing branches: Could not find base branch '{base}'.[/red]"
-        )
+        console.print(f"[red]Error comparing branches: Could not find base branch '{base}'.[/red]")
         raise typer.Exit(1)
 
     commit_history = log_res.stdout.strip()
@@ -1223,9 +1148,7 @@ def pr(
     diff_text = diff_res.stdout.strip()
 
     if not diff_text and not commit_history:
-        console.print(
-            f"[yellow]No differences found between '{base}' and HEAD.[/yellow]"
-        )
+        console.print(f"[yellow]No differences found between '{base}' and HEAD.[/yellow]")
         return
 
     # Truncate to save tokens
@@ -1264,9 +1187,7 @@ def pr(
         "- Do NOT output any JSON. Output pure Markdown."
     )
 
-    user_prompt = (
-        f"### COMMIT HISTORY:\n{commit_history}\n\n### CODE DIFF:\n{diff_text}"
-    )
+    user_prompt = f"### COMMIT HISTORY:\n{commit_history}\n\n### CODE DIFF:\n{diff_text}"
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1400,14 +1321,10 @@ def test_cmd(
 
     confirm = typer.confirm("\nWould you like to save these tests to a file?")
     if confirm:
-        test_filename = typer.prompt(
-            "Enter filename", default=f"test_{os.path.basename(filename)}"
-        )
+        test_filename = typer.prompt("Enter filename", default=f"test_{os.path.basename(filename)}")
         with open(test_filename, "w") as f:
             f.write(cleaned_text)
-        console.print(
-            f"[bold green]Successfully saved tests to {test_filename}![/bold green]"
-        )
+        console.print(f"[bold green]Successfully saved tests to {test_filename}![/bold green]")
     else:
         console.print("[yellow]Aborted.[/yellow]")
 
@@ -1493,9 +1410,7 @@ def docs_cmd(
 
     console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
-    confirm = typer.confirm(
-        f"\nWould you like to overwrite {filename} with these changes?"
-    )
+    confirm = typer.confirm(f"\nWould you like to overwrite {filename} with these changes?")
     if confirm:
         with open(filename, "w") as f:
             f.write(cleaned_text)
@@ -1594,9 +1509,7 @@ def refactor_cmd(
 
     console.print(Syntax(cleaned_text, "python", theme="monokai", line_numbers=True))
 
-    confirm = typer.confirm(
-        f"\nWould you like to overwrite {filename} with these changes?"
-    )
+    confirm = typer.confirm(f"\nWould you like to overwrite {filename} with these changes?")
     if confirm:
         with open(filename, "w") as f:
             f.write(cleaned_text)

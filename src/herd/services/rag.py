@@ -1,8 +1,9 @@
-import os
-import sqlite3
 import array
 import asyncio
-from typing import List, Dict, Any, Optional
+import os
+import sqlite3
+from typing import Any, Dict, List, Optional
+
 from herd.core.config import HERD_HOME, HERD_PORT
 
 DB_PATH = os.path.join(HERD_HOME, "embeddings.db")
@@ -75,9 +76,9 @@ class VectorDatabase:
                     matching_names.append(name)
             except Exception:
                 # Fallback to case-insensitive prefix/suffix matching
-                if name.lower().startswith(
-                    model_name.lower()
-                ) or model_name.lower().startswith(name.lower()):
+                if name.lower().startswith(model_name.lower()) or model_name.lower().startswith(
+                    name.lower()
+                ):
                     matching_names.append(name)
 
         if not matching_names:
@@ -194,9 +195,7 @@ async def get_embedding(text: str, model_name: str) -> List[float]:
 
     url = f"http://127.0.0.1:{HERD_PORT}/v1/embeddings"
     client = get_async_http_client()
-    response = await client.post(
-        url, json={"model": model_name, "input": text}, timeout=30.0
-    )
+    response = await client.post(url, json={"model": model_name, "input": text}, timeout=30.0)
     if response.status_code != 200:
         raise RuntimeError(f"Embedding request failed: {response.text}")
 
@@ -235,9 +234,7 @@ async def index_directory(
 ) -> int:
     """Recursively parses text-based files in a directory, chunks them, embeds them, and indexes in a local DB."""
     if types:
-        supported_extensions = {
-            ext.strip().lower() for ext in types.split(",") if ext.strip()
-        }
+        supported_extensions = {ext.strip().lower() for ext in types.split(",") if ext.strip()}
     else:
         supported_extensions = {
             ".txt",
@@ -281,9 +278,7 @@ async def index_directory(
                     # Call embedding API
                     vector = await get_embedding(text_chunk, embedding_model)
                     # Insert using DB repository
-                    local_db.insert_chunk(
-                        file_path, idx, text_chunk, vector, embedding_model
-                    )
+                    local_db.insert_chunk(file_path, idx, text_chunk, vector, embedding_model)
                     chunks_added += 1
 
             except Exception:

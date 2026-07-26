@@ -1,10 +1,11 @@
+import asyncio
+import json
 import os
 import time
-import json
-import asyncio
+from typing import Optional
+
 import httpx
 import typer
-from typing import Optional
 from rich.table import Table
 
 from herd.core.config import (
@@ -12,10 +13,10 @@ from herd.core.config import (
     HERD_PORT,
 )
 from herd.core.utils import (
-    console,
-    get_gateway_url,
     auto_start_gateway,
+    console,
     find_running_llm,
+    get_gateway_url,
     pull_model_async,
 )
 from herd.services.downloader import resolve_model_path
@@ -70,9 +71,7 @@ async def stream_chat_completions(model_name: str, messages: list) -> str:
 
 async def chat_interactive(model_name: str, context_model: Optional[str] = None):
     """Launches the CLI chat session loops."""
-    console.print(
-        f"\n[bold green]Chatting with {model_name} (Herd Gateway)[/bold green]"
-    )
+    console.print(f"\n[bold green]Chatting with {model_name} (Herd Gateway)[/bold green]")
     console.print(
         "Type [bold cyan]/help[/bold cyan] to see available commands. Press Ctrl+C to stop generation.\n"
     )
@@ -90,9 +89,7 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                 f"[dim]RAG Active: Retrieving context from embedding model '{context_model}'[/dim]\n"
             )
         except Exception as e:
-            console.print(
-                f"[red]Warning: Failed to load RAG embedding model: {e}[/red]"
-            )
+            console.print(f"[red]Warning: Failed to load RAG embedding model: {e}[/red]")
             context_model = None
 
     messages = []
@@ -157,16 +154,12 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                             for msg in messages:
                                 role = msg["role"].capitalize()
                                 f.write(f"### {role}\n{msg['content']}\n\n")
-                        console.print(
-                            f"[green]Chat session exported to {filename}[/green]"
-                        )
+                        console.print(f"[green]Chat session exported to {filename}[/green]")
                     except Exception as e:
                         console.print(f"[red]Failed to export chat: {e}[/red]")
                     continue
                 else:
-                    console.print(
-                        f"[red]Unknown command: {cmd}. Type /help for assistance.[/red]"
-                    )
+                    console.print(f"[red]Unknown command: {cmd}. Type /help for assistance.[/red]")
                     continue
 
             # Retrieve context if RAG is active
@@ -199,15 +192,11 @@ async def chat_interactive(model_name: str, context_model: Optional[str] = None)
                             f"Question: {user_input}"
                         ),
                     }
-                assistant_response = await stream_chat_completions(
-                    model_name, payload_messages
-                )
+                assistant_response = await stream_chat_completions(model_name, payload_messages)
                 messages.append({"role": "assistant", "content": assistant_response})
             except KeyboardInterrupt:
                 print("\n[yellow]Generation interrupted.[/yellow]")
-                messages.append(
-                    {"role": "assistant", "content": "[Generation Interrupted]"}
-                )
+                messages.append({"role": "assistant", "content": "[Generation Interrupted]"})
             except Exception as e:
                 console.print(f"\n[red]Error during generation: {e}[/red]")
         except (KeyboardInterrupt, EOFError):
@@ -309,9 +298,7 @@ def run(
     # 4. Enter chat REPL or display server status
     if whisper or "whisper" in model_name.lower():
         console.print("\n[bold green]Whisper model loaded successfully![/bold green]")
-        console.print(
-            f"Whisper server running internally on port [bold cyan]{port}[/bold cyan]."
-        )
+        console.print(f"Whisper server running internally on port [bold cyan]{port}[/bold cyan].")
         console.print("You can send transcription requests to the Gateway:")
         console.print(
             f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/audio/transcriptions[/bold white]"
@@ -321,20 +308,14 @@ def run(
         )
     elif embedding or "embedding" in model_name.lower() or "bert" in model_name.lower():
         console.print("\n[bold green]Embedding model loaded successfully![/bold green]")
-        console.print(
-            f"Model server running internally on port [bold cyan]{port}[/bold cyan]."
-        )
+        console.print(f"Model server running internally on port [bold cyan]{port}[/bold cyan].")
         console.print("You can send embedding requests to the Gateway:")
-        console.print(
-            f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/embeddings[/bold white]"
-        )
+        console.print(f"  [bold white]POST http://127.0.0.1:{HERD_PORT}/v1/embeddings[/bold white]")
     else:
         asyncio.run(chat_interactive(model_name, context_model))
 
 
-async def run_benchmark_async(
-    model_name: str, custom_prompts: Optional[list[str]], rounds: int
-):
+async def run_benchmark_async(model_name: str, custom_prompts: Optional[list[str]], rounds: int):
     """Runs the benchmark suite async."""
     # 1. Prerequisite checks
     if not auto_start_gateway():
@@ -403,9 +384,7 @@ async def run_benchmark_async(
                 if host == "0.0.0.0":
                     host = "127.0.0.1"
                 try:
-                    res = httpx.get(
-                        f"http://{host}:{HERD_PORT}/v1/models/active", timeout=1.0
-                    )
+                    res = httpx.get(f"http://{host}:{HERD_PORT}/v1/models/active", timeout=1.0)
                     active = res.json()
                     for m in active:
                         if m["model"] == model_name:
@@ -415,9 +394,7 @@ async def run_benchmark_async(
                             if "GB" in mem_str:
                                 mems.append(float(mem_str.replace("GB", "").strip()))
                             elif "MB" in mem_str:
-                                mems.append(
-                                    float(mem_str.replace("MB", "").strip()) / 1024.0
-                                )
+                                mems.append(float(mem_str.replace("MB", "").strip()) / 1024.0)
                 except Exception:
                     pass
 
@@ -425,9 +402,7 @@ async def run_benchmark_async(
 
             try:
                 async with httpx.AsyncClient(timeout=None) as client:
-                    async with client.stream(
-                        "POST", url_chat, json=payload
-                    ) as response:
+                    async with client.stream("POST", url_chat, json=payload) as response:
                         if response.status_code != 200:
                             print("[red]failed[/red]")
                             continue
@@ -452,9 +427,7 @@ async def run_benchmark_async(
             ttfts.append(ttft)
 
             # Speed (Tokens per second)
-            generation_time = (
-                end_time - first_token_time if first_token_time else total_duration
-            )
+            generation_time = end_time - first_token_time if first_token_time else total_duration
             speed = token_count / generation_time if generation_time > 0 else 0.0
             speeds.append(speed)
 
@@ -485,9 +458,7 @@ async def run_benchmark_async(
     table.add_column("Avg CPU %", style="blue")
 
     for r in results:
-        table.add_row(
-            r["prompt"][:50] + "...", r["ttft"], r["speed"], r["memory"], r["cpu"]
-        )
+        table.add_row(r["prompt"][:50] + "...", r["ttft"], r["speed"], r["memory"], r["cpu"])
 
     console.print("\n")
     console.print(table)

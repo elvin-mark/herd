@@ -1,19 +1,19 @@
-import os
-import logging
 import asyncio
+import logging
+import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from herd.api.exceptions import HerdError
+from herd.api.routers.chat import router as chat_router
+from herd.api.routers.db import router as db_router
+from herd.api.routers.models import router as models_router
 from herd.api.state import manager
 from herd.core.metrics import collector
 from herd.core.utils import close_http_clients
-from herd.api.exceptions import HerdError
-
-from herd.api.routers.models import router as models_router
-from herd.api.routers.chat import router as chat_router
-from herd.api.routers.db import router as db_router
 
 logger = logging.getLogger("herd.server")
 cleanup_task = None
@@ -79,9 +79,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 # Mount assets folder to serve the logo image
-assets_dir = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "assets")
-)
+assets_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "assets"))
 if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
@@ -96,9 +94,7 @@ async def health_check():
 @app.get("/dashboard")
 async def get_dashboard():
     """Serves the Herd Web Control Center dashboard."""
-    templates_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "templates")
-    )
+    templates_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "templates"))
     html_path = os.path.join(templates_dir, "dashboard.html")
     css_path = os.path.join(templates_dir, "dashboard.css")
     js_path = os.path.join(templates_dir, "dashboard.js")
