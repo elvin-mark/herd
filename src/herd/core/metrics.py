@@ -1,10 +1,14 @@
-from typing import Any, Dict
+from collections import deque
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 
 class MetricsCollector:
-    def __init__(self):
+    def __init__(self, max_history: int = 50):
         # Maps model_name -> stats dict
         self.stats: Dict[str, Dict[str, Any]] = {}
+        # Ring buffer for the last N requests
+        self.history: deque = deque(maxlen=max_history)
 
     def record_request(
         self,
@@ -14,6 +18,8 @@ class MetricsCollector:
         completion_tokens: int = 0,
         duration_sec: float = 0.0,
         is_error: bool = False,
+        prompt_snippet: str = "",
+        response_snippet: str = "",
     ):
         if model_name not in self.stats:
             self.stats[model_name] = {
@@ -36,6 +42,29 @@ class MetricsCollector:
 
         # Track endpoint specific request counts
         model_stats["endpoints"][endpoint] = model_stats["endpoints"].get(endpoint, 0) + 1
+
+        # Record entry in history buffer
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        self.history.appendleft(
+            {
+                "timestamp": timestamp,
+                "model_name": model_name,
+                "endpoint": endpoint,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "duration_sec": round(duration_sec, 3),
+                "is_error": is_error,
+                "prompt_snippet": prompt_snippet,
+                "response_snippet": response_snippet,
+            }
+        )
+
+    def get_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Returns the list of recent requests up to the specified limit."""
+        history_list = list(self.history)
+        if limit is not None and limit > 0:
+            return history_list[:limit]
+        return history_list
 
     def get_stats(self) -> Dict[str, Any]:
         """Returns computed statistics for all models."""

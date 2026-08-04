@@ -335,6 +335,63 @@ def show_stats():
     console.print(table)
 
 
+def history_cmd(
+    limit: int = typer.Option(
+        20, "--limit", "-n", help="Number of recent request history entries to display."
+    ),
+):
+    """Displays recent request history logs sent to the Herd API gateway."""
+    if not is_gateway_running():
+        console.print("[yellow]Herd API gateway is not running.[/yellow]")
+        return
+
+    url = f"{get_gateway_url()}/v1/models/history?limit={limit}"
+    try:
+        response = httpx.get(url)
+        response.raise_for_status()
+        history = response.json()
+    except Exception as e:
+        console.print(f"[red]Failed to query request history: {e}[/red]")
+        return
+
+    if not history:
+        console.print("[yellow]No history recorded yet. Send some LLM requests first![/yellow]")
+        return
+
+    table = Table(title=f"Herd Recent Request History (Last {len(history)})")
+    table.add_column("Timestamp", style="dim white")
+    table.add_column("Model", style="cyan")
+    table.add_column("Endpoint", style="magenta")
+    table.add_column("Prompt Snippet", style="white")
+    table.add_column("Tokens (P / C)", style="blue")
+    table.add_column("Duration", style="yellow")
+    table.add_column("Status", style="bold")
+
+    for item in history:
+        status_str = (
+            "[bold red]ERROR[/bold red]" if item.get("is_error") else "[bold green]OK[/bold green]"
+        )
+        tok_str = f"{item.get('prompt_tokens', 0)} / {item.get('completion_tokens', 0)}"
+        dur_str = f"{item.get('duration_sec', 0.0):.2f}s"
+        snippet = item.get("prompt_snippet", "")
+        if len(snippet) > 35:
+            snippet = snippet[:32] + "..."
+        if not snippet:
+            snippet = "-"
+
+        table.add_row(
+            item.get("timestamp", "-"),
+            item.get("model_name", "-"),
+            item.get("endpoint", "-"),
+            snippet,
+            tok_str,
+            dur_str,
+            status_str,
+        )
+
+    console.print(table)
+
+
 def clean(
     force: bool = typer.Option(
         False,

@@ -22,6 +22,7 @@ from herd.commands.developer import (
 # Import sub-commands from modular command files
 from herd.commands.models import (
     clean,
+    history_cmd,
     list_models,
     ps,
     pull,
@@ -57,6 +58,8 @@ app.command(name="stop", rich_help_panel="Runtime Operations")(stop)
 app.command(name="top", rich_help_panel="Runtime Operations")(top)
 app.command(name="stats", rich_help_panel="Runtime Operations")(show_stats)
 app.command(name="logs", rich_help_panel="Runtime Operations")(logs)
+app.command(name="history", rich_help_panel="Runtime Operations")(history_cmd)
+
 
 # 4. Register Developer Workflows commands
 dev_app = typer.Typer(name="dev", help="Developer productivity tools and generators.")

@@ -195,6 +195,25 @@ async def proxy_to_port(
             except Exception as e:
                 logger.error(f"Error parsing tokens from response text: {e}")
 
+            prompt_snippet = ""
+            if body_bytes:
+                try:
+                    body_json = json.loads(body_bytes)
+                    if "prompt" in body_json:
+                        prompt_snippet = str(body_json["prompt"])[:100]
+                    elif "messages" in body_json and isinstance(body_json["messages"], list):
+                        last_user_msg = next(
+                            (
+                                m.get("content", "")
+                                for m in reversed(body_json["messages"])
+                                if isinstance(m, dict) and m.get("role") == "user"
+                            ),
+                            "",
+                        )
+                        prompt_snippet = str(last_user_msg)[:100]
+                except Exception:
+                    pass
+
             collector.record_request(
                 model_name=model_name,
                 endpoint=path,
@@ -202,6 +221,7 @@ async def proxy_to_port(
                 completion_tokens=completion_tokens,
                 duration_sec=duration,
                 is_error=(response.status_code >= 400),
+                prompt_snippet=prompt_snippet,
             )
 
     res_headers = dict(response.headers)

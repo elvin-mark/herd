@@ -90,6 +90,13 @@ async def get_stats_endpoint():
     return collector.get_stats()
 
 
+@router.get("/v1/models/history")
+@router.get("/v1/history")
+async def get_history_endpoint(limit: int = 50):
+    """Returns recent LLM request execution history logs."""
+    return collector.get_history(limit=limit)
+
+
 @router.post("/v1/models/load")
 async def load_model(request: Request):
     """Explicitly starts a model server process."""
