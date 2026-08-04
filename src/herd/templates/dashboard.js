@@ -65,10 +65,11 @@
 
         async function fetchData() {
             try {
-                const [activeRes, statsRes, libraryRes] = await Promise.all([
+                const [activeRes, statsRes, libraryRes, historyRes] = await Promise.all([
                     fetch('/v1/models/active').then(r => r.json()),
                     fetch('/v1/models/stats').then(r => r.json()),
-                    fetch('/v1/models').then(r => r.json())
+                    fetch('/v1/models').then(r => r.json()),
+                    fetch('/v1/history?limit=50').then(r => r.json())
                 ]);
 
                 globalLibraryData = libraryRes;
@@ -76,6 +77,7 @@
 
                 updateActiveModels(activeRes);
                 updateStats(statsRes);
+                updateHistory(historyRes);
                 filterLibraryModels();
                 updateSharedDropdowns(libraryRes);
                 pollDownloadProgress();
@@ -208,6 +210,45 @@
                 statsTableBody.innerHTML = rows;
             }
         }
+
+        // Update Request History Log Table
+        function updateHistory(history) {
+            const historyTableBody = document.getElementById('history-table-body');
+            if (!historyTableBody) return;
+
+            if (!history || history.length === 0) {
+                historyTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No request history recorded yet.</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            const rows = history.map(item => {
+                const statusBadge = item.is_error 
+                    ? `<span style="color: var(--accent-rose); font-weight: 700; font-size: 0.75rem;">ERROR</span>`
+                    : `<span style="color: var(--accent-emerald); font-weight: 700; font-size: 0.75rem;">OK</span>`;
+                const snippet = item.prompt_snippet ? (item.prompt_snippet.length > 35 ? item.prompt_snippet.substring(0, 32) + '...' : item.prompt_snippet) : '-';
+                const tokens = `${item.prompt_tokens || 0} / ${item.completion_tokens || 0}`;
+                const duration = item.duration_sec > 0 ? `${item.duration_sec.toFixed(2)}s` : '-';
+
+                return `
+                    <tr>
+                        <td style="color: var(--text-secondary); font-size: 0.8rem;">${item.timestamp}</td>
+                        <td style="font-weight: 600; font-family: monospace; font-size: 0.8rem;">${item.model_name}</td>
+                        <td style="color: var(--accent-cyan); font-size: 0.8rem;">${item.endpoint}</td>
+                        <td style="font-size: 0.8rem; color: var(--text-primary); max-width: 200px; word-break: break-all;">${snippet}</td>
+                        <td style="font-size: 0.8rem;">${tokens}</td>
+                        <td style="font-size: 0.8rem; color: var(--accent-amber);">${duration}</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            historyTableBody.innerHTML = rows;
+        }
+
 
         // Update Library Model List
         function updateLibrary(library, active) {

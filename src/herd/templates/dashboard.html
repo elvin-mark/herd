@@ -127,7 +127,35 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Request History Logs -->
+            <div class="panel-card" style="margin-top: 1.5rem;">
+                <h2>Recent Request History Log (Last 50)</h2>
+                <div class="scrollable-panel">
+                    <div class="stats-table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Model</th>
+                                    <th>Endpoint</th>
+                                    <th>Prompt Snippet</th>
+                                    <th>Tokens (P / C)</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No request history recorded yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
+
 
         <!-- Tab: Chat Playground -->
         <div id="tab-playground" class="tab-content">
