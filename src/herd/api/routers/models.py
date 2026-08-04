@@ -97,6 +97,16 @@ async def get_history_endpoint(limit: int = 50):
     return collector.get_history(limit=limit)
 
 
+@router.get("/v1/models/history/{request_id}")
+@router.get("/v1/history/{request_id}")
+async def get_history_detail_endpoint(request_id: int):
+    """Returns full request and response payloads for a specific request ID."""
+    item = collector.get_request_by_id(request_id)
+    if not item:
+        raise HerdError(f"Request history record #{request_id} not found.", status_code=404)
+    return item
+
+
 @router.post("/v1/models/load")
 async def load_model(request: Request):
     """Explicitly starts a model server process."""

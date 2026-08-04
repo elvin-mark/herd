@@ -234,7 +234,7 @@
                 const duration = item.duration_sec > 0 ? `${item.duration_sec.toFixed(2)}s` : '-';
 
                 return `
-                    <tr>
+                    <tr style="cursor: pointer; transition: background-color 0.2s;" onclick="inspectHistoryRecord(${item.id})" title="Click to inspect full sent & received messages">
                         <td style="color: var(--text-secondary); font-size: 0.8rem;">${item.timestamp}</td>
                         <td style="font-weight: 600; font-family: monospace; font-size: 0.8rem;">${item.model_name}</td>
                         <td style="color: var(--accent-cyan); font-size: 0.8rem;">${item.endpoint}</td>
@@ -248,6 +248,38 @@
 
             historyTableBody.innerHTML = rows;
         }
+
+        async function inspectHistoryRecord(id) {
+            try {
+                const res = await fetch(`/v1/history/${id}`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                document.getElementById('modal-title').textContent = `🔍 Request Inspection #${data.id}`;
+                document.getElementById('modal-meta').innerHTML = `
+                    <div><span style="color: var(--text-secondary);">Timestamp:</span> ${data.timestamp}</div>
+                    <div><span style="color: var(--text-secondary);">Model:</span> <span style="color: var(--accent-cyan); font-weight: 600;">${data.model_name}</span></div>
+                    <div><span style="color: var(--text-secondary);">Endpoint:</span> ${data.endpoint}</div>
+                    <div><span style="color: var(--text-secondary);">Tokens:</span> ${data.prompt_tokens || 0} P / ${data.completion_tokens || 0} C</div>
+                    <div><span style="color: var(--text-secondary);">Duration:</span> ${data.duration_sec || 0}s</div>
+                `;
+
+                const promptElem = document.getElementById('modal-prompt-content');
+                const respElem = document.getElementById('modal-response-content');
+
+                promptElem.textContent = typeof data.full_prompt === 'object' ? JSON.stringify(data.full_prompt, null, 2) : (data.full_prompt || '-');
+                respElem.textContent = typeof data.full_response === 'object' ? JSON.stringify(data.full_response, null, 2) : (data.full_response || '-');
+
+                document.getElementById('history-modal').style.display = 'flex';
+            } catch (err) {
+                console.error('Error inspecting request record:', err);
+            }
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('history-modal').style.display = 'none';
+        }
+
 
 
         // Update Library Model List

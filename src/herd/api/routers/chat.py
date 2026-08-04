@@ -196,23 +196,43 @@ async def proxy_to_port(
                 logger.error(f"Error parsing tokens from response text: {e}")
 
             prompt_snippet = ""
+            full_prompt = None
             if body_bytes:
                 try:
-                    body_json = json.loads(body_bytes)
-                    if "prompt" in body_json:
-                        prompt_snippet = str(body_json["prompt"])[:100]
-                    elif "messages" in body_json and isinstance(body_json["messages"], list):
-                        last_user_msg = next(
-                            (
-                                m.get("content", "")
-                                for m in reversed(body_json["messages"])
-                                if isinstance(m, dict) and m.get("role") == "user"
-                            ),
-                            "",
-                        )
-                        prompt_snippet = str(last_user_msg)[:100]
+                    full_prompt = json.loads(body_bytes)
+                    if isinstance(full_prompt, dict):
+                        if "prompt" in full_prompt:
+                            prompt_snippet = str(full_prompt["prompt"])[:100]
+                        elif "messages" in full_prompt and isinstance(
+                            full_prompt["messages"], list
+                        ):
+                            last_user_msg = next(
+                                (
+                                    m.get("content", "")
+                                    for m in reversed(full_prompt["messages"])
+                                    if isinstance(m, dict) and m.get("role") == "user"
+                                ),
+                                "",
+                            )
+                            prompt_snippet = str(last_user_msg)[:100]
                 except Exception:
-                    pass
+                    full_prompt = body_bytes.decode("utf-8", errors="ignore")
+                    prompt_snippet = full_prompt[:100]
+
+            full_resp = None
+            try:
+                full_resp = json.loads(text)
+            except Exception:
+                full_resp = text
+
+            response_snippet = ""
+            if isinstance(full_resp, dict):
+                choices = full_resp.get("choices", [])
+                if choices and isinstance(choices, list):
+                    msg = choices[0].get("message", {})
+                    response_snippet = msg.get("content", "")[:100] if isinstance(msg, dict) else ""
+            elif isinstance(full_resp, str):
+                response_snippet = full_resp[:100]
 
             collector.record_request(
                 model_name=model_name,
@@ -222,6 +242,9 @@ async def proxy_to_port(
                 duration_sec=duration,
                 is_error=(response.status_code >= 400),
                 prompt_snippet=prompt_snippet,
+                response_snippet=response_snippet,
+                full_prompt=full_prompt,
+                full_response=full_resp,
             )
 
     res_headers = dict(response.headers)

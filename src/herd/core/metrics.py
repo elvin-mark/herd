@@ -1,14 +1,47 @@
+import json
+import os
+import sqlite3
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from herd.core.config import HERD_HOME
+
+DB_PATH = os.path.join(HERD_HOME, "history.db")
+
 
 class MetricsCollector:
-    def __init__(self, max_history: int = 50):
-        # Maps model_name -> stats dict
+    def __init__(self, max_history: int = 50, db_path: str = DB_PATH):
         self.stats: Dict[str, Dict[str, Any]] = {}
-        # Ring buffer for the last N requests
         self.history: deque = deque(maxlen=max_history)
+        self.db_path = db_path
+        self._init_db()
+
+    def _init_db(self):
+        """Initializes the SQLite database table for request logs."""
+        try:
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS request_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp TEXT,
+                        model_name TEXT,
+                        endpoint TEXT,
+                        prompt_tokens INTEGER,
+                        completion_tokens INTEGER,
+                        duration_sec REAL,
+                        is_error INTEGER,
+                        prompt_snippet TEXT,
+                        response_snippet TEXT,
+                        full_prompt TEXT,
+                        full_response TEXT
+                    )
+                """)
+                conn.commit()
+        except Exception:
+            pass
 
     def record_request(
         self,
@@ -20,6 +53,8 @@ class MetricsCollector:
         is_error: bool = False,
         prompt_snippet: str = "",
         response_snippet: str = "",
+        full_prompt: Any = None,
+        full_response: Any = None,
     ):
         if model_name not in self.stats:
             self.stats[model_name] = {
@@ -43,28 +78,108 @@ class MetricsCollector:
         # Track endpoint specific request counts
         model_stats["endpoints"][endpoint] = model_stats["endpoints"].get(endpoint, 0) + 1
 
-        # Record entry in history buffer
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        self.history.appendleft(
-            {
-                "timestamp": timestamp,
-                "model_name": model_name,
-                "endpoint": endpoint,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "duration_sec": round(duration_sec, 3),
-                "is_error": is_error,
-                "prompt_snippet": prompt_snippet,
-                "response_snippet": response_snippet,
-            }
+
+        prompt_str = (
+            json.dumps(full_prompt)
+            if isinstance(full_prompt, (dict, list))
+            else str(full_prompt or "")
+        )
+        resp_str = (
+            json.dumps(full_response)
+            if isinstance(full_response, (dict, list))
+            else str(full_response or "")
         )
 
-    def get_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Returns the list of recent requests up to the specified limit."""
+        req_id = None
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO request_logs (
+                        timestamp, model_name, endpoint, prompt_tokens, completion_tokens,
+                        duration_sec, is_error, prompt_snippet, response_snippet,
+                        full_prompt, full_response
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        timestamp,
+                        model_name,
+                        endpoint,
+                        prompt_tokens,
+                        completion_tokens,
+                        round(duration_sec, 3),
+                        1 if is_error else 0,
+                        prompt_snippet,
+                        response_snippet,
+                        prompt_str,
+                        resp_str,
+                    ),
+                )
+                conn.commit()
+                req_id = cursor.lastrowid
+        except Exception:
+            pass
+
+        # Record entry in in-memory history buffer
+        entry = {
+            "id": req_id or (len(self.history) + 1),
+            "timestamp": timestamp,
+            "model_name": model_name,
+            "endpoint": endpoint,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "duration_sec": round(duration_sec, 3),
+            "is_error": is_error,
+            "prompt_snippet": prompt_snippet,
+            "response_snippet": response_snippet,
+        }
+        self.history.appendleft(entry)
+
+    def get_history(self, limit: Optional[int] = 50) -> List[Dict[str, Any]]:
+        """Returns the list of recent requests up to the specified limit from SQLite."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                query = "SELECT id, timestamp, model_name, endpoint, prompt_tokens, completion_tokens, duration_sec, is_error, prompt_snippet, response_snippet FROM request_logs ORDER BY id DESC"
+                if limit and limit > 0:
+                    query += f" LIMIT {limit}"
+                cursor.execute(query)
+                rows = cursor.fetchall()
+                if rows:
+                    return [dict(row) for row in rows]
+        except Exception:
+            pass
+
         history_list = list(self.history)
         if limit is not None and limit > 0:
             return history_list[:limit]
         return history_list
+
+    def get_request_by_id(self, request_id: int) -> Optional[Dict[str, Any]]:
+        """Retrieves full request & response payload by request ID."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM request_logs WHERE id = ?", (request_id,))
+                row = cursor.fetchone()
+                if row:
+                    res = dict(row)
+                    try:
+                        res["full_prompt"] = json.loads(res["full_prompt"])
+                    except Exception:
+                        pass
+                    try:
+                        res["full_response"] = json.loads(res["full_response"])
+                    except Exception:
+                        pass
+                    return res
+        except Exception:
+            pass
+        return None
 
     def get_stats(self) -> Dict[str, Any]:
         """Returns computed statistics for all models."""

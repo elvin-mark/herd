@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import shutil
 import time
@@ -336,15 +337,70 @@ def show_stats():
 
 
 def history_cmd(
+    request_id: Optional[int] = typer.Argument(
+        None, help="Optional Request ID to inspect full sent & received message transcript."
+    ),
     limit: int = typer.Option(
         20, "--limit", "-n", help="Number of recent request history entries to display."
     ),
 ):
-    """Displays recent request history logs sent to the Herd API gateway."""
+    """Displays recent request history logs or inspects full messages for a specific request ID."""
     if not is_gateway_running():
         console.print("[yellow]Herd API gateway is not running.[/yellow]")
         return
 
+    # Single Request ID Detail Inspection
+    if request_id is not None:
+        url = f"{get_gateway_url()}/v1/models/history/{request_id}"
+        try:
+            response = httpx.get(url)
+            if response.status_code == 404:
+                console.print(f"[red]Request history record #{request_id} not found.[/red]")
+                return
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            console.print(f"[red]Failed to query request detail: {e}[/red]")
+            return
+
+        status_badge = (
+            "[bold red]ERROR[/bold red]" if data.get("is_error") else "[bold green]OK[/bold green]"
+        )
+        console.print(
+            f"\n🔍 [bold cyan]Request Inspection #{data.get('id')}[/bold cyan] ({status_badge})"
+        )
+        console.print(f"  [bold white]Timestamp:[/bold white] {data.get('timestamp')}")
+        console.print(f"  [bold white]Model:[/bold white]     {data.get('model_name')}")
+        console.print(f"  [bold white]Endpoint:[/bold white]  {data.get('endpoint')}")
+        console.print(
+            f"  [bold white]Tokens:[/bold white]    Prompt: {data.get('prompt_tokens')} | Gen: {data.get('completion_tokens')}"
+        )
+        console.print(f"  [bold white]Duration:[/bold white]  {data.get('duration_sec')}s\n")
+
+        # Sent Prompt Messages
+        prompt_content = data.get("full_prompt")
+        if isinstance(prompt_content, (dict, list)):
+            prompt_str = json.dumps(prompt_content, indent=2)
+        else:
+            prompt_str = str(prompt_content or "")
+
+        console.print(
+            Panel(prompt_str, title="📤 Sent Payload (Messages / Prompt)", border_style="cyan")
+        )
+
+        # Received Response Content
+        resp_content = data.get("full_response")
+        if isinstance(resp_content, (dict, list)):
+            resp_str = json.dumps(resp_content, indent=2)
+        else:
+            resp_str = str(resp_content or "")
+
+        console.print(
+            Panel(resp_str, title="📥 Received Response (Completion)", border_style="magenta")
+        )
+        return
+
+    # List Summary Table
     url = f"{get_gateway_url()}/v1/models/history?limit={limit}"
     try:
         response = httpx.get(url)
@@ -359,6 +415,7 @@ def history_cmd(
         return
 
     table = Table(title=f"Herd Recent Request History (Last {len(history)})")
+    table.add_column("ID", style="bold cyan")
     table.add_column("Timestamp", style="dim white")
     table.add_column("Model", style="cyan")
     table.add_column("Endpoint", style="magenta")
@@ -374,12 +431,13 @@ def history_cmd(
         tok_str = f"{item.get('prompt_tokens', 0)} / {item.get('completion_tokens', 0)}"
         dur_str = f"{item.get('duration_sec', 0.0):.2f}s"
         snippet = item.get("prompt_snippet", "")
-        if len(snippet) > 35:
-            snippet = snippet[:32] + "..."
+        if len(snippet) > 30:
+            snippet = snippet[:27] + "..."
         if not snippet:
             snippet = "-"
 
         table.add_row(
+            str(item.get("id", "-")),
             item.get("timestamp", "-"),
             item.get("model_name", "-"),
             item.get("endpoint", "-"),
@@ -390,6 +448,7 @@ def history_cmd(
         )
 
     console.print(table)
+    console.print("[dim]Run 'herd history <id>' to inspect full sent & received messages.[/dim]\n")
 
 
 def clean(
