@@ -111,6 +111,37 @@ async def proxy_to_cloud(
             except Exception as e:
                 logger.error(f"Error parsing tokens from response text: {e}")
 
+            prompt_snippet = ""
+            full_prompt = body
+            if isinstance(body, dict):
+                if "prompt" in body:
+                    prompt_snippet = str(body["prompt"])[:100]
+                elif "messages" in body and isinstance(body["messages"], list):
+                    last_user_msg = next(
+                        (
+                            m.get("content", "")
+                            for m in reversed(body["messages"])
+                            if isinstance(m, dict) and m.get("role") == "user"
+                        ),
+                        "",
+                    )
+                    prompt_snippet = str(last_user_msg)[:100]
+
+            full_resp = None
+            try:
+                full_resp = json.loads(text)
+            except Exception:
+                full_resp = text
+
+            response_snippet = ""
+            if isinstance(full_resp, dict):
+                choices = full_resp.get("choices", [])
+                if choices and isinstance(choices, list):
+                    msg = choices[0].get("message", {})
+                    response_snippet = msg.get("content", "")[:100] if isinstance(msg, dict) else ""
+            elif isinstance(full_resp, str):
+                response_snippet = full_resp[:100]
+
             # Record cloud metrics under provider:target_model identifier
             collector.record_request(
                 model_name=cloud_model_id,
@@ -118,6 +149,10 @@ async def proxy_to_cloud(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 duration_sec=duration,
+                prompt_snippet=prompt_snippet,
+                response_snippet=response_snippet,
+                full_prompt=full_prompt,
+                full_response=full_resp,
                 is_error=False,
             )
 
