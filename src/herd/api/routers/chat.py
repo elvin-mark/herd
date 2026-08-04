@@ -132,9 +132,8 @@ async def proxy_to_cloud(
 
 
 def resolve_pool_or_model(model_name: str) -> str:
-    """Resolves 'auto' or 'default' aliases to the least-busy running model in the configured pool or downloaded models."""
+    """Resolves 'auto' or 'pool' aliases strictly to the least-busy running model in the configured pool."""
     from herd.core.config import settings
-    from herd.core.utils import get_local_models_info
 
     settings.reload()
     if model_name.lower() in ("auto", "default", "pool"):
@@ -146,27 +145,14 @@ def resolve_pool_or_model(model_name: str) -> str:
                     f"Pool Load Balancer routed '{model_name}' request to least-busy instance '{least_busy}'."
                 )
                 return least_busy
-            logger.info(
-                f"Pool Load Balancer selected first available pool model '{pool_models[0]}'."
-            )
+            logger.info(f"Pool Load Balancer selected pool model '{pool_models[0]}'.")
             return pool_models[0]
-        elif settings.default_llm:
+
+        if settings.default_llm:
             return settings.default_llm
 
-        # Fallback to any currently running LLM instance
-        running = list(manager.running_models.values())
-        llms = [m for m in running if not m.get("is_whisper") and not m.get("is_embedding")]
-        if llms:
-            llms.sort(key=lambda x: x.get("in_flight", 0))
-            return llms[0]["model_name"]
-
-        # Fallback to first downloaded model on disk
-        local_models = get_local_models_info()
-        if local_models:
-            return local_models[0]["name"]
-
         raise HerdError(
-            "No models configured in pool or downloaded locally. Add models using 'herd pool add <model_name>' or 'herd pull <model_name>'.",
+            "Your load balancing pool is currently empty. Add models using 'herd pool add <model_name>'.",
             status_code=400,
         )
     return model_name
