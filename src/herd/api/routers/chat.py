@@ -131,6 +131,29 @@ async def proxy_to_cloud(
     )
 
 
+def resolve_pool_or_model(model_name: str) -> str:
+    """Resolves 'auto' or 'default' aliases to the least-busy running model in the configured pool."""
+    from herd.core.config import settings
+
+    settings.reload()
+    if model_name.lower() in ("auto", "default", "pool"):
+        pool_models = settings.pool
+        if pool_models:
+            least_busy = manager.select_least_busy_pool_model(pool_models)
+            if least_busy:
+                logger.info(
+                    f"Pool Load Balancer routed '{model_name}' request to least-busy instance '{least_busy}'."
+                )
+                return least_busy
+            logger.info(
+                f"Pool Load Balancer selected first available pool model '{pool_models[0]}'."
+            )
+            return pool_models[0]
+        elif settings.default_llm:
+            return settings.default_llm
+    return model_name
+
+
 async def proxy_to_port(
     port: int, path: str, request: Request, body_bytes: bytes, model_name: str
 ) -> Response:
@@ -151,10 +174,12 @@ async def proxy_to_port(
         params=request.query_params,
     )
 
+    manager.inc_in_flight(model_name)
     start_time = time.time()
     try:
         response = await client.send(req, stream=True)
     except Exception as e:
+        manager.dec_in_flight(model_name)
         logger.error(f"Failed to connect to backend server on port {port}: {e}")
         collector.record_request(
             model_name=model_name,
@@ -174,6 +199,7 @@ async def proxy_to_port(
                 full_response_text += chunk
                 yield chunk
         finally:
+            manager.dec_in_flight(model_name)
             await response.aclose()
 
             # Record request metrics at the end of streaming/non-streaming transmission
@@ -362,6 +388,8 @@ async def chat_completions(request: Request):
     if not model_name:
         raise HerdError("Missing 'model' field", status_code=400)
 
+    model_name = resolve_pool_or_model(model_name)
+
     # Check if this model targets a registered cloud provider
     if ":" in model_name:
         from herd.core.config import settings
@@ -394,6 +422,8 @@ async def completions(request: Request):
     model_name = body.get("model")
     if not model_name:
         raise HerdError("Missing 'model' field", status_code=400)
+
+    model_name = resolve_pool_or_model(model_name)
 
     # Check if this model targets a registered cloud provider
     if ":" in model_name:

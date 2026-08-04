@@ -317,10 +317,44 @@ class ProcessManager:
                 "model_path": model_path,
                 "log_path": log_path,
                 "idle_timeout": idle_timeout if idle_timeout is not None else IDLE_TIMEOUT,
+                "in_flight": 0,
             }
 
             self._save_active_processes_sync()
             return port
+
+    def inc_in_flight(self, model_identifier: str):
+        """Increments active in-flight request count for a model."""
+        for path, info in self.running_models.items():
+            if path == model_identifier or info.get("model_name") == model_identifier:
+                info["in_flight"] = info.get("in_flight", 0) + 1
+                break
+
+    def dec_in_flight(self, model_identifier: str):
+        """Decrements active in-flight request count for a model."""
+        for path, info in self.running_models.items():
+            if path == model_identifier or info.get("model_name") == model_identifier:
+                info["in_flight"] = max(0, info.get("in_flight", 1) - 1)
+                break
+
+    def select_least_busy_pool_model(self, pool_models: list) -> Optional[str]:
+        """Selects the currently running pool model with the lowest in-flight request count."""
+        running_pool_items = []
+        for m_name in pool_models:
+            for path, info in self.running_models.items():
+                if (
+                    info.get("model_name") == m_name
+                    or m_name.lower() in info.get("model_name", "").lower()
+                ):
+                    running_pool_items.append((info.get("in_flight", 0), info.get("model_name")))
+                    break
+
+        if not running_pool_items:
+            return None
+
+        # Sort by in_flight count ascending (Least-Busy)
+        running_pool_items.sort(key=lambda x: x[0])
+        return running_pool_items[0][1]
 
     async def stop_model(self, model_name: str):
         """Stops a running model server process."""

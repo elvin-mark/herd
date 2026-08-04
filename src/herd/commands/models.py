@@ -664,3 +664,96 @@ def top():
                 live.update(make_display())
     except KeyboardInterrupt:
         console.print("\n[yellow]Exiting monitor...[/yellow]")
+
+
+pool_app = typer.Typer(name="pool", help="Manage model distribution pools for load balancing.")
+
+
+@pool_app.callback(invoke_without_command=True)
+def pool_main(ctx: typer.Context):
+    """Lists configured pool models and their active load balancer status."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from herd.core.config import settings
+
+    settings.reload()
+    pool = settings.pool
+
+    if not pool:
+        console.print("[yellow]No models configured in pool.[/yellow]")
+        console.print("Use 'herd pool add <model_name>' to add models to pool.")
+        return
+
+    table = Table(title="Herd Model Distribution Pool (Least-Busy Load Balancer)")
+    table.add_column("Model Name", style="cyan")
+    table.add_column("Status", style="bold")
+    table.add_column("In-Flight Requests", style="magenta")
+    table.add_column("Port", style="yellow")
+
+    # Query running models if gateway is running
+    active_map = {}
+    if is_gateway_running():
+        try:
+            resp = httpx.get(f"{get_gateway_url()}/v1/models/pool")
+            if resp.status_code == 200:
+                for status_item in resp.json().get("status", []):
+                    active_map[status_item["model"]] = status_item
+        except Exception:
+            pass
+
+    for model_name in pool:
+        info = active_map.get(model_name, {})
+        is_running = info.get("is_running", False)
+        status_str = (
+            "[bold green]🟢 Running[/bold green]"
+            if is_running
+            else "[dim white]⚪ Inactive[/dim white]"
+        )
+        in_flight = str(info.get("in_flight", 0)) if is_running else "-"
+        port_str = str(info.get("port")) if is_running and info.get("port") else "-"
+
+        table.add_row(model_name, status_str, in_flight, port_str)
+
+    console.print(table)
+    console.print(
+        "[dim]Requests sent with model='auto' will be distributed across pool models.[/dim]\n"
+    )
+
+
+@pool_app.command(name="add")
+def pool_add(
+    model_name: str = typer.Argument(
+        ..., help="Model identifier to add to pool (e.g. 'Qwen/Qwen2.5-7B')"
+    ),
+):
+    """Adds a model to the load balancing distribution pool."""
+    from herd.core.config import load_config, save_config
+
+    config = load_config()
+    pool = config.get("pool", [])
+    if model_name in pool:
+        console.print(f"[yellow]Model '{model_name}' is already in the pool.[/yellow]")
+        return
+
+    pool.append(model_name)
+    save_config({"pool": pool})
+    console.print(f"[bold green]✓ Added model '{model_name}' to pool.[/bold green]")
+
+
+@pool_app.command(name="rm")
+def pool_rm(
+    model_name: str = typer.Argument(..., help="Model identifier to remove from pool"),
+):
+    """Removes a model from the load balancing distribution pool."""
+    from herd.core.config import load_config, save_config
+
+    config = load_config()
+    pool = config.get("pool", [])
+    if model_name not in pool:
+        console.print(f"[yellow]Model '{model_name}' is not in the pool.[/yellow]")
+        return
+
+    pool.remove(model_name)
+    save_config({"pool": pool})
+    console.print(f"[bold green]✓ Removed model '{model_name}' from pool.[/bold green]")

@@ -76,12 +76,42 @@ async def list_active_models():
                     "memory_bytes": mem_bytes,
                     "memory_str": mem_str,
                     "cpu_percent": resources["cpu_percent"],
+                    "in_flight": info.get("in_flight", 0),
                     "last_accessed": info["last_accessed"],
                     "idle_seconds": int(time.time() - info["last_accessed"]),
                     "log_path": info.get("log_path"),
                 }
             )
     return active
+
+
+@router.get("/v1/models/pool")
+async def get_pool_endpoint():
+    """Returns current pool models and their active load balancer status."""
+    from herd.core.config import settings
+
+    settings.reload()
+    pool = settings.pool
+    pool_status = []
+    async with manager.lock:
+        for model_name in pool:
+            running_info = None
+            for path, info in manager.running_models.items():
+                if (
+                    info.get("model_name") == model_name
+                    or model_name.lower() in info.get("model_name", "").lower()
+                ):
+                    running_info = info
+                    break
+            pool_status.append(
+                {
+                    "model": model_name,
+                    "is_running": running_info is not None,
+                    "in_flight": running_info.get("in_flight", 0) if running_info else 0,
+                    "port": running_info.get("port") if running_info else None,
+                }
+            )
+    return {"pool": pool, "status": pool_status}
 
 
 @router.get("/v1/models/stats")

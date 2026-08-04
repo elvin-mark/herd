@@ -70,6 +70,7 @@ class HerdSettings:
         self.default_llm = self.overrides.get("default_llm")
         self.default_embedding = self.overrides.get("default_embedding")
         self.default_whisper = self.overrides.get("default_whisper")
+        self.pool = self.overrides.get("pool", [])
         self.providers = self.overrides.get("providers", {})
 
         # Compiled commits
@@ -107,6 +108,7 @@ WHISPER_SERVER_BIN = settings.whisper_server_bin
 DEFAULT_LLM = settings.default_llm
 DEFAULT_EMBEDDING = settings.default_embedding
 DEFAULT_WHISPER = settings.default_whisper
+POOL = settings.pool
 PROVIDERS = settings.providers
 
 LLAMA_COMMIT = settings.llama_commit
@@ -126,6 +128,8 @@ def save_config(config: dict):
     settings.default_llm = config.get("default_llm", settings.default_llm)
     settings.default_embedding = config.get("default_embedding", settings.default_embedding)
     settings.default_whisper = config.get("default_whisper", settings.default_whisper)
+    if "pool" in config:
+        settings.pool = config["pool"]
     if "LLAMA_SERVER_BIN" in config:
         settings.llama_server_bin = config["LLAMA_SERVER_BIN"]
     if "WHISPER_SERVER_BIN" in config:

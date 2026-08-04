@@ -24,6 +24,7 @@ from herd.commands.models import (
     clean,
     history_cmd,
     list_models,
+    pool_app,
     ps,
     pull,
     rm,
@@ -50,6 +51,7 @@ app.command(name="list", rich_help_panel="Model Management")(list_models)
 app.command(name="pull", rich_help_panel="Model Management")(pull)
 app.command(name="rm", rich_help_panel="Model Management")(rm)
 app.command(name="search", rich_help_panel="Model Management")(search)
+app.add_typer(pool_app, rich_help_panel="Model Management")
 
 
 # 3. Register Runtime Operations commands

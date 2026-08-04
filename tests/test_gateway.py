@@ -44,3 +44,27 @@ def test_metrics_collector_ring_buffer():
     history = collector.get_history()
     assert len(history) == 50
     assert history[0]["prompt_snippet"] == "test prompt 69"
+
+
+def test_pool_route():
+    """Verifies that /v1/models/pool endpoint returns pool models and status."""
+    response = client.get("/v1/models/pool")
+    assert response.status_code == 200
+    res = response.json()
+    assert "pool" in res
+    assert "status" in res
+
+
+def test_least_busy_load_balancer():
+    """Verifies that ProcessManager selects the running model with the lowest in-flight request count."""
+    from herd.services.manager import ProcessManager
+
+    pm = ProcessManager()
+    pm.running_models = {
+        "/path/model1": {"model_name": "model1", "in_flight": 5},
+        "/path/model2": {"model_name": "model2", "in_flight": 1},
+        "/path/model3": {"model_name": "model3", "in_flight": 3},
+    }
+
+    selected = pm.select_least_busy_pool_model(["model1", "model2", "model3"])
+    assert selected == "model2"
