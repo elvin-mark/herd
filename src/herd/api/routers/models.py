@@ -103,11 +103,16 @@ async def get_pool_endpoint():
                 ):
                     running_info = info
                     break
+
+            in_flight = collector.get_in_flight(model_name)
+            if running_info and running_info.get("in_flight", 0) > in_flight:
+                in_flight = running_info.get("in_flight", 0)
+
             pool_status.append(
                 {
                     "model": model_name,
-                    "is_running": running_info is not None,
-                    "in_flight": running_info.get("in_flight", 0) if running_info else 0,
+                    "is_running": running_info is not None or ":" in model_name,
+                    "in_flight": in_flight,
                     "port": running_info.get("port") if running_info else None,
                 }
             )

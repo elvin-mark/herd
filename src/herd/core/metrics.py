@@ -14,8 +14,42 @@ class MetricsCollector:
     def __init__(self, max_history: int = 50, db_path: str = DB_PATH):
         self.stats: Dict[str, Dict[str, Any]] = {}
         self.history: deque = deque(maxlen=max_history)
+        self.in_flight_map: Dict[str, int] = {}
+        self.pool_rr_index: int = 0
         self.db_path = db_path
         self._init_db()
+
+    def inc_in_flight(self, model_name: str):
+        """Increments in-flight request counter for a model."""
+        self.in_flight_map[model_name] = self.in_flight_map.get(model_name, 0) + 1
+
+    def dec_in_flight(self, model_name: str):
+        """Decrements in-flight request counter for a model."""
+        self.in_flight_map[model_name] = max(0, self.in_flight_map.get(model_name, 1) - 1)
+
+    def get_in_flight(self, model_name: str) -> int:
+        """Returns active in-flight requests for a model."""
+        return self.in_flight_map.get(model_name, 0)
+
+    def select_least_busy_pool_model(self, pool_models: list) -> Optional[str]:
+        """Selects least-busy pool model, using round-robin rotation for tie-breaking."""
+        if not pool_models:
+            return None
+
+        model_counts = []
+        for idx, m in enumerate(pool_models):
+            count = self.get_in_flight(m)
+            model_counts.append((count, idx, m))
+
+        min_count = min(item[0] for item in model_counts)
+        candidates = [item for item in model_counts if item[0] == min_count]
+
+        if len(candidates) == 1:
+            return candidates[0][2]
+
+        selected_item = candidates[self.pool_rr_index % len(candidates)]
+        self.pool_rr_index = (self.pool_rr_index + 1) % 1000000
+        return selected_item[2]
 
     def _init_db(self):
         """Initializes the SQLite database table for request logs."""

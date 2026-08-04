@@ -58,14 +58,18 @@ async def proxy_to_cloud(
         params=request.query_params,
     )
 
+    cloud_model_id = f"{provider}:{target_model}"
+    collector.inc_in_flight(cloud_model_id)
     start_time = time.time()
     try:
         response = await client.send(req, stream=True)
     except Exception as e:
+        collector.dec_in_flight(cloud_model_id)
         logger.error(f"Failed to connect to cloud provider '{provider}' at {url}: {e}")
         raise HerdError(f"Cloud provider connection failed: {e}", status_code=502)
 
     if response.status_code >= 400:
+        collector.dec_in_flight(cloud_model_id)
         content = await response.aread()
         try:
             err_json = json.loads(content)
@@ -86,6 +90,7 @@ async def proxy_to_cloud(
                 full_response_text += chunk
                 yield chunk
         finally:
+            collector.dec_in_flight(cloud_model_id)
             await response.aclose()
 
             # Record request metrics at the end of streaming/non-streaming transmission
@@ -108,26 +113,18 @@ async def proxy_to_cloud(
 
             # Record cloud metrics under provider:target_model identifier
             collector.record_request(
-                model_name=f"{provider}:{target_model}",
-                endpoint=path,
+                model_name=cloud_model_id,
+                endpoint=path_suffix,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 duration_sec=duration,
-                is_error=(response.status_code >= 400),
+                is_error=False,
             )
-
-    res_headers = dict(response.headers)
-    res_headers.pop("transfer-encoding", None)
-    res_headers.pop("content-length", None)
-    res_headers.pop("content-encoding", None)
-    res_headers.pop("Content-Encoding", None)
-    media_type = res_headers.get("content-type")
 
     return StreamingResponse(
         response_generator(),
         status_code=response.status_code,
-        headers=res_headers,
-        media_type=media_type,
+        media_type=response.headers.get("content-type", "application/json"),
     )
 
 
@@ -139,14 +136,12 @@ def resolve_pool_or_model(model_name: str) -> str:
     if model_name.lower() in ("auto", "default", "pool"):
         pool_models = settings.pool
         if pool_models:
-            least_busy = manager.select_least_busy_pool_model(pool_models)
-            if least_busy:
+            selected = collector.select_least_busy_pool_model(pool_models)
+            if selected:
                 logger.info(
-                    f"Pool Load Balancer routed '{model_name}' request to least-busy instance '{least_busy}'."
+                    f"Pool Load Balancer routed '{model_name}' request to pool instance '{selected}'."
                 )
-                return least_busy
-            logger.info(f"Pool Load Balancer selected pool model '{pool_models[0]}'.")
-            return pool_models[0]
+                return selected
 
         if settings.default_llm:
             return settings.default_llm
