@@ -784,6 +784,7 @@
 
             const bubbleElement = document.getElementById(assistantBubbleId);
             const reasoningEnabled = document.getElementById('chat-reasoning').checked;
+            const streamingEnabled = document.getElementById('chat-streaming') ? document.getElementById('chat-streaming').checked : true;
             
             const startTime = Date.now();
             try {
@@ -794,7 +795,7 @@
                         model: model,
                         messages: messages,
                         temperature: temp,
-                        stream: true,
+                        stream: streamingEnabled,
                         chat_template_kwargs: {
                             enable_thinking: reasoningEnabled
                         }
@@ -809,6 +810,67 @@
 
                 if (!isModelRunning) {
                     populatePlaygroundModelList();
+                }
+
+                if (!streamingEnabled) {
+                    const data = await res.json();
+                    const choice = data.choices ? data.choices[0] : {};
+                    const msgObj = choice.message || {};
+                    let assistantAnswer = msgObj.content || '';
+                    let assistantReasoning = msgObj.reasoning_content || '';
+
+                    let displayThinking = '';
+                    let displayAnswer = '';
+
+                    if (assistantReasoning) {
+                        if (reasoningEnabled) {
+                            displayThinking = assistantReasoning;
+                        }
+                        displayAnswer = assistantAnswer;
+                    } else {
+                        const parsed = parseChatResponse(reasoningEnabled, assistantAnswer);
+                        displayThinking = parsed.thinking;
+                        displayAnswer = parsed.answer;
+                    }
+
+                    let bubbleHtml = '';
+                    if (displayThinking) {
+                        bubbleHtml += `
+                            <div class="thinking-block">
+                                <div class="thinking-header">💭 Thinking Process...</div>
+                                <div class="thinking-content">${escapeHtml(displayThinking)}</div>
+                            </div>
+                        `;
+                    }
+
+                    if (typeof marked !== 'undefined') {
+                        bubbleHtml += `<div class="markdown-body">${marked.parse(displayAnswer)}</div>`;
+                    } else {
+                        bubbleHtml += `<span>${escapeHtml(displayAnswer)}</span>`;
+                    }
+
+                    bubbleElement.innerHTML = bubbleHtml;
+                    if (typeof Prism !== 'undefined') {
+                        Prism.highlightAllUnder(bubbleElement);
+                    }
+
+                    const endTime = Date.now();
+                    const durationSec = (endTime - startTime) / 1000;
+                    const completionTokens = data.usage?.completion_tokens || Math.round(assistantAnswer.split(/\s+/).length * 1.3);
+                    const tokensPerSec = (completionTokens / durationSec).toFixed(1);
+
+                    const statsHtml = `
+                        <span class="chat-stats">
+                            ⏱️ ${durationSec.toFixed(2)}s | ⚡ ${tokensPerSec} tok/sec (${completionTokens} tokens)
+                        </span>
+                    `;
+                    const statsSpan = document.createElement('div');
+                    statsSpan.innerHTML = statsHtml;
+                    bubbleElement.appendChild(statsSpan);
+                    container.scrollTop = container.scrollHeight;
+
+                    playgroundChatMessages.push({ role: 'assistant', content: assistantAnswer });
+                    return;
                 }
 
                 bubbleElement.innerHTML = '';
