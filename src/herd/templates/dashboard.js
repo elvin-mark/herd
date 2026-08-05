@@ -280,6 +280,26 @@
             document.getElementById('history-modal').style.display = 'none';
         }
 
+        function copyModalContent(elementId, btnElement) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const text = el.innerText || el.textContent;
+            if (!text || text.trim() === '-') return;
+
+            navigator.clipboard.writeText(text).then(() => {
+                const origText = btnElement.innerHTML;
+                btnElement.innerHTML = '✓ Copied!';
+                btnElement.style.color = 'var(--accent-emerald)';
+                setTimeout(() => {
+                    btnElement.innerHTML = origText;
+                    btnElement.style.color = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy content:', err);
+            });
+        }
+
+
 
 
         // Update Library Model List

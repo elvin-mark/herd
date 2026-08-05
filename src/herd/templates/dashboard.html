@@ -376,13 +376,20 @@
             <div id="modal-meta" class="modal-meta-grid" style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; font-size: 0.85rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid var(--card-border);"></div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.5rem;">
                 <div class="modal-section">
-                    <h3 style="font-size: 1rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">📤 Sent Payload (Messages / Prompt)</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 1rem; color: var(--accent-cyan); margin: 0;">📤 Sent Payload (Messages / Prompt)</h3>
+                        <button class="btn btn-secondary" onclick="copyModalContent('modal-prompt-content', this)" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 6px;">📋 Copy</button>
+                    </div>
                     <pre id="modal-prompt-content" style="background: rgba(0,0,0,0.4); padding: 1.2rem; border-radius: 12px; border: 1px solid var(--card-border); max-height: 250px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; color: #f8fafc;"></pre>
                 </div>
                 <div class="modal-section">
-                    <h3 style="font-size: 1rem; color: var(--accent-violet); margin-bottom: 0.5rem;">📥 Received Response (Completion)</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <h3 style="font-size: 1rem; color: var(--accent-violet); margin: 0;">📥 Received Response (Completion)</h3>
+                        <button class="btn btn-secondary" onclick="copyModalContent('modal-response-content', this)" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 6px;">📋 Copy</button>
+                    </div>
                     <pre id="modal-response-content" style="background: rgba(0,0,0,0.4); padding: 1.2rem; border-radius: 12px; border: 1px solid var(--card-border); max-height: 250px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; color: #f8fafc;"></pre>
                 </div>
+
             </div>
         </div>
     </div>
