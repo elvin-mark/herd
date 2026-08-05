@@ -44,9 +44,15 @@ def list_downloaded_models() -> List[str]:
 
 @router.get("/v1/models")
 async def list_models():
-    """Lists all downloaded local models."""
-    local_models = list_downloaded_models()
+    """Lists all available models, including 'auto' if pool is configured."""
+    from herd.core.config import settings
+
+    settings.reload()
     data = []
+    if settings.pool:
+        data.append({"id": "auto", "object": "model", "owned_by": "herd-pool"})
+
+    local_models = list_downloaded_models()
     for m in local_models:
         data.append({"id": m, "object": "model", "owned_by": "user"})
     return {"data": data}
