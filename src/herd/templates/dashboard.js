@@ -1325,4 +1325,88 @@
             }
         }
 
+        async function runAgentTask() {
+            const objectiveInput = document.getElementById('agent-objective-input');
+            const streamContainer = document.getElementById('agent-stream-container');
+            const runBtn = document.getElementById('btn-run-agent');
+            const yolo = document.getElementById('agent-yolo').checked;
+            const memory = document.getElementById('agent-memory').checked;
+
+            const objective = objectiveInput.value.trim();
+            if (!objective) {
+                alert("Please enter an objective for the agent.");
+                return;
+            }
+
+            runBtn.disabled = true;
+            runBtn.textContent = "⏳ Agent Running...";
+            streamContainer.innerHTML = `<div style="color: #58a6ff;">🚀 Initiating Agent Objective: <strong>${escapeHtml(objective)}</strong></div><br>`;
+
+            try {
+                const response = await fetch('/v1/agent/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ objective: objective, yolo: yolo, use_memory: memory, max_turns: 10 })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    let currentEvent = null;
+
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            currentEvent = line.substring(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            const dataStr = line.substring(6);
+                            if (dataStr === '{}') continue;
+
+                            try {
+                                const payload = JSON.parse(dataStr);
+                                renderAgentEvent(streamContainer, currentEvent, payload);
+                            } catch (e) {
+                                // ignore parse errors
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                streamContainer.innerHTML += `<div style="color: #f85149; margin-top: 10px;">❌ Error running agent: ${err}</div>`;
+            } finally {
+                runBtn.disabled = false;
+                runBtn.textContent = "🚀 Execute Objective";
+            }
+        }
+
+        function renderAgentEvent(container, eventType, payload) {
+            if (eventType === 'turn_start') {
+                container.innerHTML += `<div style="color: #79c0ff; border-top: 1px dashed #30363d; margin-top: 8px; padding-top: 8px;">── Iteration ${payload.turn}/${payload.max_turns} ──</div>`;
+            } else if (eventType === 'thought') {
+                container.innerHTML += `<div style="color: #d2a8ff; margin: 4px 0;">🤔 <strong>Thought:</strong> ${escapeHtml(payload.thought)}</div>`;
+            } else if (eventType === 'action') {
+                container.innerHTML += `<div style="color: #e3b341; margin: 4px 0;">🛠️ <strong>Action:</strong> ${escapeHtml(payload.action)} → <code>${escapeHtml(JSON.stringify(payload.action_input))}</code></div>`;
+            } else if (eventType === 'observation') {
+                const obsSnippet = payload.observation.length > 300 ? payload.observation.substring(0, 300) + '...' : payload.observation;
+                container.innerHTML += `<div style="color: #7ee787; background: #161b22; padding: 6px; border-radius: 6px; margin: 4px 0; white-space: pre-wrap;">👀 <strong>Observation:</strong> ${escapeHtml(obsSnippet)}</div>`;
+            } else if (eventType === 'plan_update') {
+                container.innerHTML += `<div style="color: #8b949e; font-size: 0.8rem;"><pre style="margin: 4px 0;">${escapeHtml(payload.plan)}</pre></div>`;
+            } else if (eventType === 'compaction') {
+                container.innerHTML += `<div style="color: #58a6ff; font-style: italic; margin: 4px 0;">🧠 Compressed ${payload.msg_count} history messages (${payload.orig_chars} → ${payload.comp_chars} chars)</div>`;
+            } else if (eventType === 'finish') {
+                container.innerHTML += `<div style="color: #56d364; font-size: 1rem; margin-top: 10px; font-weight: bold;">🎯 Final Answer: ${escapeHtml(payload.answer)}</div>`;
+            } else if (eventType === 'error') {
+                container.innerHTML += `<div style="color: #f85149; margin-top: 6px;">❌ <strong>Error:</strong> ${escapeHtml(payload.error)}</div>`;
+            }
+            container.scrollTop = container.scrollHeight;
+        }
+
         window.addEventListener('DOMContentLoaded', init);

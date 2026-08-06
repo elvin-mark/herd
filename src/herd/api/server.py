@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from herd.api.exceptions import HerdError
+from herd.api.routers.agent import router as agent_router
 from herd.api.routers.chat import router as chat_router
 from herd.api.routers.db import router as db_router
 from herd.api.routers.models import router as models_router
@@ -156,3 +157,4 @@ async def get_prometheus_metrics_endpoint():
 app.include_router(models_router)
 app.include_router(chat_router)
 app.include_router(db_router)
+app.include_router(agent_router)

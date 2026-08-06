@@ -45,6 +45,7 @@
         <nav class="tabs-nav">
             <button class="tab-btn active" onclick="switchTab('instances')">Control Center</button>
             <button class="tab-btn" onclick="switchTab('playground')">Chat Playground</button>
+            <button class="tab-btn" onclick="switchTab('agent')">🤖 Autonomous Agent</button>
             <button class="tab-btn" onclick="switchTab('hub')">Model Hub</button>
             <button class="tab-btn" onclick="switchTab('rag')">RAG & Indexer</button>
         </nav>
@@ -247,6 +248,36 @@
                         <button class="btn btn-secondary" id="chat-mic-btn" onclick="toggleVoiceRecording()" style="padding: 0.8rem 1.2rem; font-size: 1rem;" title="Voice Input (Whisper)">🎙️</button>
                         <input type="text" id="chat-user-input" class="input-text" placeholder="Type a message or use voice input..." onkeydown="handleChatSubmit(event)">
                         <button class="btn btn-load" id="chat-send-btn" onclick="sendPlaygroundMessage()">Send ➔</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Autonomous Agent -->
+        <div id="tab-agent" class="tab-content">
+            <div class="panel-card" style="margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>🤖 Autonomous AI Agent Workbench</h2>
+                    <span class="status-badge status-online">Agent Server Online</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Execute autonomous tasks in your workspace. The agent plans steps, edits files, searches the web, and runs shell commands.
+                </p>
+                <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
+                    <input type="text" id="agent-objective-input" class="input-text" style="flex: 1; padding: 0.8rem 1.2rem;" placeholder="e.g., 'Inspect the codebase and create a new unit test module in tests/unit/'">
+                    <button class="btn btn-primary" onclick="runAgentTask()" id="btn-run-agent">🚀 Execute Objective</button>
+                </div>
+                <div style="display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    <label style="cursor: pointer;"><input type="checkbox" id="agent-yolo" checked> ⚡ YOLO Mode (Auto-execute shell commands)</label>
+                    <label style="cursor: pointer;"><input type="checkbox" id="agent-memory" checked> 🧠 Long-Term Memory</label>
+                </div>
+            </div>
+
+            <div class="panel-card">
+                <h3>Agent Thought & Execution Stream</h3>
+                <div id="agent-stream-container" style="background: #0d1117; border: 1px solid var(--card-border); border-radius: 12px; padding: 1.2rem; min-height: 280px; max-height: 550px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; color: #e6edf3;">
+                    <div style="color: var(--text-secondary); text-align: center; margin-top: 3rem;">
+                        Waiting for objective execution...
                     </div>
                 </div>
             </div>

@@ -1,11 +1,144 @@
+"""
+Herd Autonomous AI Engineering Agent
+Refactored with modular tool handlers, decoupled LLM transport,
+robust JSON action parsers, and UI event listeners.
+"""
+
+import html as html_lib
 import json
 import os
+import re
 import subprocess
-from typing import Any, Callable, Dict
+import urllib.parse
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
 from herd.core.utils import console
+
+# -----------------------------------------------------------------------------
+# 1. Event Listener Interface (UI Decoupling)
+# -----------------------------------------------------------------------------
+
+
+class AgentEventListener:
+    """Decouples CLI console rendering from core agent logic."""
+
+    def on_turn_start(self, turn: int, max_turns: int):
+        console.print(f"\n[bold cyan]── Agent Iteration {turn}/{max_turns} ──[/bold cyan]")
+
+    def on_plan_update(self, plan_summary: str):
+        console.print(f"[dim]{plan_summary}[/dim]")
+
+    def on_thought(self, thought: str):
+        console.print(f"🤔 [bold white]Thought:[/bold white] {thought}")
+
+    def on_action(self, action: str, action_input: Any):
+        console.print(
+            f"🛠️  [bold yellow]Action:[/bold yellow] {action} -> [cyan]{action_input}[/cyan]"
+        )
+
+    def on_observation(self, observation: str):
+        snippet = observation if len(observation) <= 400 else observation[:400] + "... [truncated]"
+        console.print(f"👀 [bold green]Observation:[/bold green]\n{snippet}\n")
+
+    def on_compaction(self, msg_count: int, orig_chars: int, comp_chars: int):
+        console.print(
+            f"\n[bold blue]🧠 Sliding Context Window Compaction[/bold blue]\n"
+            f"[dim]Compressed {msg_count} older history messages ({orig_chars} -> {comp_chars} chars).[/dim]\n"
+        )
+
+    def on_finish(self, answer: str):
+        console.print(f"\n🎯 [bold green]Final Answer:[/bold green]\n{answer}\n")
+
+    def on_error(self, error_msg: str):
+        console.print(f"[bold red]Agent Error:[/bold red] {error_msg}")
+
+
+# -----------------------------------------------------------------------------
+# 2. Decoupled LLM Gateway Client
+# -----------------------------------------------------------------------------
+
+
+class LLMClient:
+    """Transport provider interface for communicating with gateway models."""
+
+    def __init__(self, gateway_url: str, model_name: str):
+        self.gateway_url = gateway_url.rstrip("/")
+        self.model_name = model_name
+
+    def chat_completion(self, messages: List[Dict[str, str]], temperature: float = 0.2) -> str:
+        url = f"{self.gateway_url}/v1/chat/completions"
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        resp = httpx.post(url, json=payload, timeout=120.0)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Gateway HTTP {resp.status_code}: {resp.text}")
+
+        data = resp.json()
+        raw_text = data["choices"][0]["message"]["content"]
+        # Strip CoT <think>...</think> tags if present
+        return re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+
+
+# -----------------------------------------------------------------------------
+# 3. Robust Action & JSON Parser
+# -----------------------------------------------------------------------------
+
+
+def parse_agent_action(response_text: str) -> List[Dict[str, Any]]:
+    """Parses LLM output text into one or more structured action dicts."""
+    text = response_text.strip()
+    if not text:
+        return [
+            {
+                "thought": "No response returned",
+                "action": "final_answer",
+                "action_input": "Empty response.",
+            }
+        ]
+
+    # Strip markdown wrapper if present
+    if "```" in text:
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+        if match:
+            text = match.group(1).strip()
+
+    # Repair common JSON trailing commas
+    cleaned_json = re.sub(r",\s*([\]}])", r"\1", text)
+
+    try:
+        data = json.loads(cleaned_json)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+    except Exception:
+        pass
+
+    # Regex extraction fallback for {"thought": ..., "action": ...}
+    match = re.search(r"\{[\s\S]*\"action\"\s*:[\s\S]*\}", text)
+    if match:
+        try:
+            return [json.loads(match.group(0))]
+        except Exception:
+            pass
+
+    return [
+        {
+            "thought": "Failed to parse JSON response; treating output as final answer.",
+            "action": "final_answer",
+            "action_input": text,
+        }
+    ]
+
+
+# -----------------------------------------------------------------------------
+# 4. Tool Registry & Standalone Helper Functions
+# -----------------------------------------------------------------------------
 
 
 class Tool:
@@ -41,6 +174,16 @@ class ToolRegistry:
             return f"Error executing {action}: {e}"
 
 
+def _parse_json_args(raw_input: Any) -> Any:
+    """Helper to safely parse tool input arguments."""
+    if isinstance(raw_input, str):
+        try:
+            return json.loads(raw_input)
+        except Exception:
+            return raw_input
+    return raw_input
+
+
 def agent_list_dir(path: str = ".") -> str:
     try:
         files = os.listdir(path)
@@ -74,10 +217,7 @@ def agent_view_file_lines(path: str, start_line: int, end_line: int) -> str:
             )
 
         sliced = lines[start_line - 1 : min(end_line, total_lines)]
-        output = []
-        for idx, line in enumerate(sliced, start=start_line):
-            output.append(f"{idx}: {line}")
-
+        output = [f"{idx}: {line}" for idx, line in enumerate(sliced, start=start_line)]
         return "".join(output)
     except Exception as e:
         return f"Error reading file lines: {e}"
@@ -107,7 +247,7 @@ def agent_edit_file(path: str, target: str, replacement: str) -> str:
         with open(path, "r", errors="ignore") as f:
             content = f.read()
 
-        # Path 1: Exact byte/string match (Fast Path)
+        # Path 1: Exact match
         if target in content:
             count = content.count(target)
             if count > 1:
@@ -120,7 +260,7 @@ def agent_edit_file(path: str, target: str, replacement: str) -> str:
                 f.write(new_content)
             return f"Successfully edited file '{path}' (exact match)."
 
-        # Path 2: Fuzzy Normalized Line Matching (Anthropic str_replace style)
+        # Path 2: Fuzzy Normalized Line Matching
         file_lines = content.splitlines(keepends=True)
         target_lines = target.splitlines()
 
@@ -131,7 +271,6 @@ def agent_edit_file(path: str, target: str, replacement: str) -> str:
         target_len = len(target_lines)
         matches = []
 
-        # Sliding window search over file lines
         for i in range(len(file_lines) - target_len + 1):
             window_raw = file_lines[i : i + target_len]
             norm_window = [_normalize_line(line) for line in window_raw if line.strip()]
@@ -149,7 +288,6 @@ def agent_edit_file(path: str, target: str, replacement: str) -> str:
             rep_text = (
                 replacement if replacement.endswith("\n") or not file_lines else replacement + "\n"
             )
-
             new_lines = file_lines[:start_idx] + [rep_text] + file_lines[end_idx:]
             with open(path, "w") as f:
                 f.writelines(new_lines)
@@ -177,26 +315,36 @@ def agent_edit_file(path: str, target: str, replacement: str) -> str:
 
 def agent_run_command(command: str) -> str:
     try:
-        res = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30.0)
-        output = f"Exit Code: {res.returncode}\n"
-        if res.stdout:
-            output += f"STDOUT:\n{res.stdout}\n"
-        if res.stderr:
-            output += f"STDERR:\n{res.stderr}\n"
-        return output
+        proc = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        output = proc.stdout
+        if proc.stderr:
+            output += "\n" + proc.stderr
+        return (
+            output.strip()
+            if output.strip()
+            else f"Command executed cleanly with returncode {proc.returncode}."
+        )
     except subprocess.TimeoutExpired:
-        return "Error: Command execution timed out (30s limit)."
+        return "Error: Command execution timed out after 120 seconds."
     except Exception as e:
-        return f"Error executing command: {e}"
+        return f"Error running command: {e}"
 
 
 def agent_search_grep(pattern: str, path: str = ".") -> str:
     matches = []
     ignored_dirs = {
         ".git",
-        ".venv",
-        "node_modules",
         "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        ".herd",
         ".ruff_cache",
         ".pytest_cache",
         "build",
@@ -227,10 +375,6 @@ def agent_search_grep(pattern: str, path: str = ".") -> str:
 
 def agent_web_search(query: str) -> str:
     """Performs zero-auth DuckDuckGo web search and returns top 5 results (title, snippet, URL)."""
-    import html as html_lib
-    import re
-    import urllib.parse
-
     try:
         url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
         headers = {
@@ -243,10 +387,14 @@ def agent_web_search(query: str) -> str:
         raw_html = resp.text
         results = []
         links = re.findall(
-            r'<a class="result__url" href="([^"]+)".*?>(.*?)</a>', raw_html, re.DOTALL
+            r'<a class="result__url" href="([^"]+)".*?>(.*?)</a>',
+            raw_html,
+            re.DOTALL,
         )
         snippets = re.findall(
-            r'<a class="result__snippet[^"]*"[^>]*>(.*?)</a>', raw_html, re.DOTALL
+            r'<a class="result__snippet[^"]*"[^>]*>(.*?)</a>',
+            raw_html,
+            re.DOTALL,
         )
         titles = re.findall(r'<a class="result__a"[^>]*>(.*?)</a>', raw_html, re.DOTALL)
 
@@ -274,9 +422,6 @@ def agent_web_search(query: str) -> str:
 
 def agent_fetch_url(url: str) -> str:
     """Fetches web page content, strips HTML chrome, and returns clean readable text."""
-    import html as html_lib
-    import re
-
     try:
         if not url.startswith("http://") and not url.startswith("https://"):
             url = "https://" + url
@@ -290,12 +435,28 @@ def agent_fetch_url(url: str) -> str:
 
         raw_html = resp.text
         raw_html = re.sub(
-            r"<script[^>]*>.*?</script>", "", raw_html, flags=re.DOTALL | re.IGNORECASE
+            r"<script[^>]*>.*?</script>",
+            "",
+            raw_html,
+            flags=re.DOTALL | re.IGNORECASE,
         )
-        raw_html = re.sub(r"<style[^>]*>.*?</style>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
-        raw_html = re.sub(r"<nav[^>]*>.*?</nav>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
         raw_html = re.sub(
-            r"<footer[^>]*>.*?</footer>", "", raw_html, flags=re.DOTALL | re.IGNORECASE
+            r"<style[^>]*>.*?</style>",
+            "",
+            raw_html,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        raw_html = re.sub(
+            r"<nav[^>]*>.*?</nav>",
+            "",
+            raw_html,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        raw_html = re.sub(
+            r"<footer[^>]*>.*?</footer>",
+            "",
+            raw_html,
+            flags=re.DOTALL | re.IGNORECASE,
         )
 
         raw_html = re.sub(r"<(h[1-6]|p|div|li|tr)[^>]*>", "\n", raw_html, flags=re.IGNORECASE)
@@ -315,6 +476,11 @@ def agent_fetch_url(url: str) -> str:
         return f"Error fetching URL '{url}': {e}"
 
 
+# -----------------------------------------------------------------------------
+# 5. Agent Session Manager
+# -----------------------------------------------------------------------------
+
+
 class AgentSession:
     def __init__(
         self,
@@ -322,13 +488,18 @@ class AgentSession:
         gateway_url: str,
         yolo: bool = False,
         use_memory: bool = True,
+        listener: Optional[AgentEventListener] = None,
     ):
         self.model_name = model_name
         self.gateway_url = gateway_url
         self.yolo = yolo
         self.use_memory = use_memory
+        self.listener = listener or AgentEventListener()
 
+        self.client = LLMClient(gateway_url, model_name)
         self.registry = ToolRegistry()
+        self.plan: List[Dict[str, Any]] = []
+
         self._register_default_tools()
 
         self.system_prompt = (
@@ -337,18 +508,13 @@ class AgentSession:
             "Your goal is to satisfy the user's objective.\n\n"
         )
         self.system_prompt += self.registry.get_prompt_string()
-
         self.system_prompt += (
             "CRITICAL: Once the user's objective has been successfully met, you MUST immediately call the 'final_answer' tool to exit the loop.\n"
-            "Do NOT perform duplicate, redundant, or repeating actions (e.g. writing the same file repeatedly) once the task is already completed.\n\n"
+            "Do NOT perform duplicate, redundant, or repeating actions once the task is already completed.\n\n"
             "At each turn, you MUST output a valid JSON object matching the following structure:\n"
             "{\n"
             '  "thought": "What you are planning to do and why",\n'
-        )
-
-        self.system_prompt += f'  "action": {self.registry.get_action_schema()},\n'
-
-        self.system_prompt += (
+            f'  "action": {self.registry.get_action_schema()},\n'
             '  "action_input": "The raw parameter string or JSON payload required by the tool"\n'
             "}\n\n"
             "Remember:\n"
@@ -365,7 +531,7 @@ class AgentSession:
                         memories = json.load(f)
                     if memories:
                         memory_block = "\n\nRetrieved Long-Term Memories (Context):\n"
-                        for i, mem in enumerate(memories[-10:], 1):  # Max 10 recent memories
+                        for mem in memories[-10:]:
                             memory_block += f"- {mem}\n"
                         self.system_prompt += memory_block
                 except Exception:
@@ -382,6 +548,7 @@ class AgentSession:
                     )
             except Exception as e:
                 console.print(f"[dim yellow]Warning: Could not read AGENTS.md: {e}[/dim yellow]")
+
         self.history = [{"role": "system", "content": self.system_prompt}]
 
     def _register_default_tools(self):
@@ -401,7 +568,7 @@ class AgentSession:
         )
 
         def _view_lines(i):
-            data = json.loads(i) if isinstance(i, str) else i
+            data = _parse_json_args(i)
             return agent_view_file_lines(
                 data["path"], int(data["start_line"]), int(data["end_line"])
             )
@@ -409,25 +576,27 @@ class AgentSession:
         self.registry.register(
             Tool(
                 "view_file_lines",
-                'Read specific lines from a file. Action Input should be a JSON object containing "path", "start_line" (1-indexed, integer), and "end_line" (1-indexed, integer).',
+                'View a specific slice of lines from a text file. Action Input should be a JSON object containing "path", "start_line", and "end_line".',
                 _view_lines,
             )
         )
 
         def _write_file(i):
-            data = json.loads(i) if isinstance(i, str) else i
-            return agent_write_file(data["path"], data["content"])
+            data = _parse_json_args(i)
+            if isinstance(data, dict):
+                return agent_write_file(data["path"], data["content"])
+            return "Error: write_file expects JSON object with 'path' and 'content'."
 
         self.registry.register(
             Tool(
                 "write_file",
-                'Write/overwrite a file. Action Input should be a JSON object containing "path" and "content".',
+                'Write content to a file. Action Input should be a JSON object containing "path" and "content".',
                 _write_file,
             )
         )
 
         def _edit_file(i):
-            data = json.loads(i) if isinstance(i, str) else i
+            data = _parse_json_args(i)
             return agent_edit_file(data["path"], data["target"], data["replacement"])
 
         self.registry.register(
@@ -460,14 +629,10 @@ class AgentSession:
         )
 
         def _search_grep(i):
-            if isinstance(i, str):
-                try:
-                    data = json.loads(i)
-                except Exception:
-                    data = {"pattern": i}
-            else:
-                data = i
-            return agent_search_grep(data.get("pattern", ""), data.get("path", "."))
+            data = _parse_json_args(i)
+            if isinstance(data, dict):
+                return agent_search_grep(data.get("pattern", ""), data.get("path", "."))
+            return agent_search_grep(str(i), ".")
 
         self.registry.register(
             Tool(
@@ -515,18 +680,14 @@ class AgentSession:
         )
 
         def _create_plan(i):
-            if isinstance(i, str):
-                try:
-                    steps = json.loads(i)
-                except Exception:
-                    steps = [s.strip() for s in i.split("\n") if s.strip()]
-            else:
-                steps = i
+            steps = _parse_json_args(i)
+            if isinstance(steps, str):
+                steps = [s.strip() for s in steps.split("\n") if s.strip()]
             self.plan = [{"step": step, "status": "pending", "notes": ""} for step in steps]
             return f"Created task plan with {len(self.plan)} steps."
 
         def _update_plan(i):
-            data = json.loads(i) if isinstance(i, str) else i
+            data = _parse_json_args(i)
             step_num = int(data.get("step_number", 1)) - 1
             if 0 <= step_num < len(self.plan):
                 self.plan[step_num]["status"] = data.get("status", "completed")
@@ -560,265 +721,116 @@ class AgentSession:
         )
 
     def _get_plan_summary(self) -> str:
-        if not hasattr(self, "plan") or not self.plan:
+        if not self.plan:
             return ""
         lines = ["\n📋 Active Task Plan Progress:"]
         for idx, item in enumerate(self.plan, 1):
-            st = item["status"]
-            icon = (
-                "✓"
-                if st == "completed"
-                else ("⏳" if st == "in_progress" else ("❌" if st == "failed" else " "))
+            mark = (
+                "[✓]"
+                if item["status"] == "completed"
+                else ("[▶]" if item["status"] == "in_progress" else "[ ]")
             )
-            notes = f" ({item['notes']})" if item.get("notes") else ""
-            lines.append(f"[{icon}] Step {idx}: {item['step']}{notes}")
+            notes_str = f" ({item['notes']})" if item.get("notes") else ""
+            lines.append(f"{mark} Step {idx}: {item['step']}{notes_str}")
         return "\n".join(lines) + "\n"
 
     def _compress_history_if_needed(self, max_turn_messages: int = 10, max_char_budget: int = 8000):
-        """Compresses older turn history into a single structured summary block
-
-        if message count or character threshold is exceeded. Keeps system prompt
-        (index 0), objective (index 1), and recent turns intact.
-        """
-        if len(self.history) <= 4:
-            return  # Not enough messages to compress
-
-        turn_messages = self.history[2:]
-        total_chars = sum(len(m.get("content", "")) for m in turn_messages)
-
-        if len(turn_messages) <= max_turn_messages and total_chars <= max_char_budget:
+        turn_history = self.history[2:]
+        if not turn_history:
             return
 
-        keep_recent_count = 4
-        if len(turn_messages) <= keep_recent_count:
+        total_chars = sum(len(m.get("content", "")) for m in turn_history)
+        if len(turn_history) <= max_turn_messages and total_chars <= max_char_budget:
             return
 
-        to_compress = turn_messages[:-keep_recent_count]
-        recent_to_keep = turn_messages[-keep_recent_count:]
+        recent_turns = turn_history[-4:]
+        older_turns = turn_history[:-4]
+
+        if not older_turns:
+            return
 
         summary_lines = ["📜 Compressed Prior Conversation History & Progress Summary:"]
+        for msg in older_turns:
+            role = msg.get("role", "")
+            content = msg.get("content", "").strip()
 
-        for msg in to_compress:
-            role = msg.get("role")
-            content = msg.get("content", "")
             if role == "assistant":
-                try:
-                    data = json.loads(content)
-                    if isinstance(data, list):
-                        for item in data:
-                            summary_lines.append(f"- Agent Thought: {item.get('thought', '')}")
-                            summary_lines.append(
-                                f"  Action Executed: {item.get('action', '')} -> {item.get('action_input', '')}"
-                            )
-                    elif isinstance(data, dict):
-                        summary_lines.append(f"- Agent Thought: {data.get('thought', '')}")
-                        summary_lines.append(
-                            f"  Action Executed: {data.get('action', '')} -> {data.get('action_input', '')}"
-                        )
-                except Exception:
-                    summary_lines.append(f"- Assistant Action Output: {content[:150]}...")
-            elif role == "user":
-                if "Observation:" in content:
-                    obs_text = content.replace("Observation:", "").strip()
-                    if len(obs_text) > 200:
-                        obs_text = obs_text[:200] + "..."
-                    summary_lines.append(f"  Observation Result: {obs_text}")
+                actions = parse_agent_action(content)
+                for act in actions:
+                    thought = act.get("thought", "")
+                    action = act.get("action", "")
+                    action_in = act.get("action_input", "")
+                    if thought:
+                        summary_lines.append(f"- Agent Thought: {thought}")
+                    if action:
+                        summary_lines.append(f"  Action Executed: {action} -> {action_in}")
+            elif role == "user" and content.startswith("Observation:"):
+                obs_snippet = content[12:].strip()
+                if len(obs_snippet) > 150:
+                    obs_snippet = obs_snippet[:150] + "..."
+                summary_lines.append(f"  Observation Result: {obs_snippet}")
 
-        summary_block = "\n".join(summary_lines)
+        summary_text = "\n".join(summary_lines)
+        self.listener.on_compaction(len(older_turns), total_chars, len(summary_text))
 
         self.history = [
-            self.history[0],  # System prompt
-            self.history[1],  # Objective
-            {"role": "user", "content": summary_block},
-            *recent_to_keep,
+            self.history[0],
+            self.history[1],
+            {"role": "user", "content": summary_text},
+            *recent_turns,
         ]
 
-        from rich.panel import Panel
-
-        console.print(
-            Panel(
-                f"[italic cyan]Compressed {len(to_compress)} older history messages into context summary block ({total_chars} chars -> {len(summary_block)} chars).[/italic cyan]",
-                title="🧠 Sliding Context Window Compaction",
-                border_style="blue",
-            )
-        )
-
-    def run_task(self, objective: str, max_turns: int = 10):
-        from rich.panel import Panel
-
+    def run_task(self, objective: str, max_turns: int = 10) -> Optional[str]:
         self.history.append({"role": "user", "content": f"Objective: {objective}"})
 
-        url_chat = f"{self.gateway_url}/v1/chat/completions"
-
         for turn in range(1, max_turns + 1):
-            console.print(
-                f"[bold dim]── Turn {turn}/{max_turns} ──────────────────────────────────────[/bold dim]"
-            )
-
-            # Compress older turn history if context budget is exceeded
             self._compress_history_if_needed()
+            self.listener.on_turn_start(turn, max_turns)
 
-            # Display plan progress if available
-            plan_summary = self._get_plan_summary()
-            if plan_summary:
-                console.print(
-                    Panel(
-                        plan_summary.strip(),
-                        title="📋 Current Execution Plan",
-                        border_style="magenta",
-                    )
-                )
+            plan_str = self._get_plan_summary()
+            if plan_str:
+                self.listener.on_plan_update(plan_str)
 
-            # 1. Ask LLM for next step
             try:
-                res = httpx.post(
-                    url_chat,
-                    json={
-                        "model": self.model_name,
-                        "messages": self.history,
-                        "temperature": 0.2,
-                        "stream": False,
-                    },
-                    headers={"Accept-Encoding": "identity"},
-                    timeout=60.0,
-                )
-                if res.status_code != 200:
-                    console.print(f"[red]Error from Gateway: {res.text}[/red]")
-                    break
-                raw_text = res.json()["choices"][0]["message"]["content"].strip()
+                response_text = self.client.chat_completion(self.history)
             except Exception as e:
-                console.print(f"[red]Error communicating with LLM: {e}[/red]")
-                break
+                self.listener.on_error(str(e))
+                return f"Error connecting to model server: {e}"
 
-            # Extract think block if present and format JSON text
-            cleaned_text = raw_text.strip()
-            think_content = ""
-            if "<think>" in cleaned_text and "</think>" in cleaned_text:
-                start_think = cleaned_text.find("<think>") + 7
-                end_think = cleaned_text.find("</think>")
-                think_content = cleaned_text[start_think:end_think].strip()
-                cleaned_text = cleaned_text[end_think + 8 :].strip()
+            self.history.append({"role": "assistant", "content": response_text})
 
-            if (
-                "[" in cleaned_text
-                and "]" in cleaned_text
-                and ("{" not in cleaned_text or cleaned_text.find("[") < cleaned_text.find("{"))
-            ):
-                start_arr = cleaned_text.find("[")
-                end_arr = cleaned_text.rfind("]") + 1
-                cleaned_text = cleaned_text[start_arr:end_arr].strip()
-            elif "{" in cleaned_text and "}" in cleaned_text:
-                start_json = cleaned_text.find("{")
-                end_json = cleaned_text.rfind("}") + 1
-                cleaned_text = cleaned_text[start_json:end_json].strip()
-
-            if think_content:
-                console.print(
-                    Panel(
-                        f"[italic dim yellow]{think_content}[/italic dim yellow]",
-                        title="💭 Model Reasoning (CoT)",
-                        border_style="yellow",
-                    )
-                )
-
-            # 2. Parse action JSON (supports single action dict or batch action array)
-            action_list = []
-            try:
-                action_data = json.loads(cleaned_text)
-                if isinstance(action_data, list):
-                    action_list = action_data
-                elif isinstance(action_data, dict):
-                    if "actions" in action_data and isinstance(action_data["actions"], list):
-                        action_list = action_data["actions"]
-                    else:
-                        action_list = [action_data]
-            except Exception:
-                console.print(
-                    f"[red]Error: Model output was not valid JSON. Raw output was:[/red]\n{raw_text}"
-                )
-                self.history.append({"role": "assistant", "content": raw_text})
-                self.history.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "Please output strictly a valid JSON object or JSON array containing 'thought', 'action', and 'action_input'.\n"
-                            'Example single: {"thought": "...", "action": "...", "action_input": "..."}\n'
-                            'Example batch: [{"thought": "...", "action": "...", "action_input": "..."}]'
-                        ),
-                    }
-                )
-                continue
-
-            # 3. Process actions (supporting parallel batch execution)
+            actions = parse_agent_action(response_text)
             observations = []
-            is_final = False
-            final_summary = ""
+            is_finished = False
 
-            for act_idx, act_item in enumerate(action_list, 1):
-                thought = act_item.get("thought", "Executing action...")
-                action = act_item.get("action", "")
-                action_input = act_item.get("action_input", "")
+            for act in actions:
+                thought = act.get("thought", "No thought provided.")
+                action = act.get("action")
+                action_input = act.get("action_input")
 
-                console.print(
-                    Panel(
-                        f"[italic white]{thought}[/italic white]",
-                        title=f"🧠 Agent Thought (Turn {turn} - Step {act_idx}/{len(action_list)})",
-                        border_style="cyan",
-                    )
-                )
+                self.listener.on_thought(thought)
+                if action:
+                    self.listener.on_action(action, action_input)
+
+                if not action:
+                    observations.append("Error: Invalid JSON response; missing 'action' field.")
+                    continue
 
                 if action == "final_answer":
-                    is_final = True
-                    final_summary = str(action_input)
+                    final_res = str(action_input)
+                    self.listener.on_finish(final_res)
+                    is_finished = True
                     break
 
-                console.print(
-                    f"⚙️  [bold]Action:[/bold] {action} | [bold]Input:[/bold] {action_input}"
-                )
+                observation = self.registry.execute(action, action_input)
+                self.listener.on_observation(observation)
+                observations.append(f"Action '{action}' Result:\n{observation}")
 
-                obs = self.registry.execute(action, action_input)
-                console.print(
-                    f"👁️  [bold]Observation:[/bold] {obs[:300]}..."
-                    if len(obs) > 300
-                    else f"👁️  [bold]Observation:[/bold] {obs}"
-                )
-
-                if len(action_list) > 1:
-                    observations.append(f"[Action {act_idx}: {action}]\nObservation: {obs}")
-                else:
-                    observations.append(obs)
-
-            if is_final:
-                from rich.console import Group
-                from rich.markdown import Markdown
-                from rich.text import Text
-
-                content_group = Group(
-                    Text("Final Answer:", style="bold green"),
-                    Markdown(final_summary),
-                )
-                console.print(
-                    Panel(
-                        content_group,
-                        title="🏁 Objective Accomplished",
-                        border_style="green",
-                    )
-                )
-                self.history.append({"role": "assistant", "content": raw_text})
-                break
+            if is_finished:
+                return self.history[-1]["content"]
 
             combined_obs = "\n\n".join(observations)
-            plan_block = self._get_plan_summary()
+            self.history.append({"role": "user", "content": f"Observation:\n{combined_obs}"})
 
-            self.history.append({"role": "assistant", "content": raw_text})
-            self.history.append(
-                {
-                    "role": "user",
-                    "content": (
-                        f"Observation:\n{combined_obs}\n"
-                        f"{plan_block}\n"
-                        "Note: If the objective is now fully accomplished, you MUST call 'final_answer' next. "
-                        "Do not repeat the same action again."
-                    ),
-                }
-            )
+        self.listener.on_error(f"Agent reached maximum execution turns limit ({max_turns}).")
+        return "Task incomplete: Reached maximum turn iterations."
