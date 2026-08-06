@@ -263,7 +263,10 @@
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
                     Execute autonomous tasks in your workspace. The agent plans steps, edits files, searches the web, and runs shell commands.
                 </p>
-                <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; align-items: center;">
+                    <select id="agent-model-select" class="input-text" style="width: 280px; padding: 0.8rem 1rem; border-radius: 10px;" title="Select LLM model for the agent">
+                        <option value="">Loading models...</option>
+                    </select>
                     <input type="text" id="agent-objective-input" class="input-text" style="flex: 1; padding: 0.8rem 1.2rem;" placeholder="e.g., 'Inspect the codebase and create a new unit test module in tests/unit/'">
                     <button class="btn btn-primary" onclick="runAgentTask()" id="btn-run-agent">🚀 Execute Objective</button>
                 </div>

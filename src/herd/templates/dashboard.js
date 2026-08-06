@@ -20,6 +20,8 @@
 
             if (tabName === 'playground') {
                 populatePlaygroundModelList();
+            } else if (tabName === 'agent') {
+                populateAgentModelList();
             } else if (tabName === 'rag') {
                 fetchRagIndexCatalog();
             }
@@ -1325,14 +1327,58 @@
             }
         }
 
+        async function populateAgentModelList() {
+            const select = document.getElementById('agent-model-select');
+            if (!select) return;
+
+            try {
+                const [allModelsData, active] = await Promise.all([
+                    fetch('/v1/models').then(r => r.json()),
+                    fetch('/v1/models/active').then(r => r.json())
+                ]);
+
+                const downloaded = allModelsData.data || [];
+                const activeSet = new Set(active.map(a => a.model));
+                const prevVal = select.value;
+
+                const llms = downloaded.filter(m => {
+                    const id = m.id.toLowerCase();
+                    return !id.includes('whisper') && !id.endsWith('.bin') && !id.includes('embed');
+                });
+
+                select.innerHTML = '';
+                if (llms.length === 0) {
+                    select.innerHTML = '<option value="">No local LLMs found on disk</option>';
+                    return;
+                }
+
+                llms.forEach(m => {
+                    const isRunning = activeSet.has(m.id);
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = isRunning ? `🟢 ${m.id} (Running)` : `💾 ${m.id} (On Disk)`;
+                    select.appendChild(opt);
+                });
+
+                if (prevVal && Array.from(select.options).some(o => o.value === prevVal)) {
+                    select.value = prevVal;
+                }
+            } catch (e) {
+                console.error("Error populating agent model list:", e);
+            }
+        }
+
         async function runAgentTask() {
             const objectiveInput = document.getElementById('agent-objective-input');
             const streamContainer = document.getElementById('agent-stream-container');
+            const modelSelect = document.getElementById('agent-model-select');
             const runBtn = document.getElementById('btn-run-agent');
             const yolo = document.getElementById('agent-yolo').checked;
             const memory = document.getElementById('agent-memory').checked;
 
             const objective = objectiveInput.value.trim();
+            const selectedModel = modelSelect ? modelSelect.value : null;
+
             if (!objective) {
                 alert("Please enter an objective for the agent.");
                 return;
@@ -1340,13 +1386,18 @@
 
             runBtn.disabled = true;
             runBtn.textContent = "⏳ Agent Running...";
-            streamContainer.innerHTML = `<div style="color: #58a6ff;">🚀 Initiating Agent Objective: <strong>${escapeHtml(objective)}</strong></div><br>`;
+            streamContainer.innerHTML = `<div style="color: #58a6ff;">🚀 Initiating Agent Objective: <strong>${escapeHtml(objective)}</strong></div>`;
+            if (selectedModel) {
+                streamContainer.innerHTML += `<div style="color: #8b949e; font-size: 0.85rem; margin-top: 4px;">🤖 Model: <strong>${escapeHtml(selectedModel)}</strong></div><br>`;
+            } else {
+                streamContainer.innerHTML += `<br>`;
+            }
 
             try {
                 const response = await fetch('/v1/agent/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ objective: objective, yolo: yolo, use_memory: memory, max_turns: 10 })
+                    body: JSON.stringify({ objective: objective, model: selectedModel, yolo: yolo, use_memory: memory, max_turns: 10 })
                 });
 
                 const reader = response.body.getReader();
