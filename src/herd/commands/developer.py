@@ -808,10 +808,11 @@ def agent(
         "  Type [bold red]exit[/bold red] or [bold red]quit[/bold red] to end the session.\n"
     )
 
-    # If an initial objective was passed, run it first!
+    # If an initial objective was passed, run it and exit!
     if objective:
         console.print(f"\n[bold yellow]Objective:[/bold yellow] {objective}")
         session.run_task(objective, max_turns=max_turns)
+        return
 
     # Chat REPL loop
     while True:
