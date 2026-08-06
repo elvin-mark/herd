@@ -60,9 +60,9 @@ class ProcessManager:
 
         atexit.register(self.shutdown_all_sync)
 
-    def _save_active_processes_sync(self):
+    def _save_active_processes_sync(self, filepath: Optional[str] = None):
         """Writes the PIDs of currently running processes to a persistent file."""
-        state_file = os.path.join(HERD_HOME, "active_processes.json")
+        state_file = filepath or os.path.join(HERD_HOME, "active_processes.json")
         try:
             data = {}
             for path, info in self.running_models.items():
@@ -70,17 +70,18 @@ class ProcessManager:
                     "pid": info["process"].pid,
                     "port": info["port"],
                     "model_name": info["model_name"],
-                    "is_whisper": info["is_whisper"],
-                    "is_embedding": info["is_embedding"],
+                    "is_whisper": info.get("is_whisper", False),
+                    "is_embedding": info.get("is_embedding", False),
                 }
+            os.makedirs(os.path.dirname(state_file), exist_ok=True)
             with open(state_file, "w") as f:
-                json.dump(data, f, indent=4)
+                json.dump(data, f, indent=2)
         except Exception as e:
-            logger.error(f"Failed to save active processes state: {e}")
+            logger.warning(f"Could not save active processes state: {e}")
 
-    def _cleanup_orphan_processes(self):
+    def _cleanup_orphan_processes(self, filepath: Optional[str] = None):
         """Reads the active processes file and terminates any orphaned processes from prior sessions."""
-        state_file = os.path.join(HERD_HOME, "active_processes.json")
+        state_file = filepath or os.path.join(HERD_HOME, "active_processes.json")
         if not os.path.exists(state_file):
             return
         try:
