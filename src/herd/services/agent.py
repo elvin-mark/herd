@@ -225,6 +225,96 @@ def agent_search_grep(pattern: str, path: str = ".") -> str:
         return f"Error executing search_grep: {e}"
 
 
+def agent_web_search(query: str) -> str:
+    """Performs zero-auth DuckDuckGo web search and returns top 5 results (title, snippet, URL)."""
+    import html as html_lib
+    import re
+    import urllib.parse
+
+    try:
+        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = httpx.get(url, headers=headers, follow_redirects=True, timeout=10.0)
+        if resp.status_code != 200:
+            return f"Error: Web search request failed with status code {resp.status_code}."
+
+        raw_html = resp.text
+        results = []
+        links = re.findall(
+            r'<a class="result__url" href="([^"]+)".*?>(.*?)</a>', raw_html, re.DOTALL
+        )
+        snippets = re.findall(
+            r'<a class="result__snippet[^"]*"[^>]*>(.*?)</a>', raw_html, re.DOTALL
+        )
+        titles = re.findall(r'<a class="result__a"[^>]*>(.*?)</a>', raw_html, re.DOTALL)
+
+        for idx in range(min(5, len(titles))):
+            t_raw = titles[idx] if idx < len(titles) else "Result"
+            s_raw = snippets[idx] if idx < len(snippets) else ""
+            u_raw = links[idx][0] if idx < len(links) else ""
+
+            t_clean = html_lib.unescape(re.sub(r"<[^>]+>", "", t_raw)).strip()
+            s_clean = html_lib.unescape(re.sub(r"<[^>]+>", "", s_raw)).strip()
+            u_clean = re.sub(r"<[^>]+>", "", u_raw).strip()
+
+            if u_clean.startswith("//"):
+                u_clean = "https:" + u_clean
+
+            results.append(f"{idx + 1}. [{t_clean}]({u_clean})\n   Snippet: {s_clean}")
+
+        if not results:
+            return f"No web search results found for query: '{query}'."
+
+        return f"🔍 Web Search Results for '{query}':\n\n" + "\n\n".join(results)
+    except Exception as e:
+        return f"Error performing web search: {e}"
+
+
+def agent_fetch_url(url: str) -> str:
+    """Fetches web page content, strips HTML chrome, and returns clean readable text."""
+    import html as html_lib
+    import re
+
+    try:
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = httpx.get(url, headers=headers, follow_redirects=True, timeout=12.0)
+        if resp.status_code != 200:
+            return f"Error: Failed to fetch URL '{url}' (status code {resp.status_code})."
+
+        raw_html = resp.text
+        raw_html = re.sub(
+            r"<script[^>]*>.*?</script>", "", raw_html, flags=re.DOTALL | re.IGNORECASE
+        )
+        raw_html = re.sub(r"<style[^>]*>.*?</style>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
+        raw_html = re.sub(r"<nav[^>]*>.*?</nav>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
+        raw_html = re.sub(
+            r"<footer[^>]*>.*?</footer>", "", raw_html, flags=re.DOTALL | re.IGNORECASE
+        )
+
+        raw_html = re.sub(r"<(h[1-6]|p|div|li|tr)[^>]*>", "\n", raw_html, flags=re.IGNORECASE)
+        raw_html = re.sub(r"<br\s*/?>", "\n", raw_html, flags=re.IGNORECASE)
+
+        text = re.sub(r"<[^>]+>", " ", raw_html)
+        text = html_lib.unescape(text)
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        cleaned_text = "\n".join(lines)
+
+        if len(cleaned_text) > 3500:
+            cleaned_text = cleaned_text[:3500] + "\n... [Content truncated to 3500 characters]"
+
+        return f"🌐 Content from '{url}':\n\n{cleaned_text}"
+    except Exception as e:
+        return f"Error fetching URL '{url}': {e}"
+
+
 class AgentSession:
     def __init__(
         self,
@@ -407,6 +497,22 @@ class AgentSession:
                     _save_memory,
                 )
             )
+
+        self.registry.register(
+            Tool(
+                "web_search",
+                "Perform a live web search for documentation, code examples, or library APIs. Action Input should be the search query string.",
+                agent_web_search,
+            )
+        )
+
+        self.registry.register(
+            Tool(
+                "fetch_url",
+                "Fetch and read the text content of a web page URL. Action Input should be the full URL (e.g. 'https://docs.python.org/...').",
+                agent_fetch_url,
+            )
+        )
 
         def _create_plan(i):
             if isinstance(i, str):
