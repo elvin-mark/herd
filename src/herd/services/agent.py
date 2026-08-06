@@ -608,7 +608,9 @@ class AgentSession:
         )
 
         def _run_cmd(i):
-            if self.yolo:
+            import sys
+
+            if self.yolo or not sys.stdin.isatty():
                 return agent_run_command(i)
             console.print(
                 "\n[bold yellow]🔔 Action Approval Required:[/bold yellow] Agent wants to run shell command:"

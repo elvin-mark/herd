@@ -68,7 +68,7 @@ async def run_agent_stream(req: AgentRunRequest):
     """Executes an agent task objective and streams real-time step events via Server-Sent Events (SSE)."""
     # 1. Resolve model
     target_model = req.model
-    if not target_model:
+    if not target_model or target_model == "auto":
         running = list(manager.running_models.keys())
         if running:
             target_model = manager.running_models[running[0]]["model_name"]

@@ -1346,11 +1346,7 @@
                     return !id.includes('whisper') && !id.endsWith('.bin') && !id.includes('embed');
                 });
 
-                select.innerHTML = '';
-                if (llms.length === 0) {
-                    select.innerHTML = '<option value="">No local LLMs found on disk</option>';
-                    return;
-                }
+                select.innerHTML = '<option value="auto">⚡ auto (Default / Active Model)</option>';
 
                 llms.forEach(m => {
                     const isRunning = activeSet.has(m.id);
