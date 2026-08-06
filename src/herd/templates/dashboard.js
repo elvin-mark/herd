@@ -22,6 +22,7 @@
                 populatePlaygroundModelList();
             } else if (tabName === 'agent') {
                 populateAgentModelList();
+                fetchWorkspaceFiles();
             } else if (tabName === 'rag') {
                 fetchRagIndexCatalog();
             }
@@ -1434,6 +1435,73 @@
             }
         }
 
+        async function fetchWorkspaceFiles() {
+            const gallery = document.getElementById('workspace-artifacts-container');
+            if (!gallery) return;
+
+            try {
+                const res = await fetch('/v1/workspace/files');
+                if (!res.ok) return;
+                const data = await res.json();
+                const files = data.files || [];
+
+                if (files.length === 0) {
+                    gallery.innerHTML = `
+                        <div style="grid-column: 1 / -1; color: var(--text-secondary); text-align: center; padding: 2rem;">
+                            No workspace artifacts created yet. Ask the agent to generate a Matplotlib plot, SVG diagram, or HTML report!
+                        </div>
+                    `;
+                    return;
+                }
+
+                gallery.innerHTML = files.map(f => {
+                    const encodedPath = encodeURIComponent(f.path);
+                    const fileUrl = `/v1/workspace/file?path=${encodedPath}`;
+
+                    if (f.category === 'image') {
+                        return `
+                            <div class="artifact-card" style="border: 1px solid var(--card-border); background: var(--card-bg); border-radius: 12px; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <div style="font-weight: bold; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🖼️ ${escapeHtml(f.name)}</div>
+                                <div style="background: #000; border-radius: 8px; overflow: hidden; text-align: center; border: 1px solid var(--card-border);">
+                                    <img src="${fileUrl}" style="max-width: 100%; max-height: 180px; object-fit: contain; cursor: pointer;" onclick="window.open('${fileUrl}', '_blank')" title="Click to open full resolution image">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: auto;">
+                                    <span>${(f.size / 1024).toFixed(1)} KB</span>
+                                    <a href="${fileUrl}" target="_blank" style="color: var(--accent-cyan); text-decoration: none;">View Full Resolution ↗</a>
+                                </div>
+                            </div>
+                        `;
+                    } else if (f.category === 'html') {
+                        return `
+                            <div class="artifact-card" style="border: 1px solid var(--card-border); background: var(--card-bg); border-radius: 12px; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <div style="font-weight: bold; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🌐 Live HTML: ${escapeHtml(f.name)}</div>
+                                <div style="border-radius: 8px; overflow: hidden; background: #fff; height: 160px; border: 1px solid var(--card-border);">
+                                    <iframe src="${fileUrl}" style="width: 100%; height: 100%; border: none;"></iframe>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-top: auto;">
+                                    <span>${(f.size / 1024).toFixed(1)} KB</span>
+                                    <a href="${fileUrl}" target="_blank" style="color: var(--accent-cyan); text-decoration: none;">Open Interactive Preview ↗</a>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        return `
+                            <div class="artifact-card" style="border: 1px solid var(--card-border); background: var(--card-bg); border-radius: 12px; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <div style="font-weight: bold; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📄 ${escapeHtml(f.name)}</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Path: ${escapeHtml(f.path)}</div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto; font-size: 0.75rem;">
+                                    <span>${(f.size / 1024).toFixed(1)} KB</span>
+                                    <a href="${fileUrl}" download style="color: var(--accent-cyan); text-decoration: none;">Download File ⬇</a>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }).join('');
+            } catch (e) {
+                console.error("Error fetching workspace files:", e);
+            }
+        }
+
         function renderAgentEvent(container, eventType, payload) {
             if (eventType === 'turn_start') {
                 container.innerHTML += `<div style="color: #79c0ff; border-top: 1px dashed #30363d; margin-top: 8px; padding-top: 8px;">── Iteration ${payload.turn}/${payload.max_turns} ──</div>`;
@@ -1450,6 +1518,7 @@
                 container.innerHTML += `<div style="color: #58a6ff; font-style: italic; margin: 4px 0;">🧠 Compressed ${payload.msg_count} history messages (${payload.orig_chars} → ${payload.comp_chars} chars)</div>`;
             } else if (eventType === 'finish') {
                 container.innerHTML += `<div style="color: #56d364; font-size: 1rem; margin-top: 10px; font-weight: bold;">🎯 Final Answer: ${escapeHtml(payload.answer)}</div>`;
+                fetchWorkspaceFiles();
             } else if (eventType === 'error') {
                 container.innerHTML += `<div style="color: #f85149; margin-top: 6px;">❌ <strong>Error:</strong> ${escapeHtml(payload.error)}</div>`;
             }

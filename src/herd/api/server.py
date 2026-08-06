@@ -13,6 +13,7 @@ from herd.api.routers.agent import router as agent_router
 from herd.api.routers.chat import router as chat_router
 from herd.api.routers.db import router as db_router
 from herd.api.routers.models import router as models_router
+from herd.api.routers.workspace import router as workspace_router
 from herd.api.state import manager
 from herd.core.metrics import collector
 from herd.core.utils import close_http_clients
@@ -158,3 +159,4 @@ app.include_router(models_router)
 app.include_router(chat_router)
 app.include_router(db_router)
 app.include_router(agent_router)
+app.include_router(workspace_router)
