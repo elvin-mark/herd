@@ -86,6 +86,8 @@ class HerdSettings:
         self.__init__()
 
     def save(self):
+        self.config_file = CONFIG_FILE
+        os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
         with open(self.config_file, "w") as f:
             json.dump(self.global_overrides, f, indent=4)
 
@@ -115,8 +117,14 @@ LLAMA_COMMIT = settings.llama_commit
 WHISPER_COMMIT = settings.whisper_commit
 
 
-def load_config() -> dict:
-    settings.reload()
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    settings.overrides.update(settings.global_overrides)
     return settings.overrides
 
 
@@ -125,6 +133,7 @@ def save_config(config: dict):
     for k, v in config.items():
         settings.global_overrides[k] = v
 
+    settings.overrides.update(settings.global_overrides)
     settings.default_llm = config.get("default_llm", settings.default_llm)
     settings.default_embedding = config.get("default_embedding", settings.default_embedding)
     settings.default_whisper = config.get("default_whisper", settings.default_whisper)

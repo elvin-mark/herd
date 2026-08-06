@@ -25,6 +25,7 @@ def test_config_set_and_provider_cli(monkeypatch):
         fake_config = os.path.join(tmp_dir, "config.json")
         monkeypatch.setattr("herd.commands.config.CONFIG_FILE", fake_config)
         monkeypatch.setattr("herd.core.config.CONFIG_FILE", fake_config)
+        monkeypatch.setattr("herd.core.config.settings.config_file", fake_config)
 
         # 1. Set key
         res_set = runner.invoke(config_app, ["set", "default_llm", "test-model-id"])
