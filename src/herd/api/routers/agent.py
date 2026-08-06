@@ -6,6 +6,8 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from herd.api.exceptions import HerdError
+from herd.api.routers.models import list_downloaded_models
 from herd.api.state import manager
 from herd.services.agent import AgentEventListener, AgentSession
 
@@ -73,9 +75,19 @@ async def run_agent_stream(req: AgentRunRequest):
         if running:
             target_model = manager.running_models[running[0]]["model_name"]
         else:
-            from herd.core.config import DEFAULT_LLM
+            downloaded = list_downloaded_models()
+            if downloaded:
+                target_model = downloaded[0]
+            else:
+                from herd.core.config import DEFAULT_LLM
 
-            target_model = DEFAULT_LLM
+                target_model = DEFAULT_LLM
+
+    if not target_model:
+        raise HerdError(
+            status_code=400,
+            message="No LLM models are available on disk or running. Please download a model first via 'herd pull author/repo'.",
+        )
 
     # Ensure model is started
     port = await manager.get_or_start_server(target_model)
