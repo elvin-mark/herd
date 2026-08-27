@@ -58,6 +58,80 @@ async def list_models():
     return {"data": data}
 
 
+@router.get("/api/tags")
+async def list_ollama_tags():
+    """Ollama-compatible endpoint returning available models with metadata."""
+    import datetime
+
+    from herd.core.config import settings
+    from herd.core.utils import get_local_models_info
+
+    settings.reload()
+    local_info = get_local_models_info()
+    models_list = []
+
+    # Include pool 'auto' model if configured
+    if settings.pool:
+        models_list.append(
+            {
+                "name": "auto:latest",
+                "model": "auto:latest",
+                "modified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "size": 0,
+                "digest": "herd-pool-load-balancer",
+                "details": {
+                    "format": "pool",
+                    "family": "herd-pool",
+                    "parameter_size": "multi",
+                    "quantization_level": "auto",
+                },
+            }
+        )
+
+    for m in local_info:
+        file_path = m.get("path", "")
+        size_bytes = 0
+        mod_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        if os.path.exists(file_path):
+            try:
+                stat = os.stat(file_path)
+                size_bytes = stat.st_size
+                mod_time = datetime.datetime.fromtimestamp(
+                    stat.st_mtime, tz=datetime.timezone.utc
+                ).isoformat()
+            except Exception:
+                pass
+
+        name = m.get("name", "")
+        # Extract family/quantization hint from filename or identifier
+        quant = "unknown"
+        if ":" in name:
+            quant = name.split(":")[-1]
+
+        models_list.append(
+            {
+                "name": name,
+                "model": name,
+                "modified_at": mod_time,
+                "size": size_bytes,
+                "digest": f"sha256:{abs(hash(name)):016x}",
+                "details": {
+                    "format": "gguf",
+                    "family": name.split("/")[0] if "/" in name else "gguf",
+                    "quantization_level": quant,
+                },
+            }
+        )
+
+    return {"models": models_list}
+
+
+@router.get("/api/version")
+async def get_ollama_version():
+    """Ollama-compatible version endpoint."""
+    return {"version": "0.1.0"}
+
+
 @router.get("/v1/models/active")
 async def list_active_models():
     """Lists currently running model servers."""

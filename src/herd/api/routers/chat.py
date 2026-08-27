@@ -29,8 +29,6 @@ async def proxy_to_cloud(
 
     api_key = prov_config.get("api_key")
     base_url = prov_config.get("base_url", "").rstrip("/")
-    if not api_key:
-        raise HerdError(f"API key is missing for provider '{provider}'.", status_code=400)
     if not base_url:
         raise HerdError(f"Base URL is missing for provider '{provider}'.", status_code=400)
 
@@ -45,9 +43,10 @@ async def proxy_to_cloud(
     url = f"{base_url}{path_suffix}"
 
     headers = {
-        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     client = get_async_http_client()
     req = client.build_request(
@@ -126,6 +125,8 @@ async def proxy_to_cloud(
                         "",
                     )
                     prompt_snippet = str(last_user_msg)[:100]
+                elif "input" in body:
+                    prompt_snippet = str(body["input"])[:100]
 
             full_resp = None
             try:
@@ -139,6 +140,8 @@ async def proxy_to_cloud(
                 if choices and isinstance(choices, list):
                     msg = choices[0].get("message", {})
                     response_snippet = msg.get("content", "")[:100] if isinstance(msg, dict) else ""
+                elif "data" in full_resp and isinstance(full_resp["data"], list):
+                    response_snippet = f"Generated {len(full_resp['data'])} embedding vector(s)"
             elif isinstance(full_resp, str):
                 response_snippet = full_resp[:100]
 

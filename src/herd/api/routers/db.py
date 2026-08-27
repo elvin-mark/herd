@@ -50,7 +50,8 @@ async def db_index(request: Request, background_tasks: BackgroundTasks):
     if not os.path.exists(directory):
         raise HerdError("Directory not found", status_code=404)
 
-    await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
+    if ":" not in model_name:
+        await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
 
     async def index_worker(d: str, m: str):
         try:
@@ -89,7 +90,8 @@ async def db_search(request: Request):
             status_code=400,
         )
 
-    await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
+    if ":" not in model_name:
+        await manager.get_or_start_server(model_name, is_whisper=False, is_embedding=True)
     query_vector = await get_embedding(query, model_name)
     matches = search_vectors(query_vector, model_name, top_k=limit, target_path=directory)
     return matches

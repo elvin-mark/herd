@@ -27,3 +27,19 @@ def test_metrics_prometheus_route():
     assert res.status_code == 200
     assert "text/plain" in res.headers.get("content-type", "")
     assert "herd_" in res.text
+
+
+def test_ollama_tags_route():
+    """Verifies GET /api/tags endpoint returns models array."""
+    res = client.get("/api/tags")
+    assert res.status_code == 200
+    data = res.json()
+    assert "models" in data
+    assert isinstance(data["models"], list)
+
+
+def test_ollama_version_route():
+    """Verifies GET /api/version endpoint returns version info."""
+    res = client.get("/api/version")
+    assert res.status_code == 200
+    assert "version" in res.json()
